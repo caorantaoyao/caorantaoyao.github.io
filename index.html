@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CAORAN — 札记 · 思考 · 构建</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0b0d;
+    --surface: #121215;
+    --surface-raised: #1a1a1e;
+    --border: #252528;
+    --text: #e4e0d8;
+    --text-muted: #7a7670;
+    --text-dim: #4a4642;
+    --accent: #c9a87c;
+    --accent-glow: rgba(201, 168, 124, 0.15);
+    --accent-dim: #8a6d4b;
+    --green: #7a9a8a;
+    --green-dim: #4a6a5a;
+    --red: #c97c7c;
+    --font-serif: 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', serif;
+    --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace;
+    --gap: clamp(1rem, 3vw, 2.5rem);
+    --max-width: 1100px;
+  }
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-serif);
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* ── Background texture ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 0%, rgba(201,168,124,0.03) 0%, transparent 70%),
+      radial-gradient(ellipse 40% 50% at 80% 80%, rgba(122,154,138,0.02) 0%, transparent 70%);
+    pointer-events: none; z-index: 0;
+  }
+
+  /* ── Grid overlay ── */
+  .grid-overlay {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: 0.03;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
+
+  /* ── Container ── */
+  .container {
+    position: relative; z-index: 1;
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 0 var(--gap);
+  }
+
+  /* ── Navigation ── */
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    padding: 1.2rem 0;
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    background: rgba(11,11,13,0.75);
+    border-bottom: 1px solid var(--border);
+  }
+  nav .container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .nav-logo {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    font-weight: 500;
+    letter-spacing: 0.25em;
+    color: var(--accent);
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+  .nav-links {
+    display: flex; gap: 1.8rem; list-style: none;
+  }
+  .nav-links a {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    text-decoration: none;
+    text-transform: uppercase;
+    transition: color 0.2s;
+    position: relative;
+  }
+  .nav-links a::after {
+    content: '';
+    position: absolute;
+    bottom: -4px; left: 0; right: 0;
+    height: 1px;
+    background: var(--accent);
+    transform: scaleX(0);
+    transition: transform 0.25s ease;
+  }
+  .nav-links a:hover { color: var(--text); }
+  .nav-links a:hover::after { transform: scaleX(1); }
+
+  /* ── Hero ── */
+  .hero {
+    padding: clamp(6rem, 15vh, 10rem) 0 clamp(4rem, 10vh, 6rem);
+    position: relative;
+  }
+  .hero-tag {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 400;
+    letter-spacing: 0.15em;
+    color: var(--accent-dim);
+    text-transform: uppercase;
+    margin-bottom: 1.5rem;
+    display: flex; align-items: center; gap: 0.75rem;
+  }
+  .hero-tag::before {
+    content: '';
+    display: inline-block;
+    width: 2rem; height: 1px;
+    background: var(--accent-dim);
+  }
+  .hero h1 {
+    font-family: var(--font-serif);
+    font-size: clamp(2.5rem, 6vw, 4.5rem);
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    margin-bottom: 1.2rem;
+  }
+  .hero h1 em {
+    font-style: normal;
+    color: var(--accent);
+    position: relative;
+  }
+  .hero-subtitle {
+    font-family: var(--font-serif);
+    font-size: clamp(1rem, 1.8vw, 1.25rem);
+    color: var(--text-muted);
+    max-width: 580px;
+    line-height: 1.8;
+  }
+  .hero-stats {
+    display: flex; gap: 2.5rem;
+    margin-top: 2.5rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
+  }
+  .hero-stat {
+    display: flex; flex-direction: column;
+  }
+  .hero-stat-num {
+    font-family: var(--font-mono);
+    font-size: 1.5rem;
+    font-weight: 400;
+    color: var(--accent);
+    letter-spacing: -0.02em;
+  }
+  .hero-stat-label {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-top: 0.25rem;
+  }
+
+  /* ── Section ── */
+  .section {
+    padding: 5rem 0;
+  }
+  .section-header {
+    display: flex; align-items: center; gap: 0.75rem;
+    margin-bottom: 3rem;
+  }
+  .section-num {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--accent-dim);
+    letter-spacing: 0.1em;
+  }
+  .section-title {
+    font-family: var(--font-serif);
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: -0.01em;
+  }
+  .section-line {
+    flex: 1; height: 1px;
+    background: var(--border);
+    margin-left: 1rem;
+  }
+
+  /* ── Articles Grid ── */
+  .articles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.5rem;
+  }
+  .article-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 1.8rem;
+    transition: border-color 0.3s, background 0.3s, transform 0.2s;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    text-decoration: none;
+    display: block;
+  }
+  .article-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .article-card:hover {
+    border-color: var(--accent-dim);
+    background: var(--surface-raised);
+    transform: translateY(-2px);
+  }
+  .article-card:hover::before { opacity: 0.6; }
+  .article-meta {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 1rem;
+  }
+  .article-date {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+  .article-tag {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text-muted);
+  }
+  .article-tag.chemistry { color: var(--green); border-color: var(--green-dim); }
+  .article-tag.cloud { color: var(--accent); border-color: var(--accent-dim); }
+  .article-tag.security { color: var(--red); border-color: rgba(201,124,124,0.3); }
+  .article-card h3 {
+    font-family: var(--font-serif);
+    font-size: 1.15rem;
+    font-weight: 600;
+    line-height: 1.5;
+    color: var(--text);
+    margin-bottom: 0.6rem;
+  }
+  .article-card p {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    line-height: 1.7;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .article-card .read-more {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    color: var(--accent-dim);
+    margin-top: 1rem;
+    display: flex; align-items: center; gap: 0.4rem;
+    letter-spacing: 0.05em;
+  }
+  .article-card .read-more::after {
+    content: '→';
+    transition: transform 0.2s;
+  }
+  .article-card:hover .read-more::after {
+    transform: translateX(4px);
+  }
+
+  /* ── Featured Article ── */
+  .article-featured {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    text-decoration: none;
+    transition: border-color 0.3s, background 0.3s;
+  }
+  .article-featured:hover {
+    border-color: var(--accent-dim);
+    background: var(--surface-raised);
+  }
+  .article-featured-content {
+    padding: 2.5rem;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .article-featured-content h3 {
+    font-family: var(--font-serif);
+    font-size: 1.5rem;
+    font-weight: 600;
+    line-height: 1.4;
+    color: var(--text);
+    margin-bottom: 0.8rem;
+  }
+  .article-featured-content p {
+    font-size: 0.95rem;
+    color: var(--text-muted);
+    line-height: 1.8;
+  }
+  .article-featured-visual {
+    background: linear-gradient(135deg, rgba(201,168,124,0.08) 0%, rgba(122,154,138,0.05) 100%);
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .article-featured-visual::after {
+    content: '';
+    position: absolute;
+    width: 200px; height: 200px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    opacity: 0.3;
+  }
+  .article-featured-visual-inner {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    position: relative; z-index: 1;
+  }
+
+  /* ── About ── */
+  .about-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3rem;
+    align-items: start;
+  }
+  .about-text p {
+    font-size: 1rem;
+    color: var(--text-muted);
+    line-height: 1.9;
+    margin-bottom: 1.2rem;
+  }
+  .about-text p strong {
+    color: var(--text);
+    font-weight: 600;
+  }
+  .about-links {
+    display: flex; flex-direction: column; gap: 0.6rem;
+  }
+  .about-link {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-decoration: none;
+    padding: 0.8rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    display: flex; align-items: center; gap: 0.6rem;
+    transition: all 0.2s;
+  }
+  .about-link:hover {
+    color: var(--accent);
+    border-color: var(--accent-dim);
+    background: rgba(201,168,124,0.05);
+  }
+  .about-link-icon {
+    font-size: 0.9rem;
+    opacity: 0.6;
+  }
+
+  /* ── Footer ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 2.5rem 0;
+    margin-top: 3rem;
+  }
+  footer .container {
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .footer-left {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+  .footer-right {
+    display: flex; gap: 1.5rem;
+  }
+  .footer-right a {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-decoration: none;
+    transition: color 0.2s;
+    letter-spacing: 0.05em;
+  }
+  .footer-right a:hover { color: var(--accent); }
+
+  /* ── Animations ── */
+  .reveal {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.7s ease, transform 0.7s ease;
+  }
+  .reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .reveal-delay-1 { transition-delay: 0.1s; }
+  .reveal-delay-2 { transition-delay: 0.2s; }
+  .reveal-delay-3 { transition-delay: 0.3s; }
+  .reveal-delay-4 { transition-delay: 0.4s; }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .article-featured { grid-template-columns: 1fr; }
+    .article-featured-visual { display: none; }
+    .about-content { grid-template-columns: 1fr; gap: 2rem; }
+    .hero-stats { gap: 1.5rem; }
+    .articles-grid { grid-template-columns: 1fr; }
+    nav .container { flex-direction: column; gap: 0.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="grid-overlay"></div>
+
+<nav>
+  <div class="container">
+    <a href="#" class="nav-logo">CAORAN</a>
+    <ul class="nav-links">
+      <li><a href="#essays">文章</a></li>
+      <li><a href="#about">关于</a></li>
+      <li><a href="#contact">联系</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main class="container">
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-tag">札记 · 思考 · 构建</div>
+    <h1>在代码与分子之间<br><em>寻找秩序</em></h1>
+    <p class="hero-subtitle">
+      计算化学、云原生工程、系统安全。这里记录我的技术笔记、深度思考和偶尔的离经叛道。
+    </p>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <span class="hero-stat-num">12</span>
+        <span class="hero-stat-label">篇文章</span>
+      </div>
+      <div class="hero-stat">
+        <span class="hero-stat-num">3</span>
+        <span class="hero-stat-label">研究方向</span>
+      </div>
+      <div class="hero-stat">
+        <span class="hero-stat-num">∞</span>
+        <span class="hero-stat-label">持续探索</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Essays -->
+  <section class="section" id="essays">
+    <div class="section-header">
+      <span class="section-num">01</span>
+      <h2 class="section-title">文章</h2>
+      <span class="section-line"></span>
+    </div>
+
+    <div class="articles-grid">
+
+      <!-- Featured Article -->
+      <a href="#" class="article-featured reveal">
+        <div class="article-featured-content">
+          <div class="article-meta">
+            <span class="article-date">2026.07.15</span>
+            <span class="article-tag chemistry">计算化学</span>
+          </div>
+          <h3>FEP 自由能计算中的力场选择：从 CHARMM 到 OpenFF 的迁移实践</h3>
+          <p>在 StarryFE 平台迁移过程中，力场参数体系的切换是精度与效率权衡的核心。本文记录从 GAFF 到 OpenFF 2.1 的完整迁移路径、验证策略及令人意外的性能回归。</p>
+          <span class="read-more">阅读全文</span>
+        </div>
+        <div class="article-featured-visual">
+          <div class="article-featured-visual-inner">ΔΔG · binding<br>affinity · alchemy</div>
+        </div>
+      </a>
+
+      <!-- Article Cards -->
+      <a href="#" class="article-card reveal reveal-delay-1">
+        <div class="article-meta">
+          <span class="article-date">2026.06.28</span>
+          <span class="article-tag cloud">云原生</span>
+        </div>
+        <h3>VKE 上 FEP 工作负载的自动扩缩容策略</h3>
+        <p>GROMACS 模拟作业的 GPU 资源调度是一个典型的批处理场景。探讨基于队列深度的弹性伸缩方案及 VKE 集群的坑位。</p>
+        <span class="read-more">阅读全文</span>
+      </a>
+
+      <a href="#" class="article-card reveal reveal-delay-2">
+        <div class="article-meta">
+          <span class="article-date">2026.06.10</span>
+          <span class="article-tag security">安全研究</span>
+        </div>
+        <h3>iOS 17 内核漏洞利用中的 PAC 绕过技术综述</h3>
+        <p>Pointer Authentication 机制在 A15+ 芯片上的实现细节及近年公开的绕过方法回顾。</p>
+        <span class="read-more">阅读全文</span>
+      </a>
+
+      <a href="#" class="article-card reveal reveal-delay-3">
+        <div class="article-meta">
+          <span class="article-date">2026.05.22</span>
+          <span class="article-tag cloud">云原生</span>
+        </div>
+        <h3>从单体到微服务：gRPC 鉴权中间件的设计演进</h3>
+        <p>跨 20+ 微服务的统一认证方案，如何在不引入 SPOF 的前提下实现零信任鉴权。</p>
+        <span class="read-more">阅读全文</span>
+      </a>
+
+      <a href="#" class="article-card reveal reveal-delay-4">
+        <div class="article-meta">
+          <span class="article-date">2026.04.15</span>
+          <span class="article-tag chemistry">计算化学</span>
+        </div>
+        <h3>为什么你的 MD 模拟总是不收敛？—— 一个系统性的排查框架</h3>
+        <p>从初始构象、溶剂化、平衡时间到积分步长，拆解分子动力学模拟中最常见的收敛陷阱。</p>
+        <span class="read-more">阅读全文</span>
+      </a>
+
+      <a href="#" class="article-card reveal">
+        <div class="article-meta">
+          <span class="article-date">2026.03.08</span>
+          <span class="article-tag security">安全研究</span>
+        </div>
+        <h3>Mach-O 文件格式逆向笔记：从 dyld 加载到符号解析</h3>
+        <p>一份写给自己的 Mach-O 速查手册，涵盖 dyld 3 闭包模式下的加载流程和常见反混淆技巧。</p>
+        <span class="read-more">阅读全文</span>
+      </a>
+
+    </div>
+  </section>
+
+  <!-- About -->
+  <section class="section" id="about">
+    <div class="section-header">
+      <span class="section-num">02</span>
+      <h2 class="section-title">关于</h2>
+      <span class="section-line"></span>
+    </div>
+    <div class="about-content">
+      <div class="about-text reveal">
+        <p>
+          <strong>Caoran</strong>，目前就职于字节跳动，从事自由能计算平台的云原生架构与全栈开发。
+        </p>
+        <p>
+          背景横跨<strong>计算化学、云原生工程与 iOS 安全研究</strong>。相信第一性原理，厌恶经验主义驱动。写代码追求「熵最低」的方案 —— 简单、实用、不过度设计。
+        </p>
+        <p>
+          这个网站是我思考的外化。不追求流量，不讨好读者，只记录那些经过反复推敲后依然站得住脚的观点。
+        </p>
+      </div>
+      <div class="about-links reveal reveal-delay-2">
+        <a href="#" class="about-link">
+          <span class="about-link-icon">&#8599;</span>
+          GitHub
+        </a>
+        <a href="#" class="about-link">
+          <span class="about-link-icon">&#8599;</span>
+          飞书
+        </a>
+        <a href="#" class="about-link">
+          <span class="about-link-icon">&#9993;</span>
+          caoran@caoran.cn
+        </a>
+        <a href="#" class="about-link">
+          <span class="about-link-icon">&#8644;</span>
+          RSS 订阅
+        </a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="container">
+    <span class="footer-left">&copy; 2026 Caoran. Built with intent, not frameworks.</span>
+    <div class="footer-right">
+      <a href="#">GitHub</a>
+      <a href="#">RSS</a>
+      <a href="#">Mail</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Scroll reveal animation
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+      }
+    });
+  }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+
+</body>
+</html>

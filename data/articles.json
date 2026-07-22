@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-07-22T23:03:57.377933+08:00",
-  "count": 34,
+  "generated_at": "2026-07-22T23:27:33.474417+08:00",
+  "count": 33,
   "articles": [
     {
       "title": "SSH：从握手、认证到隧道与文件传输",
@@ -25,14 +25,6 @@
       "tag_color": "cloud",
       "summary": "Casbin 不把权限系统固定成某一种 RBAC，而是用 PERM 元模型把授权决策拆成 Request、Policy、Matchers 和 Effect 四部分。model.conf 定义计算规则，Policy 保存动态授权数据，Enfo…",
       "url": "/articles/Casbin-PERM-4df90054.html"
-    },
-    {
-      "title": "知识库首页",
-      "date": "2026.07.21",
-      "category": "知识库首页",
-      "tag_color": "cloud",
-      "summary": "目标：面向互联网大厂秋招，系统建设后端、AI Agent、算法工程与前端能力；当前优先后端与 Agent。",
-      "url": "/articles/c86fa13d.html"
     },
     {
       "title": "简历与项目表达",

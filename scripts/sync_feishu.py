@@ -393,10 +393,12 @@ def ts_to_date(ts) -> str:
 
 # ─────────────────────────────  主流程  ─────────────────────────────
 
-def walk(fs: Feishu, space_id: str, parent_token: str, category: str, articles: list):
+def walk(fs: Feishu, space_id: str, parent_token: str, category: str, articles: list,
+         skip_token: str = None):
     """
     递归遍历知识库节点。
     category = 当前父节点标题（分类目录）；顶层节点的 category 由其自身标题决定。
+    skip_token = 需跳过的节点（如知识库根节点/首页），仅跳过其自身内容，仍下钻其子节点。
     """
     children = fs.list_children(space_id, parent_token)
     for node in children:
@@ -404,6 +406,12 @@ def walk(fs: Feishu, space_id: str, parent_token: str, category: str, articles: 
         obj_type = node.get("obj_type")
         node_token = node.get("node_token")
         has_child = node.get("has_child")
+
+        # 跳过根节点/首页自身：不收录为文章，但仍继续遍历其子节点
+        if skip_token and node_token == skip_token:
+            if has_child:
+                walk(fs, space_id, node_token, category, articles, skip_token)
+            continue
 
         # 顶层节点（category 为空）以自身标题作为分类；下层沿用父目录分类
         node_category = category or title
@@ -458,12 +466,14 @@ def main():
     print("· 解析知识库根节点 …")
     root = fs.get_node(wiki_token)
     space_id = root["space_id"]
+    root_token = root.get("node_token")
     print(f"· space_id = {space_id}, 根节点 = {root.get('title')}")
 
     articles = []
     # 顶层节点是"知识空间"的直接子节点，必须不传 parent_node_token 才能列出；
     # 传入根 docx 节点的 token 只会得到 0 条（它自身没有 wiki 子节点）。
-    walk(fs, space_id, None, None, articles)
+    # skip_token=root_token：跳过知识库首页/根节点自身，不将其收录为文章。
+    walk(fs, space_id, None, None, articles, skip_token=root_token)
 
     # 按更新时间倒序
     articles.sort(key=lambda a: a["sort_ts"], reverse=True)

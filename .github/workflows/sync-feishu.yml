@@ -2,8 +2,7 @@ name: Sync Feishu Wiki
 
 on:
   schedule:
-    - cron: "0 22 * * *"
-    - cron: "0 10 * * *"
+    - cron: "0 20 * * *"
   workflow_dispatch:
 
 permissions:
@@ -37,8 +36,8 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/ articles/
           if git diff --staged --quiet; then
-            echo "内容无变化, 跳过提交"
+            echo "no change, skip commit"
           else
-            git commit -m "chore: sync feishu wiki $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git commit -m "chore: sync feishu wiki"
             git push
           fi

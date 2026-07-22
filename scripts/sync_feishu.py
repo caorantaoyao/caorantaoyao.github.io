@@ -283,7 +283,7 @@ DETAIL_TEMPLATE = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{title} — 白鸦</title>
+<title>{title} — 曹然</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -363,7 +363,7 @@ DETAIL_TEMPLATE = """<!DOCTYPE html>
 <div id="progress"></div>
 <nav>
   <div class="container">
-    <a href="/" class="nav-logo"><span class="dot"></span>白鸦</a>
+    <a href="/" class="nav-logo"><span class="dot"></span>曹然</a>
     <a href="/library.html" class="nav-back">← 返回知识库</a>
   </div>
 </nav>
@@ -379,7 +379,7 @@ DETAIL_TEMPLATE = """<!DOCTYPE html>
     </div>
   </article>
 </main>
-<footer>&copy; 2026 白鸦 · 技术札记与深度思考</footer>
+<footer>&copy; 2026 曹然 · 技术札记与深度思考</footer>
 <script>
   var p=document.getElementById('progress');
   addEventListener('scroll',function(){{

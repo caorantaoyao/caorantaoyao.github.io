@@ -1,0 +1,5 @@
+# 本地测试/密钥，绝不入库
+.env
+*.local
+__pycache__/
+*.pyc

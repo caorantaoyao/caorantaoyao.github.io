@@ -217,6 +217,14 @@
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: 1.5rem;
   }
+  .articles-empty {
+    grid-column: 1 / -1;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+    padding: 2rem 0;
+  }
   .article-card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -477,7 +485,7 @@
     </p>
     <div class="hero-stats">
       <div class="hero-stat">
-        <span class="hero-stat-num">12</span>
+        <span class="hero-stat-num" id="stat-count">—</span>
         <span class="hero-stat-label">篇文章</span>
       </div>
       <div class="hero-stat">
@@ -499,75 +507,9 @@
       <span class="section-line"></span>
     </div>
 
-    <div class="articles-grid">
-
-      <!-- Featured Article -->
-      <a href="#" class="article-featured reveal">
-        <div class="article-featured-content">
-          <div class="article-meta">
-            <span class="article-date">2026.07.15</span>
-            <span class="article-tag chemistry">计算化学</span>
-          </div>
-          <h3>FEP 自由能计算中的力场选择：从 CHARMM 到 OpenFF 的迁移实践</h3>
-          <p>在 StarryFE 平台迁移过程中，力场参数体系的切换是精度与效率权衡的核心。本文记录从 GAFF 到 OpenFF 2.1 的完整迁移路径、验证策略及令人意外的性能回归。</p>
-          <span class="read-more">阅读全文</span>
-        </div>
-        <div class="article-featured-visual">
-          <div class="article-featured-visual-inner">ΔΔG · binding<br>affinity · alchemy</div>
-        </div>
-      </a>
-
-      <!-- Article Cards -->
-      <a href="#" class="article-card reveal reveal-delay-1">
-        <div class="article-meta">
-          <span class="article-date">2026.06.28</span>
-          <span class="article-tag cloud">云原生</span>
-        </div>
-        <h3>VKE 上 FEP 工作负载的自动扩缩容策略</h3>
-        <p>GROMACS 模拟作业的 GPU 资源调度是一个典型的批处理场景。探讨基于队列深度的弹性伸缩方案及 VKE 集群的坑位。</p>
-        <span class="read-more">阅读全文</span>
-      </a>
-
-      <a href="#" class="article-card reveal reveal-delay-2">
-        <div class="article-meta">
-          <span class="article-date">2026.06.10</span>
-          <span class="article-tag security">安全研究</span>
-        </div>
-        <h3>iOS 17 内核漏洞利用中的 PAC 绕过技术综述</h3>
-        <p>Pointer Authentication 机制在 A15+ 芯片上的实现细节及近年公开的绕过方法回顾。</p>
-        <span class="read-more">阅读全文</span>
-      </a>
-
-      <a href="#" class="article-card reveal reveal-delay-3">
-        <div class="article-meta">
-          <span class="article-date">2026.05.22</span>
-          <span class="article-tag cloud">云原生</span>
-        </div>
-        <h3>从单体到微服务：gRPC 鉴权中间件的设计演进</h3>
-        <p>跨 20+ 微服务的统一认证方案，如何在不引入 SPOF 的前提下实现零信任鉴权。</p>
-        <span class="read-more">阅读全文</span>
-      </a>
-
-      <a href="#" class="article-card reveal reveal-delay-4">
-        <div class="article-meta">
-          <span class="article-date">2026.04.15</span>
-          <span class="article-tag chemistry">计算化学</span>
-        </div>
-        <h3>为什么你的 MD 模拟总是不收敛？—— 一个系统性的排查框架</h3>
-        <p>从初始构象、溶剂化、平衡时间到积分步长，拆解分子动力学模拟中最常见的收敛陷阱。</p>
-        <span class="read-more">阅读全文</span>
-      </a>
-
-      <a href="#" class="article-card reveal">
-        <div class="article-meta">
-          <span class="article-date">2026.03.08</span>
-          <span class="article-tag security">安全研究</span>
-        </div>
-        <h3>Mach-O 文件格式逆向笔记：从 dyld 加载到符号解析</h3>
-        <p>一份写给自己的 Mach-O 速查手册，涵盖 dyld 3 闭包模式下的加载流程和常见反混淆技巧。</p>
-        <span class="read-more">阅读全文</span>
-      </a>
-
+    <div class="articles-grid" id="articles-grid">
+      <!-- 文章由 data/articles.json 动态渲染；同步自飞书知识库 -->
+      <p class="articles-empty" id="articles-empty">正在加载文章…</p>
     </div>
   </section>
 
@@ -591,21 +533,21 @@
         </p>
       </div>
       <div class="about-links reveal reveal-delay-2">
-        <a href="#" class="about-link">
+        <a href="https://github.com/caorantaoyao" target="_blank" rel="noopener" class="about-link">
           <span class="about-link-icon">&#8599;</span>
           GitHub
         </a>
-        <a href="#" class="about-link">
+        <a href="https://my.feishu.cn/wiki/E9BuwXR9qiZfGmkLo95cBRNUnph" target="_blank" rel="noopener" class="about-link">
           <span class="about-link-icon">&#8599;</span>
-          飞书
+          飞书知识库
         </a>
-        <a href="#" class="about-link">
+        <a href="mailto:caoran@caoran.cn" class="about-link">
           <span class="about-link-icon">&#9993;</span>
           caoran@caoran.cn
         </a>
-        <a href="#" class="about-link">
+        <a href="/data/articles.json" target="_blank" rel="noopener" class="about-link">
           <span class="about-link-icon">&#8644;</span>
-          RSS 订阅
+          文章数据 (JSON)
         </a>
       </div>
     </div>
@@ -625,16 +567,84 @@
 </footer>
 
 <script>
-  // Scroll reveal animation
+  // ── 转义，防止标题/摘要中的特殊字符破坏结构 ──
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // ── 渲染一篇 featured 文章 ──
+  function featuredHTML(a, i) {
+    return `<a href="${esc(a.url)}" class="article-featured reveal">
+      <div class="article-featured-content">
+        <div class="article-meta">
+          <span class="article-date">${esc(a.date)}</span>
+          <span class="article-tag ${esc(a.tag_color)}">${esc(a.category)}</span>
+        </div>
+        <h3>${esc(a.title)}</h3>
+        <p>${esc(a.summary)}</p>
+        <span class="read-more">阅读全文</span>
+      </div>
+      <div class="article-featured-visual">
+        <div class="article-featured-visual-inner">${esc(a.category)}</div>
+      </div>
+    </a>`;
+  }
+
+  // ── 渲染一篇普通卡片 ──
+  function cardHTML(a, i) {
+    const delay = i > 0 && i <= 4 ? ` reveal-delay-${i}` : '';
+    return `<a href="${esc(a.url)}" class="article-card reveal${delay}">
+      <div class="article-meta">
+        <span class="article-date">${esc(a.date)}</span>
+        <span class="article-tag ${esc(a.tag_color)}">${esc(a.category)}</span>
+      </div>
+      <h3>${esc(a.title)}</h3>
+      <p>${esc(a.summary)}</p>
+      <span class="read-more">阅读全文</span>
+    </a>`;
+  }
+
+  // ── 滚动渐显观察器 ──
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        entry.target.classList.add('visible');
-      }
+      if (entry.isIntersecting) entry.target.classList.add('visible');
     });
   }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
 
-  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+  function observeReveals(scope) {
+    (scope || document).querySelectorAll('.reveal:not(.visible)').forEach(el => observer.observe(el));
+  }
+
+  // ── 加载并渲染飞书同步文章 ──
+  async function loadArticles() {
+    const grid = document.getElementById('articles-grid');
+    const empty = document.getElementById('articles-empty');
+    try {
+      const res = await fetch('/data/articles.json', { cache: 'no-cache' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      const list = (data && data.articles) || [];
+
+      const countEl = document.getElementById('stat-count');
+      if (countEl) countEl.textContent = list.length || '0';
+
+      if (!list.length) {
+        if (empty) empty.textContent = '知识库暂无文章，或首次同步尚未完成。';
+        return;
+      }
+      grid.innerHTML = list.map((a, i) => i === 0 ? featuredHTML(a, i) : cardHTML(a, i)).join('\n');
+      observeReveals(grid);
+    } catch (e) {
+      if (empty) empty.textContent = '文章加载失败（' + e.message + '）。首次运行需先在 Actions 触发同步。';
+      const countEl = document.getElementById('stat-count');
+      if (countEl) countEl.textContent = '0';
+    }
+  }
+
+  observeReveals(document);
+  loadArticles();
 </script>
 
 </body>

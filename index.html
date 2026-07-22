@@ -3,35 +3,40 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CAORAN — 札记 · 思考 · 构建</title>
+<title>CAORAN — 在代码与分子之间寻找秩序</title>
+<meta name="description" content="Caoran 的技术札记与知识库：计算化学、云原生工程、系统安全。">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0b0b0d;
-    --surface: #121215;
-    --surface-raised: #1a1a1e;
-    --border: #252528;
-    --text: #e4e0d8;
-    --text-muted: #7a7670;
-    --text-dim: #4a4642;
+    --bg: #0a0a0c;
+    --bg-2: #0d0d10;
+    --surface: #121216;
+    --surface-raised: #17171c;
+    --border: #232327;
+    --border-soft: #1b1b1f;
+    --text: #e6e2da;
+    --text-muted: #837e76;
+    --text-dim: #4c4842;
     --accent: #c9a87c;
-    --accent-glow: rgba(201, 168, 124, 0.15);
+    --accent-bright: #dcc199;
+    --accent-glow: rgba(201, 168, 124, 0.14);
     --accent-dim: #8a6d4b;
-    --green: #7a9a8a;
+    --green: #86a596;
     --green-dim: #4a6a5a;
-    --red: #c97c7c;
+    --red: #c98a8a;
+    --violet: #9a8fb5;
+    --blue: #7f96b0;
     --font-serif: 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', serif;
     --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace;
-    --gap: clamp(1rem, 3vw, 2.5rem);
-    --max-width: 1100px;
+    --gap: clamp(1.1rem, 3vw, 2.5rem);
+    --max-width: 1180px;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-
   html { scroll-behavior: smooth; }
-
   body {
     background: var(--bg);
     color: var(--text);
@@ -40,448 +45,291 @@
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
   }
+  ::selection { background: var(--accent-dim); color: #0a0a0c; }
 
-  /* ── Background texture ── */
-  body::before {
-    content: '';
-    position: fixed; inset: 0;
+  /* ── Hero canvas ── */
+  #bg-canvas {
+    position: fixed; inset: 0; z-index: 0;
+    pointer-events: none;
+    opacity: 0.9;
+  }
+  body::after {
+    content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
     background:
-      radial-gradient(ellipse 80% 60% at 50% 0%, rgba(201,168,124,0.03) 0%, transparent 70%),
-      radial-gradient(ellipse 40% 50% at 80% 80%, rgba(122,154,138,0.02) 0%, transparent 70%);
-    pointer-events: none; z-index: 0;
+      radial-gradient(ellipse 70% 55% at 50% -5%, var(--accent-glow) 0%, transparent 65%),
+      radial-gradient(ellipse 45% 45% at 88% 92%, rgba(134,165,150,0.05) 0%, transparent 70%);
   }
 
-  /* ── Grid overlay ── */
-  .grid-overlay {
-    position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: 0.03;
-    background-image:
-      linear-gradient(var(--border) 1px, transparent 1px),
-      linear-gradient(90deg, var(--border) 1px, transparent 1px);
-    background-size: 60px 60px;
-  }
-
-  /* ── Container ── */
   .container {
-    position: relative; z-index: 1;
-    max-width: var(--max-width);
-    margin: 0 auto;
-    padding: 0 var(--gap);
+    position: relative; z-index: 2;
+    max-width: var(--max-width); margin: 0 auto; padding: 0 var(--gap);
   }
 
-  /* ── Navigation ── */
+  /* ── Nav ── */
   nav {
     position: sticky; top: 0; z-index: 100;
-    padding: 1.2rem 0;
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    background: rgba(11,11,13,0.75);
-    border-bottom: 1px solid var(--border);
+    padding: 1.15rem 0;
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    background: rgba(10,10,12,0.6);
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.4s, background 0.4s;
   }
-  nav .container {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
+  nav.scrolled { border-bottom-color: var(--border-soft); background: rgba(10,10,12,0.82); }
+  nav .container { display: flex; justify-content: space-between; align-items: center; }
   .nav-logo {
-    font-family: var(--font-mono);
-    font-size: 0.85rem;
-    font-weight: 500;
-    letter-spacing: 0.25em;
-    color: var(--accent);
-    text-decoration: none;
-    text-transform: uppercase;
+    font-family: var(--font-mono); font-size: 0.85rem; font-weight: 500;
+    letter-spacing: 0.28em; color: var(--accent); text-decoration: none; text-transform: uppercase;
+    display: inline-flex; align-items: center; gap: 0.55rem;
   }
-  .nav-links {
-    display: flex; gap: 1.8rem; list-style: none;
+  .nav-logo .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 10px var(--accent); animation: pulse 2.6s var(--ease) infinite;
   }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.45;transform:scale(0.7)} }
+  .nav-links { display: flex; gap: 1.9rem; list-style: none; }
   .nav-links a {
-    font-family: var(--font-mono);
-    font-size: 0.72rem;
-    font-weight: 400;
-    letter-spacing: 0.08em;
-    color: var(--text-muted);
-    text-decoration: none;
-    text-transform: uppercase;
-    transition: color 0.2s;
-    position: relative;
+    font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.1em;
+    color: var(--text-muted); text-decoration: none; text-transform: uppercase;
+    transition: color 0.2s; position: relative;
   }
   .nav-links a::after {
-    content: '';
-    position: absolute;
-    bottom: -4px; left: 0; right: 0;
-    height: 1px;
-    background: var(--accent);
-    transform: scaleX(0);
-    transition: transform 0.25s ease;
+    content: ''; position: absolute; bottom: -5px; left: 0; right: 0; height: 1px;
+    background: var(--accent); transform: scaleX(0); transform-origin: left;
+    transition: transform 0.3s var(--ease);
   }
   .nav-links a:hover { color: var(--text); }
   .nav-links a:hover::after { transform: scaleX(1); }
 
   /* ── Hero ── */
   .hero {
-    padding: clamp(6rem, 15vh, 10rem) 0 clamp(4rem, 10vh, 6rem);
-    position: relative;
+    min-height: 92vh; display: flex; flex-direction: column; justify-content: center;
+    padding: clamp(3rem,10vh,7rem) 0 clamp(3rem,8vh,5rem);
   }
   .hero-tag {
-    font-family: var(--font-mono);
-    font-size: 0.7rem;
-    font-weight: 400;
-    letter-spacing: 0.15em;
-    color: var(--accent-dim);
-    text-transform: uppercase;
-    margin-bottom: 1.5rem;
-    display: flex; align-items: center; gap: 0.75rem;
+    font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.2em;
+    color: var(--accent-dim); text-transform: uppercase; margin-bottom: 1.8rem;
+    display: flex; align-items: center; gap: 0.8rem;
   }
-  .hero-tag::before {
-    content: '';
-    display: inline-block;
-    width: 2rem; height: 1px;
-    background: var(--accent-dim);
-  }
+  .hero-tag::before { content: ''; width: 2.4rem; height: 1px; background: var(--accent-dim); }
   .hero h1 {
-    font-family: var(--font-serif);
-    font-size: clamp(2.5rem, 6vw, 4.5rem);
-    font-weight: 700;
-    line-height: 1.15;
-    letter-spacing: -0.02em;
-    color: var(--text);
-    margin-bottom: 1.2rem;
+    font-size: clamp(2.6rem, 7vw, 5.4rem); font-weight: 700; line-height: 1.1;
+    letter-spacing: -0.025em; margin-bottom: 1.6rem;
   }
+  .hero h1 .line { display: block; overflow: hidden; }
+  .hero h1 .line > span {
+    display: inline-block; transform: translateY(105%);
+    animation: rise 1s var(--ease) forwards;
+  }
+  .hero h1 .line:nth-child(2) > span { animation-delay: 0.12s; }
+  @keyframes rise { to { transform: translateY(0); } }
   .hero h1 em {
-    font-style: normal;
-    color: var(--accent);
-    position: relative;
+    font-style: normal; color: var(--accent);
+    background: linear-gradient(105deg, var(--accent) 0%, var(--accent-bright) 50%, var(--accent) 100%);
+    background-size: 200% auto; -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; animation: shimmer 6s linear infinite;
   }
+  @keyframes shimmer { to { background-position: 200% center; } }
   .hero-subtitle {
-    font-family: var(--font-serif);
-    font-size: clamp(1rem, 1.8vw, 1.25rem);
-    color: var(--text-muted);
-    max-width: 580px;
-    line-height: 1.8;
+    font-size: clamp(1rem,1.7vw,1.28rem); color: var(--text-muted); max-width: 600px;
+    line-height: 1.85; opacity: 0; animation: fadeUp 0.9s var(--ease) 0.5s forwards;
   }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
   .hero-stats {
-    display: flex; gap: 2.5rem;
-    margin-top: 2.5rem;
-    padding-top: 2rem;
-    border-top: 1px solid var(--border);
+    display: flex; gap: clamp(1.6rem,4vw,3rem); margin-top: 2.8rem; padding-top: 2.2rem;
+    border-top: 1px solid var(--border-soft); opacity: 0;
+    animation: fadeUp 0.9s var(--ease) 0.7s forwards;
   }
-  .hero-stat {
-    display: flex; flex-direction: column;
-  }
+  .hero-stat { display: flex; flex-direction: column; }
   .hero-stat-num {
-    font-family: var(--font-mono);
-    font-size: 1.5rem;
-    font-weight: 400;
-    color: var(--accent);
-    letter-spacing: -0.02em;
+    font-family: var(--font-mono); font-size: 1.7rem; font-weight: 400;
+    color: var(--accent); letter-spacing: -0.02em;
   }
   .hero-stat-label {
-    font-family: var(--font-mono);
-    font-size: 0.65rem;
-    letter-spacing: 0.1em;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    margin-top: 0.25rem;
+    font-family: var(--font-mono); font-size: 0.64rem; letter-spacing: 0.12em;
+    color: var(--text-dim); text-transform: uppercase; margin-top: 0.35rem;
   }
+  .scroll-hint {
+    position: absolute; left: 50%; bottom: 2rem; transform: translateX(-50%);
+    font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: 0.2em;
+    color: var(--text-dim); text-transform: uppercase; opacity: 0;
+    animation: fadeUp 1s var(--ease) 1.2s forwards; display: flex; flex-direction: column;
+    align-items: center; gap: 0.6rem;
+  }
+  .scroll-hint .bar {
+    width: 1px; height: 2.2rem; background: linear-gradient(var(--accent-dim), transparent);
+    animation: scrollbar 2s var(--ease) infinite;
+  }
+  @keyframes scrollbar { 0%{transform:scaleY(0);transform-origin:top} 40%{transform:scaleY(1);transform-origin:top} 60%{transform:scaleY(1);transform-origin:bottom} 100%{transform:scaleY(0);transform-origin:bottom} }
 
-  /* ── Section ── */
-  .section {
-    padding: 5rem 0;
+  /* ── Section header ── */
+  .section { padding: clamp(4rem,9vh,7rem) 0; }
+  .section-head { margin-bottom: 3.2rem; }
+  .section-eyebrow {
+    font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.16em;
+    color: var(--accent-dim); text-transform: uppercase; margin-bottom: 0.9rem;
+    display: flex; align-items: center; gap: 0.7rem;
   }
-  .section-header {
-    display: flex; align-items: center; gap: 0.75rem;
-    margin-bottom: 3rem;
-  }
-  .section-num {
-    font-family: var(--font-mono);
-    font-size: 0.7rem;
-    color: var(--accent-dim);
-    letter-spacing: 0.1em;
-  }
+  .section-eyebrow::before { content: ''; width: 1.6rem; height: 1px; background: var(--accent-dim); }
   .section-title {
-    font-family: var(--font-serif);
-    font-size: 1.6rem;
-    font-weight: 600;
-    color: var(--text);
-    letter-spacing: -0.01em;
+    font-size: clamp(1.7rem,3.2vw,2.4rem); font-weight: 600; letter-spacing: -0.02em; line-height: 1.25;
   }
-  .section-line {
-    flex: 1; height: 1px;
-    background: var(--border);
-    margin-left: 1rem;
-  }
+  .section-desc { color: var(--text-muted); max-width: 560px; margin-top: 0.9rem; font-size: 0.98rem; }
 
-  /* ── Articles Grid ── */
-  .articles-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 1.5rem;
+  /* ── Library portal grid ── */
+  .portal-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.3rem;
   }
-  .articles-empty {
-    grid-column: 1 / -1;
-    font-family: var(--font-mono);
-    font-size: 0.8rem;
-    color: var(--text-dim);
-    letter-spacing: 0.05em;
-    padding: 2rem 0;
+  .portal-card {
+    position: relative; background: var(--surface); border: 1px solid var(--border-soft);
+    border-radius: 4px; padding: 1.9rem 1.8rem 1.6rem; text-decoration: none; color: inherit;
+    overflow: hidden; transition: transform 0.4s var(--ease), border-color 0.4s, background 0.4s;
+    display: flex; flex-direction: column; min-height: 190px;
   }
-  .article-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 2px;
-    padding: 1.8rem;
-    transition: border-color 0.3s, background 0.3s, transform 0.2s;
-    cursor: pointer;
-    position: relative;
-    overflow: hidden;
-    text-decoration: none;
-    display: block;
+  .portal-card::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(circle at var(--mx,50%) var(--my,0%), var(--accent-glow), transparent 60%);
+    opacity: 0; transition: opacity 0.4s;
   }
-  .article-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 1px;
+  .portal-card::after {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
     background: linear-gradient(90deg, transparent, var(--accent), transparent);
-    opacity: 0;
-    transition: opacity 0.3s;
+    opacity: 0; transition: opacity 0.4s;
   }
-  .article-card:hover {
+  .portal-card:hover { transform: translateY(-4px); border-color: var(--accent-dim); background: var(--surface-raised); }
+  .portal-card:hover::before { opacity: 1; }
+  .portal-card:hover::after { opacity: 0.7; }
+  .portal-index {
+    font-family: var(--font-mono); font-size: 0.66rem; color: var(--text-dim);
+    letter-spacing: 0.1em; margin-bottom: 1.1rem;
+  }
+  .portal-card h3 {
+    font-size: 1.28rem; font-weight: 600; line-height: 1.4; margin-bottom: 0.5rem; letter-spacing: -0.01em;
+  }
+  .portal-card .desc { font-size: 0.88rem; color: var(--text-muted); line-height: 1.65; flex: 1; }
+  .portal-foot {
+    display: flex; justify-content: space-between; align-items: center; margin-top: 1.3rem;
+    font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.06em;
+  }
+  .portal-count { color: var(--accent); }
+  .portal-count b { font-weight: 500; }
+  .portal-arrow { color: var(--text-dim); transition: transform 0.3s var(--ease), color 0.3s; }
+  .portal-card:hover .portal-arrow { transform: translateX(5px); color: var(--accent); }
+  .portal-card.wide { grid-column: 1 / -1; min-height: auto; }
+  .portal-card.all {
+    background: linear-gradient(120deg, rgba(201,168,124,0.06), rgba(134,165,150,0.03));
     border-color: var(--accent-dim);
-    background: var(--surface-raised);
-    transform: translateY(-2px);
   }
-  .article-card:hover::before { opacity: 0.6; }
-  .article-meta {
-    display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 1rem;
-  }
-  .article-date {
-    font-family: var(--font-mono);
-    font-size: 0.68rem;
-    color: var(--text-dim);
-    letter-spacing: 0.05em;
-  }
-  .article-tag {
-    font-family: var(--font-mono);
-    font-size: 0.6rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    padding: 0.2rem 0.6rem;
-    border: 1px solid var(--border);
-    border-radius: 2px;
-    color: var(--text-muted);
-  }
-  .article-tag.chemistry { color: var(--green); border-color: var(--green-dim); }
-  .article-tag.cloud { color: var(--accent); border-color: var(--accent-dim); }
-  .article-tag.security { color: var(--red); border-color: rgba(201,124,124,0.3); }
-  .article-card h3 {
-    font-family: var(--font-serif);
-    font-size: 1.15rem;
-    font-weight: 600;
-    line-height: 1.5;
-    color: var(--text);
-    margin-bottom: 0.6rem;
-  }
-  .article-card p {
-    font-size: 0.9rem;
-    color: var(--text-muted);
-    line-height: 1.7;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-  .article-card .read-more {
-    font-family: var(--font-mono);
-    font-size: 0.68rem;
-    color: var(--accent-dim);
-    margin-top: 1rem;
-    display: flex; align-items: center; gap: 0.4rem;
-    letter-spacing: 0.05em;
-  }
-  .article-card .read-more::after {
-    content: '→';
-    transition: transform 0.2s;
-  }
-  .article-card:hover .read-more::after {
-    transform: translateX(4px);
-  }
+  .portal-card.all h3 { color: var(--accent-bright); }
 
-  /* ── Featured Article ── */
-  .article-featured {
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 2px;
-    overflow: hidden;
-    text-decoration: none;
-    transition: border-color 0.3s, background 0.3s;
-  }
-  .article-featured:hover {
-    border-color: var(--accent-dim);
-    background: var(--surface-raised);
-  }
-  .article-featured-content {
-    padding: 2.5rem;
-    display: flex; flex-direction: column; justify-content: center;
-  }
-  .article-featured-content h3 {
-    font-family: var(--font-serif);
-    font-size: 1.5rem;
-    font-weight: 600;
-    line-height: 1.4;
-    color: var(--text);
-    margin-bottom: 0.8rem;
-  }
-  .article-featured-content p {
-    font-size: 0.95rem;
-    color: var(--text-muted);
-    line-height: 1.8;
-  }
-  .article-featured-visual {
-    background: linear-gradient(135deg, rgba(201,168,124,0.08) 0%, rgba(122,154,138,0.05) 100%);
-    display: flex; align-items: center; justify-content: center;
+  /* accent variants for category dots */
+  .cat-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 0.55rem; }
+  .c-route .cat-dot { background: var(--accent); }
+  .c-subject .cat-dot { background: var(--green); }
+  .c-asset .cat-dot { background: var(--blue); }
+  .c-inbox .cat-dot { background: var(--violet); }
+  .c-review .cat-dot { background: var(--red); }
+  .c-template .cat-dot { background: var(--text-muted); }
+
+  /* ── Latest list ── */
+  .latest-list { display: flex; flex-direction: column; }
+  .latest-row {
+    display: grid; grid-template-columns: 108px 1fr auto; gap: 1.4rem; align-items: baseline;
+    padding: 1.35rem 0.4rem; border-top: 1px solid var(--border-soft);
+    text-decoration: none; color: inherit; transition: padding 0.35s var(--ease), background 0.35s;
     position: relative;
-    overflow: hidden;
   }
-  .article-featured-visual::after {
-    content: '';
-    position: absolute;
-    width: 200px; height: 200px;
-    border: 1px solid var(--border);
-    border-radius: 50%;
-    opacity: 0.3;
+  .latest-row:last-child { border-bottom: 1px solid var(--border-soft); }
+  .latest-row::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px;
+    background: var(--accent); transform: scaleY(0); transform-origin: top; transition: transform 0.35s var(--ease);
   }
-  .article-featured-visual-inner {
-    font-family: var(--font-mono);
-    font-size: 0.7rem;
-    color: var(--text-dim);
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    position: relative; z-index: 1;
+  .latest-row:hover { padding-left: 1.3rem; background: linear-gradient(90deg, var(--accent-glow), transparent 40%); }
+  .latest-row:hover::before { transform: scaleY(1); }
+  .latest-date { font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-dim); letter-spacing: 0.04em; }
+  .latest-title { font-size: 1.08rem; font-weight: 500; line-height: 1.5; }
+  .latest-title .cat {
+    font-family: var(--font-mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-muted); border: 1px solid var(--border); border-radius: 2px; padding: 0.12rem 0.5rem;
+    margin-left: 0.75rem; vertical-align: middle; white-space: nowrap;
   }
+  .latest-go { font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-dim); transition: transform 0.3s var(--ease), color 0.3s; }
+  .latest-row:hover .latest-go { transform: translateX(4px); color: var(--accent); }
 
   /* ── About ── */
-  .about-content {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 3rem;
-    align-items: start;
-  }
-  .about-text p {
-    font-size: 1rem;
-    color: var(--text-muted);
-    line-height: 1.9;
-    margin-bottom: 1.2rem;
-  }
-  .about-text p strong {
-    color: var(--text);
-    font-weight: 600;
-  }
-  .about-links {
-    display: flex; flex-direction: column; gap: 0.6rem;
-  }
+  .about-content { display: grid; grid-template-columns: 1.4fr 1fr; gap: clamp(2rem,5vw,4rem); align-items: start; }
+  .about-text p { font-size: 1.02rem; color: var(--text-muted); line-height: 1.95; margin-bottom: 1.3rem; }
+  .about-text p strong { color: var(--text); font-weight: 600; }
+  .about-links { display: flex; flex-direction: column; gap: 0.65rem; }
   .about-link {
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    text-decoration: none;
-    padding: 0.8rem 1rem;
-    border: 1px solid var(--border);
-    border-radius: 2px;
-    display: flex; align-items: center; gap: 0.6rem;
-    transition: all 0.2s;
+    font-family: var(--font-mono); font-size: 0.76rem; color: var(--text-muted); text-decoration: none;
+    padding: 0.95rem 1.1rem; border: 1px solid var(--border-soft); border-radius: 3px;
+    display: flex; align-items: center; justify-content: space-between; transition: all 0.28s var(--ease);
   }
-  .about-link:hover {
-    color: var(--accent);
-    border-color: var(--accent-dim);
-    background: rgba(201,168,124,0.05);
-  }
-  .about-link-icon {
-    font-size: 0.9rem;
-    opacity: 0.6;
-  }
+  .about-link:hover { color: var(--accent); border-color: var(--accent-dim); background: rgba(201,168,124,0.05); transform: translateX(4px); }
+  .about-link .arr { opacity: 0.5; transition: transform 0.3s var(--ease); }
+  .about-link:hover .arr { transform: translate(3px,-3px); opacity: 1; }
 
   /* ── Footer ── */
-  footer {
-    border-top: 1px solid var(--border);
-    padding: 2.5rem 0;
-    margin-top: 3rem;
-  }
-  footer .container {
-    display: flex; justify-content: space-between; align-items: center;
-  }
-  .footer-left {
-    font-family: var(--font-mono);
-    font-size: 0.68rem;
-    color: var(--text-dim);
-    letter-spacing: 0.05em;
-  }
-  .footer-right {
-    display: flex; gap: 1.5rem;
-  }
-  .footer-right a {
-    font-family: var(--font-mono);
-    font-size: 0.7rem;
-    color: var(--text-dim);
-    text-decoration: none;
-    transition: color 0.2s;
-    letter-spacing: 0.05em;
-  }
+  footer { border-top: 1px solid var(--border-soft); padding: 2.6rem 0; margin-top: 2rem; }
+  footer .container { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+  .footer-left { font-family: var(--font-mono); font-size: 0.68rem; color: var(--text-dim); letter-spacing: 0.04em; }
+  .footer-right { display: flex; gap: 1.6rem; }
+  .footer-right a { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-dim); text-decoration: none; transition: color 0.2s; letter-spacing: 0.04em; }
   .footer-right a:hover { color: var(--accent); }
 
-  /* ── Animations ── */
-  .reveal {
-    opacity: 0;
-    transform: translateY(24px);
-    transition: opacity 0.7s ease, transform 0.7s ease;
-  }
-  .reveal.visible {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  .reveal-delay-1 { transition-delay: 0.1s; }
-  .reveal-delay-2 { transition-delay: 0.2s; }
-  .reveal-delay-3 { transition-delay: 0.3s; }
-  .reveal-delay-4 { transition-delay: 0.4s; }
+  /* ── Reveal ── */
+  .reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.8s var(--ease), transform 0.8s var(--ease); }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+  .reveal-d1 { transition-delay: 0.08s; }
+  .reveal-d2 { transition-delay: 0.16s; }
+  .reveal-d3 { transition-delay: 0.24s; }
+  .reveal-d4 { transition-delay: 0.32s; }
+  .reveal-d5 { transition-delay: 0.40s; }
 
-  /* ── Responsive ── */
-  @media (max-width: 768px) {
-    .article-featured { grid-template-columns: 1fr; }
-    .article-featured-visual { display: none; }
+  @media (max-width: 820px) {
     .about-content { grid-template-columns: 1fr; gap: 2rem; }
-    .hero-stats { gap: 1.5rem; }
-    .articles-grid { grid-template-columns: 1fr; }
-    nav .container { flex-direction: column; gap: 0.5rem; }
+    .latest-row { grid-template-columns: 1fr auto; }
+    .latest-date { grid-column: 1 / -1; margin-bottom: -0.6rem; }
+    .nav-links { gap: 1.1rem; }
+    .latest-title .cat { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    .hero h1 .line > span { transform: none; }
+    .hero-subtitle, .hero-stats, .scroll-hint { opacity: 1; }
+    .reveal { opacity: 1; transform: none; }
+    #bg-canvas { display: none; }
   }
 </style>
 </head>
 <body>
 
-<div class="grid-overlay"></div>
+<canvas id="bg-canvas"></canvas>
 
-<nav>
+<nav id="nav">
   <div class="container">
-    <a href="#" class="nav-logo">CAORAN</a>
+    <a href="#top" class="nav-logo"><span class="dot"></span>CAORAN</a>
     <ul class="nav-links">
-      <li><a href="#essays">文章</a></li>
+      <li><a href="#library">知识库</a></li>
+      <li><a href="#latest">最新</a></li>
       <li><a href="#about">关于</a></li>
-      <li><a href="#contact">联系</a></li>
+      <li><a href="library.html">全部 &#8599;</a></li>
     </ul>
   </div>
 </nav>
 
-<main class="container">
+<main class="container" id="top">
 
   <!-- Hero -->
   <section class="hero">
     <div class="hero-tag">札记 · 思考 · 构建</div>
-    <h1>在代码与分子之间<br><em>寻找秩序</em></h1>
+    <h1>
+      <span class="line"><span>在代码与分子之间</span></span>
+      <span class="line"><span><em>寻找秩序</em></span></span>
+    </h1>
     <p class="hero-subtitle">
-      计算化学、云原生工程、系统安全。这里记录我的技术笔记、深度思考和偶尔的离经叛道。
+      计算化学、云原生工程、系统安全。这里记录我的技术笔记、深度思考，以及偶尔的离经叛道。
     </p>
     <div class="hero-stats">
       <div class="hero-stat">
@@ -489,66 +337,57 @@
         <span class="hero-stat-label">篇文章</span>
       </div>
       <div class="hero-stat">
-        <span class="hero-stat-num">3</span>
-        <span class="hero-stat-label">研究方向</span>
+        <span class="hero-stat-num" id="stat-cats">—</span>
+        <span class="hero-stat-label">个分类</span>
       </div>
       <div class="hero-stat">
-        <span class="hero-stat-num">∞</span>
+        <span class="hero-stat-num">&#8734;</span>
         <span class="hero-stat-label">持续探索</span>
       </div>
     </div>
+    <div class="scroll-hint"><span class="bar"></span>SCROLL</div>
   </section>
 
-  <!-- Essays -->
-  <section class="section" id="essays">
-    <div class="section-header">
-      <span class="section-num">01</span>
-      <h2 class="section-title">文章</h2>
-      <span class="section-line"></span>
+  <!-- Library portal -->
+  <section class="section" id="library">
+    <div class="section-head reveal">
+      <div class="section-eyebrow">飞书知识库 · 入口</div>
+      <h2 class="section-title">按主题进入知识库</h2>
+      <p class="section-desc">
+        全部内容同步自飞书知识库，并按主题归类。选择一个方向进入，或查看全部文章。
+      </p>
     </div>
+    <div class="portal-grid" id="portal-grid">
+      <p class="section-desc reveal" id="portal-empty">正在加载知识库分类…</p>
+    </div>
+  </section>
 
-    <div class="articles-grid" id="articles-grid">
-      <!-- 文章由 data/articles.json 动态渲染；同步自飞书知识库 -->
-      <p class="articles-empty" id="articles-empty">正在加载文章…</p>
+  <!-- Latest -->
+  <section class="section" id="latest">
+    <div class="section-head reveal">
+      <div class="section-eyebrow">近期更新</div>
+      <h2 class="section-title">最新写下的</h2>
     </div>
+    <div class="latest-list reveal" id="latest-list"></div>
   </section>
 
   <!-- About -->
   <section class="section" id="about">
-    <div class="section-header">
-      <span class="section-num">02</span>
-      <h2 class="section-title">关于</h2>
-      <span class="section-line"></span>
+    <div class="section-head reveal">
+      <div class="section-eyebrow">关于</div>
+      <h2 class="section-title">关于我</h2>
     </div>
     <div class="about-content">
       <div class="about-text reveal">
-        <p>
-          <strong>Caoran</strong>，目前就职于字节跳动，从事自由能计算平台的云原生架构与全栈开发。
-        </p>
-        <p>
-          背景横跨<strong>计算化学、云原生工程与 iOS 安全研究</strong>。相信第一性原理，厌恶经验主义驱动。写代码追求「熵最低」的方案 —— 简单、实用、不过度设计。
-        </p>
-        <p>
-          这个网站是我思考的外化。不追求流量，不讨好读者，只记录那些经过反复推敲后依然站得住脚的观点。
-        </p>
+        <p><strong>Caoran</strong>，目前就职于字节跳动，从事自由能计算平台的云原生架构与全栈开发。</p>
+        <p>背景横跨<strong>计算化学、云原生工程与系统安全研究</strong>。相信第一性原理，厌恶经验主义驱动。写代码追求「熵最低」的方案：简单、实用、不过度设计。</p>
+        <p>这个网站是我思考的外化。不追求流量，不讨好读者，只记录那些经过反复推敲后依然站得住脚的观点。</p>
       </div>
-      <div class="about-links reveal reveal-delay-2">
-        <a href="https://github.com/caorantaoyao" target="_blank" rel="noopener" class="about-link">
-          <span class="about-link-icon">&#8599;</span>
-          GitHub
-        </a>
-        <a href="https://my.feishu.cn/wiki/E9BuwXR9qiZfGmkLo95cBRNUnph" target="_blank" rel="noopener" class="about-link">
-          <span class="about-link-icon">&#8599;</span>
-          飞书知识库
-        </a>
-        <a href="mailto:caoran@caoran.cn" class="about-link">
-          <span class="about-link-icon">&#9993;</span>
-          caoran@caoran.cn
-        </a>
-        <a href="/data/articles.json" target="_blank" rel="noopener" class="about-link">
-          <span class="about-link-icon">&#8644;</span>
-          文章数据 (JSON)
-        </a>
+      <div class="about-links reveal reveal-d2">
+        <a href="https://github.com/caorantaoyao" target="_blank" rel="noopener" class="about-link">GitHub<span class="arr">&#8599;</span></a>
+        <a href="https://my.feishu.cn/wiki/E9BuwXR9qiZfGmkLo95cBRNUnph" target="_blank" rel="noopener" class="about-link">飞书知识库<span class="arr">&#8599;</span></a>
+        <a href="mailto:caoran@caoran.cn" class="about-link">caoran@caoran.cn<span class="arr">&#8594;</span></a>
+        <a href="library.html" class="about-link">浏览全部文章<span class="arr">&#8594;</span></a>
       </div>
     </div>
   </section>
@@ -559,92 +398,152 @@
   <div class="container">
     <span class="footer-left">&copy; 2026 Caoran. Built with intent, not frameworks.</span>
     <div class="footer-right">
-      <a href="#">GitHub</a>
-      <a href="#">RSS</a>
-      <a href="#">Mail</a>
+      <a href="https://github.com/caorantaoyao" target="_blank" rel="noopener">GitHub</a>
+      <a href="library.html">知识库</a>
+      <a href="mailto:caoran@caoran.cn">Mail</a>
     </div>
   </div>
 </footer>
 
 <script>
-  // ── 转义，防止标题/摘要中的特殊字符破坏结构 ──
-  function esc(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
+  // ── Nav shadow on scroll ──
+  const nav = document.getElementById('nav');
+  addEventListener('scroll', () => nav.classList.toggle('scrolled', scrollY > 40), { passive: true });
 
-  // ── 渲染一篇 featured 文章 ──
-  function featuredHTML(a, i) {
-    return `<a href="${esc(a.url)}" class="article-featured reveal">
-      <div class="article-featured-content">
-        <div class="article-meta">
-          <span class="article-date">${esc(a.date)}</span>
-          <span class="article-tag ${esc(a.tag_color)}">${esc(a.category)}</span>
-        </div>
-        <h3>${esc(a.title)}</h3>
-        <p>${esc(a.summary)}</p>
-        <span class="read-more">阅读全文</span>
-      </div>
-      <div class="article-featured-visual">
-        <div class="article-featured-visual-inner">${esc(a.category)}</div>
-      </div>
-    </a>`;
-  }
+  // ── esc ──
+  const esc = s => String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
-  // ── 渲染一篇普通卡片 ──
-  function cardHTML(a, i) {
-    const delay = i > 0 && i <= 4 ? ` reveal-delay-${i}` : '';
-    return `<a href="${esc(a.url)}" class="article-card reveal${delay}">
-      <div class="article-meta">
-        <span class="article-date">${esc(a.date)}</span>
-        <span class="article-tag ${esc(a.tag_color)}">${esc(a.category)}</span>
-      </div>
-      <h3>${esc(a.title)}</h3>
-      <p>${esc(a.summary)}</p>
-      <span class="read-more">阅读全文</span>
-    </a>`;
-  }
+  // ── Category meta: order + class + human blurb ──
+  const CAT_META = {
+    '岗位路线':       { cls:'c-route',    blurb:'四条方向的学习顺序与正文引用。' },
+    '学科知识正文':   { cls:'c-subject',  blurb:'一个知识点只维护一份正文。' },
+    '项目与面试资产': { cls:'c-asset',    blurb:'把知识转化为项目证据、题库与复盘。' },
+    '知识收件箱':     { cls:'c-inbox',    blurb:'尚未归类的新知识点暂存区。' },
+    '待人工确认':     { cls:'c-review',   blurb:'证据不足、需要人工决策的项目。' },
+    '标准知识文档模板':{ cls:'c-template', blurb:'撰写正文时复用的结构模板。' },
+  };
+  const CAT_ORDER = Object.keys(CAT_META);
 
-  // ── 滚动渐显观察器 ──
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) entry.target.classList.add('visible');
+  // ── Reveal observer ──
+  const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); }),
+    { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+  const observe = scope => (scope||document).querySelectorAll('.reveal:not(.visible)').forEach(el => io.observe(el));
+
+  // ── Portal card pointer glow ──
+  function bindGlow(card) {
+    card.addEventListener('pointermove', e => {
+      const r = card.getBoundingClientRect();
+      card.style.setProperty('--mx', ((e.clientX-r.left)/r.width*100)+'%');
+      card.style.setProperty('--my', ((e.clientY-r.top)/r.height*100)+'%');
     });
-  }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
-
-  function observeReveals(scope) {
-    (scope || document).querySelectorAll('.reveal:not(.visible)').forEach(el => observer.observe(el));
   }
 
-  // ── 加载并渲染飞书同步文章 ──
-  async function loadArticles() {
-    const grid = document.getElementById('articles-grid');
-    const empty = document.getElementById('articles-empty');
+  async function load() {
     try {
-      const res = await fetch('/data/articles.json', { cache: 'no-cache' });
+      const res = await fetch('data/articles.json', { cache: 'no-cache' });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
       const list = (data && data.articles) || [];
 
-      const countEl = document.getElementById('stat-count');
-      if (countEl) countEl.textContent = list.length || '0';
+      // group by category
+      const groups = {};
+      list.forEach(a => { (groups[a.category] = groups[a.category] || []).push(a); });
+      const cats = CAT_ORDER.filter(c => groups[c]);
 
-      if (!list.length) {
-        if (empty) empty.textContent = '知识库暂无文章，或首次同步尚未完成。';
-        return;
-      }
-      grid.innerHTML = list.map((a, i) => i === 0 ? featuredHTML(a, i) : cardHTML(a, i)).join('\n');
-      observeReveals(grid);
+      // stats
+      document.getElementById('stat-count').textContent = list.length || '0';
+      document.getElementById('stat-cats').textContent = cats.length || '0';
+
+      // portal cards
+      const grid = document.getElementById('portal-grid');
+      let html = cats.map((c, i) => {
+        const m = CAT_META[c] || { cls:'', blurb:'' };
+        const n = groups[c].length;
+        const idx = String(i+1).padStart(2,'0');
+        return `<a href="library.html?cat=${encodeURIComponent(c)}" class="portal-card reveal ${m.cls} reveal-d${(i%5)+1}">
+          <div class="portal-index">${idx}</div>
+          <h3><span class="cat-dot"></span>${esc(c)}</h3>
+          <p class="desc">${esc(m.blurb)}</p>
+          <div class="portal-foot">
+            <span class="portal-count"><b>${n}</b> 篇</span>
+            <span class="portal-arrow">&#8594;</span>
+          </div>
+        </a>`;
+      }).join('');
+      // "all" card
+      html += `<a href="library.html" class="portal-card all wide reveal reveal-d1">
+        <div class="portal-index">全部 · ${list.length}</div>
+        <h3>进入完整知识库 &#8594;</h3>
+        <p class="desc">支持按分类筛选与全文搜索，浏览同步自飞书的所有文章。</p>
+      </a>`;
+      grid.innerHTML = html;
+      grid.querySelectorAll('.portal-card').forEach(bindGlow);
+
+      // latest 5
+      const latest = document.getElementById('latest-list');
+      latest.innerHTML = list.slice(0, 5).map(a =>
+        `<a href="${esc(a.url)}" class="latest-row">
+          <span class="latest-date">${esc(a.date)}</span>
+          <span class="latest-title">${esc(a.title)}<span class="cat">${esc(a.category)}</span></span>
+          <span class="latest-go">&#8594;</span>
+        </a>`).join('');
+
+      observe(document);
     } catch (e) {
-      if (empty) empty.textContent = '文章加载失败（' + e.message + '）。首次运行需先在 Actions 触发同步。';
-      const countEl = document.getElementById('stat-count');
-      if (countEl) countEl.textContent = '0';
+      document.getElementById('portal-empty').textContent =
+        '知识库加载失败（' + e.message + '）。首次运行需先在 Actions 触发同步。';
+      document.getElementById('stat-count').textContent = '0';
+      document.getElementById('stat-cats').textContent = '0';
     }
   }
+  observe(document);
+  load();
 
-  observeReveals(document);
-  loadArticles();
+  // ── Hero canvas: molecular / node network ──
+  (function () {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const cv = document.getElementById('bg-canvas'), ctx = cv.getContext('2d');
+    let w, h, dpr, nodes, raf, mouse = { x: -999, y: -999 };
+    const A = 'rgba(201,168,124,';
+    function resize() {
+      dpr = Math.min(devicePixelRatio || 1, 2);
+      w = cv.width = innerWidth * dpr; h = cv.height = innerHeight * dpr;
+      cv.style.width = innerWidth + 'px'; cv.style.height = innerHeight + 'px';
+      const count = Math.min(70, Math.floor(innerWidth * innerHeight / 22000));
+      nodes = Array.from({ length: count }, () => ({
+        x: Math.random()*w, y: Math.random()*h,
+        vx: (Math.random()-0.5)*0.18*dpr, vy: (Math.random()-0.5)*0.18*dpr,
+        r: (Math.random()*1.6+0.6)*dpr
+      }));
+    }
+    const LINK = 150;
+    function tick() {
+      ctx.clearRect(0,0,w,h);
+      const link = LINK*dpr, mr = 170*dpr;
+      for (const n of nodes) {
+        n.x+=n.vx; n.y+=n.vy;
+        if (n.x<0||n.x>w) n.vx*=-1;
+        if (n.y<0||n.y>h) n.vy*=-1;
+        const dx=n.x-mouse.x, dy=n.y-mouse.y, d=Math.hypot(dx,dy);
+        if (d<mr && d>0){ n.x+=dx/d*0.6*dpr; n.y+=dy/d*0.6*dpr; }
+      }
+      for (let i=0;i<nodes.length;i++){
+        for (let j=i+1;j<nodes.length;j++){
+          const a=nodes[i], b=nodes[j], dx=a.x-b.x, dy=a.y-b.y, d=Math.hypot(dx,dy);
+          if (d<link){ ctx.strokeStyle=A+(0.14*(1-d/link))+')'; ctx.lineWidth=dpr*0.6;
+            ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); }
+        }
+      }
+      for (const n of nodes){ ctx.fillStyle=A+'0.55)'; ctx.beginPath();
+        ctx.arc(n.x,n.y,n.r,0,6.283); ctx.fill(); }
+      raf=requestAnimationFrame(tick);
+    }
+    addEventListener('resize', () => { cancelAnimationFrame(raf); resize(); tick(); });
+    addEventListener('pointermove', e => { mouse.x=e.clientX*dpr; mouse.y=e.clientY*dpr; }, { passive:true });
+    addEventListener('pointerleave', () => { mouse.x=mouse.y=-9999; });
+    resize(); tick();
+  })();
 </script>
 
 </body>

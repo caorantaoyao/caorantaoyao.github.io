@@ -6,30 +6,40 @@
 <title>错题与薄弱项 — CAORAN</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg:#0b0b0d; --surface:#121215; --surface-raised:#1a1a1e; --border:#252528;
-    --text:#e4e0d8; --text-muted:#7a7670; --text-dim:#4a4642;
-    --accent:#c9a87c; --accent-dim:#8a6d4b; --green:#7a9a8a; --green-dim:#4a6a5a; --red:#c97c7c;
-    --font-serif:'Noto Serif SC','Songti SC',serif;
+    --bg:#0a0a0c; --surface:#121216; --surface-raised:#17171c; --border:#232327; --border-soft:#1b1b1f;
+    --text:#e6e2da; --text-muted:#837e76; --text-dim:#4c4842;
+    --accent:#c9a87c; --accent-bright:#dcc199; --accent-glow:rgba(201,168,124,0.14); --accent-dim:#8a6d4b;
+    --green:#86a596; --green-dim:#4a6a5a; --red:#c98a8a; --blue:#7f96b0;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
     --font-mono:'JetBrains Mono','SF Mono',monospace;
-    --max-width:760px;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
   }
   *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
   html { scroll-behavior:smooth; }
   body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
     line-height:1.9; -webkit-font-smoothing:antialiased; }
-  .container { max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  ::selection { background:var(--accent-dim); color:#0a0a0c; }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+    background:radial-gradient(ellipse 70% 45% at 50% -10%, var(--accent-glow) 0%, transparent 60%); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
   nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
-    backdrop-filter:blur(20px); background:rgba(11,11,13,0.75); border-bottom:1px solid var(--border); }
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(10,10,12,0.75); border-bottom:1px solid var(--border-soft); }
   nav .container { display:flex; justify-content:space-between; align-items:center; }
   .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
-    color:var(--accent); text-decoration:none; text-transform:uppercase; }
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); box-shadow:0 0 10px var(--accent); }
   .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
-    color:var(--text-muted); text-decoration:none; text-transform:uppercase; }
-  .nav-back:hover { color:var(--text); }
-  article { padding:clamp(3rem,8vh,5rem) 0 4rem; }
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
   .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
     font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
   .article-date { color:var(--text-dim); }
@@ -69,10 +79,11 @@
 </style>
 </head>
 <body>
+<div id="progress"></div>
 <nav>
   <div class="container">
-    <a href="/" class="nav-logo">CAORAN</a>
-    <a href="/#essays" class="nav-back">← 返回文章列表</a>
+    <a href="/" class="nav-logo"><span class="dot"></span>CAORAN</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
   </div>
 </nav>
 <main class="container">
@@ -88,5 +99,12 @@
   </article>
 </main>
 <footer>&copy; 2026 Caoran · 内容同步自飞书知识库</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
 </body>
 </html>

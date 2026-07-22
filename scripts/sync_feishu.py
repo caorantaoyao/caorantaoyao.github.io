@@ -491,7 +491,21 @@ def main():
     with open(os.path.join(DATA_DIR, "articles.json"), "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
 
-    print(f"· 完成，共 {len(articles)} 篇文章 -> data/articles.json")
+    # 全量覆盖：删除本次结果不再引用的旧详情页（孤儿文件）。
+    # 此步骤在文章已全部成功生成之后执行，保证原子性——同步失败时不会误删。
+    referenced = {os.path.basename(a["url"]) for a in articles}
+    removed = 0
+    for fn in os.listdir(ARTICLES_DIR):
+        if fn.endswith(".html") and fn not in referenced:
+            try:
+                os.remove(os.path.join(ARTICLES_DIR, fn))
+                removed += 1
+                print(f"  - 清理孤儿页 {fn}")
+            except OSError as e:
+                print(f"  ✗ 清理 {fn} 失败: {e}", file=sys.stderr)
+
+    print(f"· 完成，共 {len(articles)} 篇文章 -> data/articles.json"
+          + (f"（清理 {removed} 个孤儿页）" if removed else ""))
 
 
 if __name__ == "__main__":

@@ -3,18 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>知识库 — CAORAN</title>
-<meta name="description" content="Caoran 知识库：按分类筛选与全文搜索，浏览同步自飞书的全部文章。">
+<title>知识库 — 白鸦</title>
+<meta name="description" content="白鸦的知识库：按分类筛选与全文搜索，浏览全部技术文章。">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0a0a0c; --surface: #121216; --surface-raised: #17171c;
-    --border: #232327; --border-soft: #1b1b1f;
-    --text: #e6e2da; --text-muted: #837e76; --text-dim: #4c4842;
-    --accent: #c9a87c; --accent-bright: #dcc199; --accent-glow: rgba(201,168,124,0.14); --accent-dim: #8a6d4b;
-    --green: #86a596; --red: #c98a8a; --violet: #9a8fb5; --blue: #7f96b0;
+    --bg: #f5f1e8; --surface: #fbf8f1; --surface-raised: #efe8da;
+    --border: #ddd3c1; --border-soft: #e6ddcc;
+    --text: #29241f; --text-muted: #574f45; --text-dim: #928979;
+    --accent: #c0553b; --accent-bright: #9c4229; --accent-glow: rgba(192,85,59,0.09); --accent-dim: #b98a3e;
+    --green: #2f5d4e; --red: #b06a6a; --violet: #8a7fa5; --blue: #7f96b0;
+    --font-display: 'Spectral','Noto Serif SC',serif;
     --font-serif: 'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
     --font-mono: 'JetBrains Mono','SF Mono',monospace;
     --gap: clamp(1.1rem,3vw,2.5rem); --max-width: 1180px;
@@ -24,14 +25,14 @@
   html { scroll-behavior:smooth; }
   body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
     line-height:1.7; -webkit-font-smoothing:antialiased; overflow-x:hidden; min-height:100dvh; }
-  ::selection { background:var(--accent-dim); color:#0a0a0c; }
-  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
-    background: radial-gradient(ellipse 70% 50% at 50% -8%, var(--accent-glow) 0%, transparent 62%); }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
   .container { position:relative; z-index:2; max-width:var(--max-width); margin:0 auto; padding:0 var(--gap); }
 
   nav { position:sticky; top:0; z-index:100; padding:1.15rem 0;
     backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
-    background:rgba(10,10,12,0.82); border-bottom:1px solid var(--border-soft); }
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
   nav .container { display:flex; justify-content:space-between; align-items:center; }
   .nav-logo { font-family:var(--font-mono); font-size:0.85rem; font-weight:500; letter-spacing:0.28em;
     color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.55rem; }
@@ -49,7 +50,7 @@
   .lib-eyebrow { font-family:var(--font-mono); font-size:0.68rem; letter-spacing:0.16em; color:var(--accent-dim);
     text-transform:uppercase; margin-bottom:1rem; display:flex; align-items:center; gap:0.7rem; }
   .lib-eyebrow::before { content:''; width:1.6rem; height:1px; background:var(--accent-dim); }
-  .lib-head h1 { font-size:clamp(2.2rem,5vw,3.4rem); font-weight:700; letter-spacing:-0.025em; line-height:1.15; }
+  .lib-head h1 { font-family:var(--font-display); font-size:clamp(2.2rem,5vw,3.4rem); font-weight:700; letter-spacing:-0.025em; line-height:1.15; }
   .lib-head p { color:var(--text-muted); margin-top:0.9rem; max-width:600px; }
 
   /* ── Toolbar ── */
@@ -70,13 +71,13 @@
     background:transparent; border:1px solid var(--border); border-radius:100px; padding:0.42rem 0.95rem;
     cursor:pointer; transition:all 0.25s var(--ease); display:inline-flex; align-items:center; gap:0.45rem; white-space:nowrap; }
   .chip:hover { color:var(--text); border-color:var(--accent-dim); }
-  .chip.active { color:#0a0a0c; background:var(--accent); border-color:var(--accent); font-weight:500; }
+  .chip.active { color:var(--bg); background:var(--accent); border-color:var(--accent); font-weight:500; }
   .chip .n { opacity:0.6; font-size:0.62rem; }
   .chip.active .n { opacity:0.75; }
   .chip .cd { width:7px; height:7px; border-radius:50%; }
   .cd-all{background:var(--text-muted)} .cd-route{background:var(--accent)} .cd-subject{background:var(--green)}
-  .cd-asset{background:var(--blue)} .cd-inbox{background:var(--violet)} .cd-review{background:var(--red)} .cd-template{background:var(--text-muted)}
-  .chip.active .cd { background:#0a0a0c !important; }
+  .cd-asset{background:var(--accent-dim)} .cd-inbox{background:var(--blue)} .cd-review{background:var(--red)} .cd-template{background:var(--text-dim)}
+  .chip.active .cd { background:var(--bg) !important; }
 
   /* ── Results ── */
   .results { padding-bottom:5rem; }
@@ -99,14 +100,14 @@
   .card-date { font-family:var(--font-mono); font-size:0.66rem; color:var(--text-dim); letter-spacing:0.04em; }
   .card-tag { font-family:var(--font-mono); font-size:0.58rem; letter-spacing:0.06em; text-transform:uppercase;
     padding:0.2rem 0.55rem; border:1px solid var(--border); border-radius:2px; color:var(--text-muted); }
-  .card h3 { font-size:1.12rem; font-weight:600; line-height:1.5; margin-bottom:0.55rem; }
+  .card h3 { font-family:var(--font-display); font-size:1.12rem; font-weight:600; line-height:1.5; margin-bottom:0.55rem; }
   .card p { font-size:0.87rem; color:var(--text-muted); line-height:1.65; flex:1;
     display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
   .card .more { font-family:var(--font-mono); font-size:0.66rem; color:var(--accent-dim); margin-top:1rem;
     display:flex; align-items:center; gap:0.4rem; letter-spacing:0.04em; }
   .card .more::after { content:'→'; transition:transform 0.25s var(--ease); }
   .card:hover .more::after { transform:translateX(4px); }
-  mark { background:rgba(201,168,124,0.28); color:var(--accent-bright); border-radius:2px; padding:0 1px; }
+  mark { background:rgba(192,85,59,0.18); color:var(--accent-bright); border-radius:2px; padding:0 1px; }
   .empty { font-family:var(--font-mono); font-size:0.85rem; color:var(--text-dim); padding:3rem 0; text-align:center; letter-spacing:0.04em; }
 
   .reveal { opacity:0; transform:translateY(20px); transition:opacity 0.6s var(--ease), transform 0.6s var(--ease); }
@@ -127,11 +128,10 @@
 
 <nav>
   <div class="container">
-    <a href="index.html" class="nav-logo"><span class="dot"></span>CAORAN</a>
+    <a href="index.html" class="nav-logo"><span class="dot"></span>白鸦</a>
     <ul class="nav-links">
       <li><a href="index.html">首页</a></li>
       <li><a href="index.html#about">关于</a></li>
-      <li><a href="https://my.feishu.cn/wiki/E9BuwXR9qiZfGmkLo95cBRNUnph" target="_blank" rel="noopener">飞书 &#8599;</a></li>
     </ul>
   </div>
 </nav>
@@ -159,11 +159,11 @@
 
 <footer>
   <div class="container">
-    <span class="footer-left">&copy; 2026 Caoran. Built with intent, not frameworks.</span>
+    <span class="footer-left">&copy; 2026 白鸦. Built with intent, not frameworks.</span>
     <div class="footer-right">
       <a href="index.html">首页</a>
       <a href="https://github.com/caorantaoyao" target="_blank" rel="noopener">GitHub</a>
-      <a href="mailto:caoran@caoran.cn">Mail</a>
+      <a href="mailto:caoran.taoyao@gmail.com">Mail</a>
     </div>
   </div>
 </footer>

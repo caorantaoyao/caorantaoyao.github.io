@@ -1,0 +1,44 @@
+name: Sync Feishu Wiki
+
+on:
+  schedule:
+    - cron: "0 22 * * *"
+    - cron: "0 10 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-feishu
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r scripts/requirements.txt
+      - name: Run sync
+        env:
+          FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+          FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
+          FEISHU_WIKI_TOKEN: ${{ secrets.FEISHU_WIKI_TOKEN }}
+        run: python scripts/sync_feishu.py
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/ articles/
+          if git diff --staged --quiet; then
+            echo "内容无变化, 跳过提交"
+          else
+            git commit -m "chore: sync feishu wiki $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git push
+          fi

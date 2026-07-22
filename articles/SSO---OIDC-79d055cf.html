@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SSO 单点登录：原理、OIDC 流程与浏览器会话边界 — CAORAN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0b0b0d; --surface:#121215; --surface-raised:#1a1a1e; --border:#252528;
+    --text:#e4e0d8; --text-muted:#7a7670; --text-dim:#4a4642;
+    --accent:#c9a87c; --accent-dim:#8a6d4b; --green:#7a9a8a; --green-dim:#4a6a5a; --red:#c97c7c;
+    --font-serif:'Noto Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px;
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  .container { max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px); background:rgba(11,11,13,0.75); border-bottom:1px solid var(--border); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; }
+  .nav-back:hover { color:var(--text); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(201,124,124,0.3); }
+  h1.article-title { font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:#d4d0c8; }
+  .article-body h2 { font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:#c8c4bc; font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo">CAORAN</a>
+    <a href="/#essays" class="nav-back">← 返回文章列表</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.07.21</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">SSO 单点登录：原理、OIDC 流程与浏览器会话边界</h1>
+    <div class="article-body">
+<h3>一句话结论</h3>
+<p>SSO 让多个业务系统共同信任一个身份提供方。用户在同一浏览器中第一次完成认证后，身份提供方保存自己的登录 Cookie；其他业务系统再次把浏览器重定向到该身份提供方时，它可以复用已有会话并快速返回身份结果。业务系统之间通常不共享 Cookie，每个系统仍建立和管理自己的本地 Session。</p>
+<h3>前置知识与边界</h3>
+<ul><li>前置知识：HTTP 重定向、Cookie、Session、JWT、认证与授权的区别。</li><li>适用范围：公司内部系统、多个 SaaS 产品、微服务入口、移动端和第三方身份联合。</li><li>不解决的问题：SSO 只统一身份认证，不自动决定用户能访问哪些业务资源。</li><li>核心边界：OIDC/SAML 确认“用户是谁”，Casbin/RBAC/ABAC 判断“用户能做什么”。</li></ul>
+<h3>1. SSO 是能力，不是单一协议</h3>
+<p>SSO（Single Sign-On）描述的是“一次登录，访问多个相互信任系统”的能力和用户体验。它可以由不同协议实现：</p>
+<p>方案</p>
+<p>典型场景</p>
+<p>主要载体</p>
+<p>OpenID Connect（OIDC）</p>
+<p>现代 Web、移动端、微服务</p>
+<p>JSON、JWT</p>
+<p>SAML 2.0</p>
+<p>企业内部、传统 SaaS、政企系统</p>
+<p>XML Assertion</p>
+<p>CAS</p>
+<p>学校和传统 Java 系统</p>
+<p>Service Ticket</p>
+<p>Kerberos</p>
+<p>企业内网、Windows 域</p>
+<p>Ticket</p>
+<p>共享主域 Cookie</p>
+<p>同一主域下的少量自建系统</p>
+<p>Cookie</p>
+<p>现代互联网应用通常优先选择 OIDC，并采用 Authorization Code Flow + PKCE。OIDC 是建立在 OAuth 2.0 之上的身份层；OAuth 2.0 本身主要解决委托授权，并不等价于登录协议。</p>
+<h3>2. 核心角色</h3>
+<h4>用户和浏览器</h4>
+<p>用户通过浏览器访问多个业务系统。浏览器负责保存各个域名下相互隔离的 Cookie，并在重定向过程中传递授权码或 SAML Response。</p>
+<h4>身份提供方 IdP</h4>
+<p>身份提供方负责：</p>
+<ul><li>展示登录页面并验证密码、扫码、Passkey 或 MFA。</li><li>维护统一登录会话和风险状态。</li><li>签发身份断言或令牌。</li><li>执行账号冻结、认证强度和重新认证策略。</li></ul>
+<p>OIDC 中通常称为 OpenID Provider（OP），例如企业统一身份平台、Keycloak、Auth0、Okta 或 Microsoft Entra ID。</p>
+<h4>业务系统</h4>
+<p>业务系统依赖 IdP 确认身份。OIDC 中称为 Relying Party（RP），SAML 中称为 Service Provider（SP）。业务系统验证身份结果后，通常建立自己的本地 Session。</p>
+<h3>3. SSO 为什么能做到“第二次免登录”</h3>
+<p>假设存在：</p>
+<pre><code class="language-plaintext">sso.example.com       统一身份平台
+project.example.com   项目系统
+wiki.example.com      知识库</code></pre>
+<p>第一次访问项目系统：</p>
+<p>随后访问知识库：</p>
+<pre><code class="language-plaintext">访问知识库
+→ 知识库发现没有自己的 Session
+→ 重定向到同一个 IdP
+→ 浏览器自动携带 sso.example.com 的 Cookie
+→ IdP 识别已有会话，无需再次输入密码
+→ 返回新的授权码
+→ 知识库验证身份并创建自己的 Session</code></pre>
+<p>关键点是：项目系统和知识库并不读取彼此的 Cookie。它们都把浏览器重定向到 IdP，由 IdP 读取自己域名下的 Cookie。</p>
+<h3>4. Cookie 与浏览器边界</h3>
+<p>同一个 Chrome 用户配置中可能存在：</p>
+<pre><code class="language-plaintext">Chrome Cookie 存储
+├── sso.example.com 的 IdP Cookie
+├── project.example.com 的本地 Session Cookie
+└── wiki.example.com 的本地 Session Cookie</code></pre>
+<p>换成 Safari 后，Cookie 存储是独立的：</p>
+<p>所以，更准确的 SSO 有效范围通常是：</p>
+<pre><code class="language-plaintext">同一浏览器
++ 同一浏览器用户配置
++ 尚未失效的 IdP 会话</code></pre>
+<p>以下情况通常需要重新认证：</p>
+<ul><li>从 Chrome 换到 Safari 或 Firefox。</li><li>换电脑或手机。</li><li>打开独立的无痕窗口。</li><li>切换 Chrome 用户配置。</li><li>清除 Cookie。</li><li>IdP Cookie 过期或被管理员撤销。</li><li>风险策略要求重新认证或补充 MFA。</li></ul>
+<p>不同浏览器不能直接共享 Cookie，这是安全隔离边界。少数场景看起来能在新浏览器“自动登录”，通常是操作系统集成认证、Kerberos、客户端证书、Passkey、密码管理器或上游 IdP 会话重新完成了一次认证，而不是读取了原浏览器的 Cookie。</p>
+<h3>5. OIDC Authorization Code + PKCE 流程</h3>
+<h4>5.1 创建登录事务</h4>
+<p>业务系统生成：</p>
+<p>参数</p>
+<p>主要作用</p>
+<p><code>state</code></p>
+<p>把回调绑定到发起登录的浏览器会话，防止登录 CSRF</p>
+<p><code>nonce</code></p>
+<p>把 ID Token 绑定到本次认证请求，防止重放</p>
+<p><code>code_verifier</code></p>
+<p>PKCE 随机秘密，仅由客户端保存</p>
+<p><code>code_challenge</code></p>
+<p><code>code_verifier</code> 的摘要，发送给 IdP</p>
+<p>推荐使用：</p>
+<pre><code class="language-plaintext">code_challenge = BASE64URL(SHA256(code_verifier))
+code_challenge_method = S256</code></pre>
+<h4>5.2 浏览器重定向到授权端点</h4>
+<pre><code class="language-plaintext">GET https://sso.example.com/authorize?
+    client_id=knowledge-base&amp;
+    redirect_uri=https://kb.example.com/callback&amp;
+    response_type=code&amp;
+    scope=openid%20profile%20email&amp;
+    state=random-state&amp;
+    nonce=random-nonce&amp;
+    code_challenge=...&amp;
+    code_challenge_method=S256</code></pre>
+<p><code>scope=openid</code> 表示这是 OIDC 身份认证请求。</p>
+<h4>5.3 IdP 认证并返回授权码</h4>
+<p>IdP 检查自己的会话 Cookie：有可接受的会话就继续，否则要求密码、扫码、Passkey 或 MFA。成功后重定向到业务系统注册过的回调地址：</p>
+<pre><code class="language-plaintext">GET https://kb.example.com/callback?code=temporary-code&amp;state=random-state</code></pre>
+<p>授权码应短时有效、只能使用一次，并绑定客户端、准确回调地址和 PKCE Challenge。</p>
+<h4>5.4 后端交换令牌</h4>
+<pre><code class="language-plaintext">POST https://sso.example.com/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=authorization_code
+&amp;code=temporary-code
+&amp;redirect_uri=https://kb.example.com/callback
+&amp;client_id=knowledge-base
+&amp;code_verifier=original-random-value</code></pre>
+<p>IdP 验证 <code>code_verifier</code> 与最初的 <code>code_challenge</code> 是否匹配，然后返回 ID Token、Access Token，以及按需返回 Refresh Token。</p>
+<h3>6. 三种令牌的职责</h3>
+<h4>ID Token</h4>
+<p>回答“刚才完成认证的是谁”，典型 Claims 包括：</p>
+<pre><code class="language-plaintext">{
+  &quot;iss&quot;: &quot;https://sso.example.com&quot;,
+  &quot;sub&quot;: &quot;user_123456&quot;,
+  &quot;aud&quot;: &quot;knowledge-base&quot;,
+  &quot;exp&quot;: 1784635200,
+  &quot;iat&quot;: 1784631600,
+  &quot;nonce&quot;: &quot;random-nonce&quot;
+}</code></pre>
+<p>业务系统必须验证签名、<code>iss</code>、<code>aud</code>、<code>exp</code>、<code>nonce</code> 和允许的签名算法，不能只做 Base64 解码。</p>
+<h4>Access Token</h4>
+<p>回答“客户端能否代表用户调用指定资源服务器”。它应发送给目标 API，不应被当作所有系统通用的身份凭证。</p>
+<h4>Refresh Token</h4>
+<p>用于 Access Token 过期后的续期。它生命周期更长、风险更高，应保存在可信后端或安全设备存储中，并支持轮换、撤销和重用检测。</p>
+<h3>7. 为什么业务系统还需要本地 Session</h3>
+<p>业务后端验证身份后，通常建立本地 Session，并向浏览器设置：</p>
+<pre><code class="language-plaintext">Set-Cookie: session_id=abc123;
+            HttpOnly;
+            Secure;
+            SameSite=Lax;
+            Path=/</code></pre>
+<p>这样可以：</p>
+<ul><li>独立控制本系统的会话有效期和退出。</li><li>在服务端安全保存 OIDC Token。</li><li>避免每个页面请求都依赖 IdP。</li><li>避免前端 JavaScript 直接接触 Refresh Token。</li><li>在用户权限或风险状态变化时立即结束本地会话。</li></ul>
+<p>对传统 Python Web 项目，优先考虑 Backend-for-Frontend 模式：浏览器只保存 HttpOnly Session Cookie，OIDC Token 保存在后端。</p>
+<h3>8. SAML SSO</h3>
+<p>SAML 2.0 常用于企业系统。SP 发起流程为：</p>
+<pre><code class="language-plaintext">用户访问 SP
+→ SP 生成 AuthnRequest
+→ 浏览器重定向到 IdP
+→ IdP 认证用户
+→ IdP 生成签名的 SAML Response
+→ 浏览器 POST 到 SP 的 ACS 地址
+→ SP 验证 Assertion 并创建本地 Session</code></pre>
+<p>SAML Assertion 通常包含 Issuer、Subject、Conditions、Audience、认证声明和用户属性。SP 必须验证 XML 签名、受众、有效期、接收地址、InResponseTo，并防止断言重放。</p>
+<p>维度</p>
+<p>OIDC</p>
+<p>SAML 2.0</p>
+<p>数据格式</p>
+<p>JSON/JWT</p>
+<p>XML</p>
+<p>现代 Web 和移动端</p>
+<p>更适合</p>
+<p>相对笨重</p>
+<p>企业传统系统</p>
+<p>越来越常见</p>
+<p>非常常见</p>
+<p>API 委托授权</p>
+<p>可结合 OAuth</p>
+<p>不是主要目标</p>
+<p>调试复杂度</p>
+<p>相对较低</p>
+<p>XML 签名与 Binding 更复杂</p>
+<h3>9. 单点登出为什么困难</h3>
+<p>一次 SSO 登录可能同时产生：</p>
+<pre><code class="language-plaintext">IdP 登录会话
+├── 系统 A 本地 Session
+├── 系统 B 本地 Session
+├── 系统 C 本地 Session
+├── Access Token
+└── Refresh Token</code></pre>
+<p>删除当前系统 Session 只是本地退出；删除 IdP Cookie 也不保证已经创建的业务系统 Session 立即失效。真正的全局退出可能需要：</p>
+<ol><li>删除 IdP 会话。</li><li>通过 Front-channel 或 Back-channel Logout 通知业务系统。</li><li>删除各系统本地 Session。</li><li>撤销 Refresh Token。</li><li>必要时撤销或等待 Access Token 过期。</li></ol>
+<p>产品必须明确“退出当前系统”和“退出所有系统”的不同语义。</p>
+<h3>10. 账号映射与业务授权</h3>
+<p>业务系统不要用昵称或可变邮箱作为永久主键，推荐保存：</p>
+<pre><code class="language-plaintext">(issuer, subject) → local_user_id</code></pre>
+<p>例如：</p>
+<p>issuer</p>
+<p>subject</p>
+<p>local_user_id</p>
+<p><code>https://sso.example.com</code></p>
+<p><code>user_123456</code></p>
+<p><code>10001</code></p>
+<p>首次登录可以执行 JIT Provisioning，但应明确自动注册范围、邮箱验证、默认角色、账号冻结和离职同步策略。</p>
+<p>与 Casbin 结合时：</p>
+<pre><code class="language-plaintext"># OIDC 确认用户是谁
+current_user_id = session[&quot;user_id&quot;]
+
+# Casbin 判断该用户能做什么
+allowed = enforcer.enforce(
+    current_user_id,
+    &quot;tenant-a&quot;,
+    &quot;/orders/1001&quot;,
+    &quot;delete&quot;,
+)</code></pre>
+<p>SSO 登录成功不代表用户自动拥有业务权限。</p>
+<h3>11. 生产安全清单</h3>
+<ul><li>使用 Authorization Code + PKCE S256，不使用隐式模式传递 Access Token。</li><li>回调地址使用预注册的精确匹配，禁止宽泛通配符。</li><li>正确校验 <code>state</code>、<code>nonce</code> 和 PKCE 事务绑定。</li><li>验证 JWT 签名、<code>iss</code>、<code>aud</code>、<code>exp</code>、<code>nbf</code>、算法和密钥来源。</li><li>处理 JWKS 密钥轮换、未知 <code>kid</code> 和合理时钟偏差。</li><li>禁止开放重定向；登录后的 <code>next</code> 只能是站内路径或严格白名单。</li><li>Cookie 设置 <code>HttpOnly</code>、<code>Secure</code>、合适的 <code>SameSite</code>、<code>Domain</code>、<code>Path</code> 与生命周期。</li><li>登录成功后轮换 Session ID，写操作仍实施 CSRF 防护。</li><li>不在 URL、日志、错误页或前端存储中泄露授权码、Access Token 和 Refresh Token。</li><li>IdP 或 Token 验证异常时默认拒绝，不绕过认证。</li><li>多 IdP 场景按 Issuer 隔离配置，防止混淆攻击。</li><li>对高风险操作使用近期认证要求，例如 <code>max_age</code> 或强制 MFA。</li></ul>
+<h3>12. 常见误区与排查</h3>
+<ol><li><strong>认为两个业务系统共享同一个 Cookie</strong>：通常共享的是对 IdP 的信任；各系统 Cookie 相互隔离。</li><li><strong>认为换浏览器仍应自动登录</strong>：新浏览器没有原 IdP Cookie，通常必须重新认证。</li><li><strong>把 OAuth 当作登录协议</strong>：登录身份使用 OIDC；OAuth 主要用于委托访问 API。</li><li><strong>把 Access Token 当 ID Token</strong>：两者受众和用途不同。</li><li><strong>只解码 JWT 不验证</strong>：任何人都能构造未验证的 Payload。</li><li><strong>使用邮箱作为永久身份主键</strong>：优先使用 <code>iss + sub</code>。</li><li><strong>登录成功即拥有所有权限</strong>：认证之后仍要执行 Casbin/RBAC/ABAC 授权。</li><li><strong>注销 IdP 就认为所有系统都退出</strong>：本地 Session 可能继续有效。</li><li><strong>将 Token 全部放入 localStorage</strong>：XSS 可以直接读取这些令牌。</li><li><strong>回调地址使用通配符或开放重定向</strong>：可能导致授权码和令牌泄漏。</li></ol>
+<h3>面试问答阶梯</h3>
+<ol><li>SSO 为什么能让用户第二次访问业务系统时免登录？</li><li>业务系统之间是否共享 Cookie？为什么？</li><li>换浏览器、无痕窗口或清理 Cookie 后会发生什么？</li><li>OAuth 2.0、OIDC、SAML 和 SSO 分别是什么关系？</li><li>Authorization Code Flow 中 <code>state</code>、<code>nonce</code> 和 PKCE 分别防御什么？</li><li>ID Token、Access Token 和 Refresh Token 有什么区别？</li><li>为什么验证 JWT 签名后还要验证 <code>iss</code> 和 <code>aud</code>？</li><li>为什么业务系统还需要自己的本地 Session？</li><li>单点登录容易、单点登出困难的根本原因是什么？</li><li>如何把 OIDC 身份与 Casbin 多租户权限模型结合？</li></ol>
+<h3>验证与实践</h3>
+<ul><li>最小实验：在 Chrome 登录 IdP，依次访问两个 RP；再使用 Safari、无痕窗口和清除 Cookie 后重复观察跳转。</li><li>网络观察：记录 <code>/authorize</code>、回调、<code>/token</code> 和本地 Session 建立过程，确认 Token 不出现在日志中。</li><li>安全测试：修改 <code>state</code>、复用授权码、篡改 <code>nonce</code>、替换 <code>iss/aud</code>、尝试开放重定向，验证系统均拒绝。</li><li>会话测试：分别执行本地退出、IdP 退出和全局退出，记录每个系统的真实状态。</li><li>关键指标：登录成功率、P95 登录延迟、MFA 触发率、Token 交换失败率、会话撤销延迟和异常 Issuer 次数。</li></ul>
+<h3>参考资料</h3>
+<ul><li><a href="https://openid.net/specs/openid-connect-core-1_0-18.html" target="_blank" rel="noopener">OpenID Connect Core 1.0</a></li><li><a href="https://www.rfc-editor.org/rfc/rfc6749" target="_blank" rel="noopener">RFC 6749：The OAuth 2.0 Authorization Framework</a></li><li><a href="https://www.rfc-editor.org/rfc/rfc9700" target="_blank" rel="noopener">RFC 9700：Best Current Practice for OAuth 2.0 Security</a></li><li><a href="https://docs.oasis-open.org/security/saml/Post2.0/sstc-saml-tech-overview-2.0-cd-02.html" target="_blank" rel="noopener">OASIS SAML 2.0 Technical Overview</a></li></ul>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 内容同步自飞书知识库</footer>
+</body>
+</html>

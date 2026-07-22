@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAG 检索与重排 — CAORAN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0b0b0d; --surface:#121215; --surface-raised:#1a1a1e; --border:#252528;
+    --text:#e4e0d8; --text-muted:#7a7670; --text-dim:#4a4642;
+    --accent:#c9a87c; --accent-dim:#8a6d4b; --green:#7a9a8a; --green-dim:#4a6a5a; --red:#c97c7c;
+    --font-serif:'Noto Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px;
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  .container { max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px); background:rgba(11,11,13,0.75); border-bottom:1px solid var(--border); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; }
+  .nav-back:hover { color:var(--text); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(201,124,124,0.3); }
+  h1.article-title { font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:#d4d0c8; }
+  .article-body h2 { font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:#c8c4bc; font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo">CAORAN</a>
+    <a href="/#essays" class="nav-back">← 返回文章列表</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.07.21</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">RAG 检索与重排</h1>
+    <div class="article-body">
+<h3>一句话结论</h3>
+<p>RAG 的检索阶段负责从大规模知识中高召回候选，重排阶段负责用更精细的相关性判断把真正能回答问题的片段放到上下文前部；两者共同决定模型最终能看到什么证据。</p>
+<h3>前置知识与边界</h3>
+<ul><li>前置知识：Embedding、向量相似度、关键词检索、Transformer 上下文窗口。</li><li>适用范围：答案依赖外部、私有或持续更新的知识。</li><li>不解决的问题：检索到正确证据后模型仍可能推理错误；需要生成评测和引用校验兜底。</li></ul>
+<h3>核心原理与执行流程</h3>
+<p>典型流程为：查询理解与改写 → 多路召回 → 候选合并与去重 → 重排 → 上下文组装 → 带引用生成。</p>
+<p>向量召回擅长语义相近表达，BM25 等关键词召回擅长专有名词、编号和精确词。混合检索先扩大候选覆盖，再使用 Cross-Encoder、LLM 打分或轻量学习排序模型重排。重排要同时考虑相关性、证据完整性、时效性、权限和片段多样性，不能只按单一相似度排序。</p>
+<h3>工程实现</h3>
+<ul><li>切分时保留标题、章节、来源、更新时间和权限等元数据。</li><li>查询改写保留用户实体和约束，避免语义扩展抹掉精确条件。</li><li>多路召回分别设定 top-k，再用 RRF 或归一化分数融合。</li><li>重排只处理有限候选，设置超时和降级，防止延迟失控。</li><li>上下文组装按 token 预算去重、补邻接片段，并保留稳定引用标识。</li><li>记录查询、候选、分数、最终上下文、引用和答案，支持轨迹评测。</li></ul>
+<h3>方案对比与取舍</h3>
+<p>方案</p>
+<p>优点</p>
+<p>限制</p>
+<p>适用场景</p>
+<p>纯向量检索</p>
+<p>实现简单、语义召回好</p>
+<p>精确词和罕见实体较弱</p>
+<p>通用语义问答基线</p>
+<p>BM25</p>
+<p>可解释、精确匹配强</p>
+<p>同义表达和语义迁移较弱</p>
+<p>文档编号、术语密集语料</p>
+<p>混合检索</p>
+<p>兼顾语义与关键词</p>
+<p>融合与调参复杂</p>
+<p>生产级知识问答</p>
+<p>Cross-Encoder 重排</p>
+<p>相关性通常更好</p>
+<p>推理成本和延迟较高</p>
+<p>候选规模可控、质量优先</p>
+<p>LLM 重排</p>
+<p>可利用复杂指令和领域判断</p>
+<p>成本、稳定性、可复现性较差</p>
+<p>小候选集和复杂判断</p>
+<h3>故障模式与排查</h3>
+<ol><li>没召回正确文档：分别检查查询改写、索引覆盖、切分粒度和各召回通道的 Recall@k。</li><li>正确文档被排到后面：检查重排训练分布、截断、负样本和融合分数。</li><li>上下文包含重复片段：按文档、章节和语义近重复进行去重并控制多样性。</li><li>引用与答案不匹配：验证答案句子是否可由引用片段直接支持，不只检查引用存在。</li><li>P99 延迟过高：分解改写、召回、重排、组装和生成各阶段耗时，设置超时降级。</li></ol>
+<h3>面试问答阶梯</h3>
+<ol><li>为什么向量库检索之后还需要重排？</li><li>BM25 与向量检索各自擅长什么，如何融合？</li><li>chunk 太大或太小分别会发生什么？</li><li>如何构建离线评测集并区分检索失败和生成失败？</li><li>设计一个支持权限、时效性、引用和低延迟的企业 RAG 系统。</li></ol>
+<h3>验证与实践</h3>
+<ul><li>最小实验：建立含同义表达、精确编号和干扰文档的小语料，对比向量、BM25、混合和重排结果。</li><li>关键指标：Recall@k、MRR、nDCG、上下文精确率、引用支持率、端到端正确率与 P95/P99 延迟。</li><li>项目应用：保存每次查询的候选轨迹，建立“检索错误 / 重排错误 / 生成错误”三级失败归因。</li><li>延伸方向：Query Routing、HyDE、Multi-Query、RRF、ColBERT、Contextual Retrieval 和权限过滤。</li></ul>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 内容同步自飞书知识库</footer>
+</body>
+</html>

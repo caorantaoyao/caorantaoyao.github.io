@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>标准知识文档模板 — CAORAN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0b0b0d; --surface:#121215; --surface-raised:#1a1a1e; --border:#252528;
+    --text:#e4e0d8; --text-muted:#7a7670; --text-dim:#4a4642;
+    --accent:#c9a87c; --accent-dim:#8a6d4b; --green:#7a9a8a; --green-dim:#4a6a5a; --red:#c97c7c;
+    --font-serif:'Noto Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px;
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  .container { max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px); background:rgba(11,11,13,0.75); border-bottom:1px solid var(--border); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; }
+  .nav-back:hover { color:var(--text); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(201,124,124,0.3); }
+  h1.article-title { font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:#d4d0c8; }
+  .article-body h2 { font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:#c8c4bc; font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo">CAORAN</a>
+    <a href="/#essays" class="nav-back">← 返回文章列表</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.07.21</span>
+      <span class="article-tag cloud">标准知识文档模板</span>
+    </div>
+    <h1 class="article-title">标准知识文档模板</h1>
+    <div class="article-body">
+<h3>一句话结论</h3>
+<p>用一两句话回答它是什么、解决什么问题。</p>
+<h3>前置知识与边界</h3>
+<ul><li>前置知识：</li><li>适用范围：</li><li>不解决的问题：</li></ul>
+<h3>核心原理与执行流程</h3>
+<p>说明数据结构、协议、状态变化和关键路径；必要时补充时序或状态图。</p>
+<h3>工程实现</h3>
+<p>覆盖配置、部署、容量、监控、性能和数据治理；具体语言仅作为示例。</p>
+<h3>方案对比与取舍</h3>
+<p>列出候选方案、适用条件、成本、限制和选择依据。</p>
+<h3>故障模式与排查</h3>
+<p>按“现象 → 假设 → 证据 → 定位 → 修复 → 预防”组织。</p>
+<h3>面试问答阶梯</h3>
+<ol><li>基础：定义和核心机制。</li><li>追问：边界、异常和实现细节。</li><li>场景：容量、一致性、可用性与成本取舍。</li><li>迁移：如何应用到系统设计题或项目经历。</li></ol>
+<h3>验证与实践</h3>
+<ul><li>最小实验：</li><li>关键指标：</li><li>项目应用：</li><li>延伸链接：</li></ul>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 内容同步自飞书知识库</footer>
+</body>
+</html>

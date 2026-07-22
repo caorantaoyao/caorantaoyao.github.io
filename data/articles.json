@@ -1,0 +1,278 @@
+{
+  "generated_at": "2026-07-22T23:03:57.377933+08:00",
+  "count": 34,
+  "articles": [
+    {
+      "title": "SSH：从握手、认证到隧道与文件传输",
+      "date": "2026.07.22",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "面向计算机秋招的 SSH 机制笔记，仅采用 IETF SSH 标准与 OpenSSH/OpenBSD 官方手册作为资料来源。",
+      "url": "/articles/SSH-66fa2cf5.html"
+    },
+    {
+      "title": "SSO 单点登录：原理、OIDC 流程与浏览器会话边界",
+      "date": "2026.07.21",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "SSO 让多个业务系统共同信任一个身份提供方。用户在同一浏览器中第一次完成认证后，身份提供方保存自己的登录 Cookie；其他业务系统再次把浏览器重定向到该身份提供方时，它可以复用已有会话并快速返回身份结果。业务系统之间通常不共享 Cook…",
+      "url": "/articles/SSO---OIDC-79d055cf.html"
+    },
+    {
+      "title": "Casbin PERM 元模型：从请求到授权决策",
+      "date": "2026.07.21",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "Casbin 不把权限系统固定成某一种 RBAC，而是用 PERM 元模型把授权决策拆成 Request、Policy、Matchers 和 Effect 四部分。model.conf 定义计算规则，Policy 保存动态授权数据，Enfo…",
+      "url": "/articles/Casbin-PERM-4df90054.html"
+    },
+    {
+      "title": "知识库首页",
+      "date": "2026.07.21",
+      "category": "知识库首页",
+      "tag_color": "cloud",
+      "summary": "目标：面向互联网大厂秋招，系统建设后端、AI Agent、算法工程与前端能力；当前优先后端与 Agent。",
+      "url": "/articles/c86fa13d.html"
+    },
+    {
+      "title": "简历与项目表达",
+      "date": "2026.07.21",
+      "category": "项目与面试资产",
+      "tag_color": "cloud",
+      "summary": "保存项目故事、技术难点、量化指标和追问预案。技术结论回链学科正文。",
+      "url": "/articles/1006a135.html"
+    },
+    {
+      "title": "公司与岗位记录",
+      "date": "2026.07.21",
+      "category": "项目与面试资产",
+      "tag_color": "cloud",
+      "summary": "保存 JD 拆解、公司题型、面经索引和投递记录，提取出的知识缺口进入学习控制台。",
+      "url": "/articles/f287ff0e.html"
+    },
+    {
+      "title": "模拟面试",
+      "date": "2026.07.21",
+      "category": "项目与面试资产",
+      "tag_color": "cloud",
+      "summary": "记录岗位、问题序列、回答摘要、追问、薄弱点和改进动作，并回链学科正文。",
+      "url": "/articles/82cd12d5.html"
+    },
+    {
+      "title": "错题与薄弱项",
+      "date": "2026.07.21",
+      "category": "项目与面试资产",
+      "tag_color": "cloud",
+      "summary": "记录错误答案、根因、对应正文、纠正证据和复习状态。",
+      "url": "/articles/2afb450b.html"
+    },
+    {
+      "title": "面试题库",
+      "date": "2026.07.21",
+      "category": "项目与面试资产",
+      "tag_color": "cloud",
+      "summary": "按学科索引基础题、连环追问、场景题和系统设计题。答案引用学科正文，不维护第二份标准答案。",
+      "url": "/articles/1bcef85e.html"
+    },
+    {
+      "title": "项目实战",
+      "date": "2026.07.21",
+      "category": "项目与面试资产",
+      "tag_color": "cloud",
+      "summary": "按后端项目、Agent 项目、算法项目、前端与全栈项目组织。项目文档引用学科正文，并记录目标、架构、指标、故障和复盘。",
+      "url": "/articles/b3aa9a81.html"
+    },
+    {
+      "title": "RAG 检索与重排",
+      "date": "2026.07.21",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "RAG 的检索阶段负责从大规模知识中高召回候选，重排阶段负责用更精细的相关性判断把真正能回答问题的片段放到上下文前部；两者共同决定模型最终能看到什么证据。",
+      "url": "/articles/RAG-ed4ca340.html"
+    },
+    {
+      "title": "缓存一致性：Cache-Aside 与失效策略",
+      "date": "2026.07.21",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "缓存一致性不是让缓存与数据库在任意瞬间绝对相同，而是在可接受的不一致窗口内，通过正确的读写顺序、失效策略和兜底机制，使缓存最终收敛到数据库真值。",
+      "url": "/articles/Cache-Aside-8e621cac.html"
+    },
+    {
+      "title": "安全与合规",
+      "date": "2026.07.21",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "覆盖认证授权、Web 与服务端安全、数据与密钥、供应链、AI/Agent 安全、沙箱、审批、最小权限和隐私合规。",
+      "url": "/articles/16767371.html"
+    },
+    {
+      "title": "云原生与交付",
+      "date": "2026.07.21",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "覆盖容器、Kubernetes、CI/CD、发布回滚、服务网格、基础设施、配置密钥、SRE 和资源成本治理。",
+      "url": "/articles/e4cbf446.html"
+    },
+    {
+      "title": "系统设计",
+      "date": "2026.07.21",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "覆盖需求澄清、容量估算、数据模型、接口、高并发、高可用、一致性、缓存、异步化、可观测性和典型互联网系统。",
+      "url": "/articles/8b31bd80.html"
+    },
+    {
+      "title": "前端与浏览器",
+      "date": "2026.07.21",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "覆盖浏览器渲染、DOM/CSSOM、事件系统、网络缓存、JavaScript 运行时、组件与状态、工程化、性能、安全、SSR/SSG/BFF 和 AI 原生交互。",
+      "url": "/articles/292f0075.html"
+    },
+    {
+      "title": "Agent 系统",
+      "date": "2026.07.21",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "覆盖 Prompt 与 Context Engineering、RAG、工具调用、MCP、记忆、规划、工作流、多 Agent、人在回路、评测、可观测性、安全和部署恢复。",
+      "url": "/articles/Agent-29387d3e.html"
+    },
+    {
+      "title": "AI / 机器学习 / LLM",
+      "date": "2026.07.21",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "覆盖数学基础、机器学习、深度学习、Transformer、Token、Embedding、训练对齐、微调压缩、数据、评测和推理优化。",
+      "url": "/articles/AI--LLM-4a39b500.html"
+    },
+    {
+      "title": "后端工程",
+      "date": "2026.07.21",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "覆盖 API、模块边界、服务治理、测试、可观测性、认证授权、安全、性能、容量成本和故障恢复。",
+      "url": "/articles/9ac34bc7.html"
+    },
+    {
+      "title": "中间件与分布式",
+      "date": "2026.07.21",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "覆盖消息队列、注册与配置、网关与负载均衡、缓存一致性、分布式事务、一致性模型、共识、幂等、限流熔断和任务调度。",
+      "url": "/articles/a1b0a66a.html"
+    },
+    {
+      "title": "数据库与存储",
+      "date": "2026.07.21",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "覆盖关系数据库、SQL 优化、索引、事务、锁与 MVCC、复制与高可用、分库分表、Redis、搜索、向量数据库和对象存储。",
+      "url": "/articles/cd0ecbc2.html"
+    },
+    {
+      "title": "计算机网络",
+      "date": "2026.07.21",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "覆盖网络分层、TCP/UDP、HTTP/HTTPS、DNS/CDN、TLS、WebSocket、RPC、序列化和网络故障排查。",
+      "url": "/articles/292d269c.html"
+    },
+    {
+      "title": "计算机系统",
+      "date": "2026.07.21",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "覆盖计算机组成、操作系统、Linux、进程线程、并发同步、内存、文件系统、I/O 模型、运行时与性能基础。",
+      "url": "/articles/55c60fe7.html"
+    },
+    {
+      "title": "数据结构与算法",
+      "date": "2026.07.21",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "覆盖复杂度分析、线性结构、树与堆、哈希、图、字符串、排序查找、递归、分治、贪心、回溯、动态规划和高频题型模型。",
+      "url": "/articles/ec3ae9d3.html"
+    },
+    {
+      "title": "待人工确认",
+      "date": "2026.07.21",
+      "category": "待人工确认",
+      "tag_color": "cloud",
+      "summary": "保存分类证据不足、链接异常或需要用户决策的项目。每项应说明不确定原因和下一步需要的决定。",
+      "url": "/articles/9759a2b0.html"
+    },
+    {
+      "title": "知识收件箱",
+      "date": "2026.07.21",
+      "category": "知识收件箱",
+      "tag_color": "cloud",
+      "summary": "暂存新对话中尚未完成归类的知识点。确认学科归属后更新已有正文或创建新正文，不在此长期维护答案。",
+      "url": "/articles/24201b40.html"
+    },
+    {
+      "title": "标准知识文档模板",
+      "date": "2026.07.21",
+      "category": "标准知识文档模板",
+      "tag_color": "cloud",
+      "summary": "用一两句话回答它是什么、解决什么问题。",
+      "url": "/articles/e33cbd17.html"
+    },
+    {
+      "title": "项目与面试资产",
+      "date": "2026.07.21",
+      "category": "项目与面试资产",
+      "tag_color": "cloud",
+      "summary": "将学科知识转化为项目证据、题库、复盘和简历表达；答案只引用学科正文。",
+      "url": "/articles/f2ee206d.html"
+    },
+    {
+      "title": "学科知识正文",
+      "date": "2026.07.21",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "一个知识点只维护一份正文。岗位路线、项目和面试资产通过引用复用这些内容。",
+      "url": "/articles/297425ab.html"
+    },
+    {
+      "title": "前端开发路线",
+      "date": "2026.07.21",
+      "category": "岗位路线",
+      "tag_color": "cloud",
+      "summary": "路线结构保持完整，当前内容建设优先级低于后端和 Agent。",
+      "url": "/articles/37f03596.html"
+    },
+    {
+      "title": "算法工程路线",
+      "date": "2026.07.21",
+      "category": "岗位路线",
+      "tag_color": "cloud",
+      "summary": "路线结构保持完整，当前内容建设优先级低于后端和 Agent。",
+      "url": "/articles/b7b72232.html"
+    },
+    {
+      "title": "AI Agent / 应用工程路线",
+      "date": "2026.07.21",
+      "category": "岗位路线",
+      "tag_color": "cloud",
+      "summary": "学习顺序：LLM 基础 → Context 与 RAG → 工具与 MCP → 记忆、规划与工作流 → 评测、安全和工程化 → Agent 项目。",
+      "url": "/articles/AI-Agent-74f269ff.html"
+    },
+    {
+      "title": "后端开发路线",
+      "date": "2026.07.21",
+      "category": "岗位路线",
+      "tag_color": "cloud",
+      "summary": "学习顺序：系统与网络 → 数据库与存储 → 中间件与分布式 → 后端工程 → 系统设计 → 云原生与交付 → 项目和面试资产。",
+      "url": "/articles/1868ab23.html"
+    },
+    {
+      "title": "岗位路线",
+      "date": "2026.07.21",
+      "category": "岗位路线",
+      "tag_color": "cloud",
+      "summary": "四条路线只保存学习顺序和指向学科正文的引用，不复制正文。",
+      "url": "/articles/6502a845.html"
+    }
+  ]
+}

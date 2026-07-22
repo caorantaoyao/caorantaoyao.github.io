@@ -405,18 +405,21 @@ def walk(fs: Feishu, space_id: str, parent_token: str, category: str, articles: 
         node_token = node.get("node_token")
         has_child = node.get("has_child")
 
+        # 顶层节点（category 为空）以自身标题作为分类；下层沿用父目录分类
+        node_category = category or title
+
         if obj_type == "docx" and node.get("obj_token"):
             try:
                 blocks = fs.get_blocks(node["obj_token"])
                 body_html, first_text = blocks_to_html(blocks)
                 slug = slugify(title, node_token)
                 date = ts_to_date(node.get("obj_edit_time") or node.get("obj_create_time"))
-                color = tag_color(category)
+                color = tag_color(node_category)
                 summary = (first_text[:120] + "…") if len(first_text) > 120 else first_text
 
                 # 写详情页
                 page = DETAIL_TEMPLATE.format(
-                    title=esc(title), date=date, category=esc(category or "文章"),
+                    title=esc(title), date=date, category=esc(node_category or "文章"),
                     tag_color=color, body=body_html or "<p>（暂无正文）</p>",
                 )
                 os.makedirs(ARTICLES_DIR, exist_ok=True)
@@ -426,20 +429,20 @@ def walk(fs: Feishu, space_id: str, parent_token: str, category: str, articles: 
                 articles.append({
                     "title": title,
                     "date": date,
-                    "category": category or "文章",
+                    "category": node_category or "文章",
                     "tag_color": color,
                     "summary": summary or title,
                     "url": f"/articles/{slug}.html",
                     "sort_ts": int(node.get("obj_edit_time") or node.get("obj_create_time") or 0),
                 })
-                print(f"  ✓ [{category}] {title} -> {slug}.html")
+                print(f"  ✓ [{node_category}] {title} -> {slug}.html")
             except Exception as e:
                 print(f"  ✗ 跳过 {title}: {e}", file=sys.stderr)
 
         # 若该节点还有子节点，则它本身作为分类目录继续下钻
         if has_child:
             # 分类名：容器节点用自身标题；docx 节点仍沿用上层分类
-            next_category = title if obj_type != "docx" else category
+            next_category = title if obj_type != "docx" else node_category
             walk(fs, space_id, node_token, next_category, articles)
 
 
@@ -458,9 +461,9 @@ def main():
     print(f"· space_id = {space_id}, 根节点 = {root.get('title')}")
 
     articles = []
-    # 顶层：从根节点的子节点开始；根节点自身标题作为默认分类
-    root_category = root.get("title") or "文章"
-    walk(fs, space_id, root["node_token"], root_category, articles)
+    # 顶层节点是"知识空间"的直接子节点，必须不传 parent_node_token 才能列出；
+    # 传入根 docx 节点的 token 只会得到 0 条（它自身没有 wiki 子节点）。
+    walk(fs, space_id, None, None, articles)
 
     # 按更新时间倒序
     articles.sort(key=lambda a: a["sort_ts"], reverse=True)

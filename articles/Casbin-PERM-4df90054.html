@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Casbin PERM 元模型：从请求到授权决策 — CAORAN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0b0b0d; --surface:#121215; --surface-raised:#1a1a1e; --border:#252528;
+    --text:#e4e0d8; --text-muted:#7a7670; --text-dim:#4a4642;
+    --accent:#c9a87c; --accent-dim:#8a6d4b; --green:#7a9a8a; --green-dim:#4a6a5a; --red:#c97c7c;
+    --font-serif:'Noto Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px;
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  .container { max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px); background:rgba(11,11,13,0.75); border-bottom:1px solid var(--border); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; }
+  .nav-back:hover { color:var(--text); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(201,124,124,0.3); }
+  h1.article-title { font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:#d4d0c8; }
+  .article-body h2 { font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:#c8c4bc; font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo">CAORAN</a>
+    <a href="/#essays" class="nav-back">← 返回文章列表</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.07.21</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">Casbin PERM 元模型：从请求到授权决策</h1>
+    <div class="article-body">
+<h3>一句话结论</h3>
+<p>Casbin 不把权限系统固定成某一种 RBAC，而是用 PERM 元模型把授权决策拆成 Request、Policy、Matchers 和 Effect 四部分。<code>model.conf</code> 定义计算规则，Policy 保存动态授权数据，Enforcer 将一次访问请求与所有候选策略匹配并合并为允许或拒绝。</p>
+<h3>前置知识与边界</h3>
+<ul><li>前置知识：认证与授权的区别、ACL、RBAC 的基本概念。</li><li>适用范围：需要 ACL、RBAC、多租户 RBAC、ABAC 或混合授权模型的后端系统。</li><li>不解决的问题：Casbin 不负责登录、签发 JWT、校验用户密码，也不负责资源数据本身的存储。</li><li>核心边界：身份认证回答“你是谁”，Casbin 授权回答“你能做什么”。</li></ul>
+<h3>1. 元模型、模型与策略</h3>
+<p>层次</p>
+<p>Casbin 对象</p>
+<p>类比</p>
+<p>作用</p>
+<p>元模型</p>
+<p>PERM</p>
+<p>数据库关系模型</p>
+<p>规定授权系统由哪些计算环节组成</p>
+<p>具体模型</p>
+<p><code>model.conf</code></p>
+<p>表结构 Schema</p>
+<p>定义请求和策略字段、匹配关系、冲突处理方式</p>
+<p>策略数据</p>
+<p>Policy</p>
+<p>表中的数据行</p>
+<p>记录用户或角色当前拥有哪些权限</p>
+<p>执行器</p>
+<p>Enforcer</p>
+<p>查询执行器</p>
+<p>加载模型与策略，执行 <code>enforce()</code></p>
+<p>PERM 表示：</p>
+<ul><li><strong>P — Policy</strong>：一条权限策略包含哪些字段。</li><li><strong>E — Effect</strong>：多条匹配策略的 allow / deny 如何合并。</li><li><strong>R — Request</strong>：一次鉴权请求包含哪些参数。</li><li><strong>M — Matchers</strong>：请求与策略之间满足什么条件才算匹配。</li></ul>
+<p>RBAC 使用的 <code>[role_definition]</code> 是角色关系扩展，不属于 PERM 四个字母，但会在 Matcher 中参与计算。</p>
+<h3>2. 最小 ACL 模型</h3>
+<pre><code class="language-plaintext">[request_definition]
+r = sub, obj, act
+
+[policy_definition]
+p = sub, obj, act
+
+[policy_effect]
+e = some(where (p.eft == allow))
+
+[matchers]
+m = r.sub == p.sub &amp;&amp; r.obj == p.obj &amp;&amp; r.act == p.act</code></pre>
+<p>策略数据：</p>
+<pre><code class="language-plaintext">p, alice, order:1001, read
+p, bob, order:1001, update</code></pre>
+<p>Python 调用：</p>
+<pre><code class="language-plaintext">import casbin
+
+enforcer = casbin.Enforcer(&quot;model.conf&quot;, &quot;policy.csv&quot;)
+allowed = enforcer.enforce(&quot;alice&quot;, &quot;order:1001&quot;, &quot;read&quot;)</code></pre>
+<p>参数会按 Request Definition 的顺序绑定：</p>
+<pre><code class="language-plaintext">r.sub = &quot;alice&quot;
+r.obj = &quot;order:1001&quot;
+r.act = &quot;read&quot;</code></pre>
+<h3>3. Request：定义问题的形状</h3>
+<pre><code class="language-plaintext">[request_definition]
+r = sub, obj, act</code></pre>
+<p><code>sub</code>、<code>obj</code>、<code>act</code> 分别表示访问主体、目标资源和操作。字段名和数量可以自定义，但 <code>enforce()</code> 的参数数量与顺序必须严格一致。</p>
+<p>多租户系统可以定义为：</p>
+<pre><code class="language-plaintext">r = sub, dom, obj, act</code></pre>
+<p>对应调用：</p>
+<pre><code class="language-plaintext">enforcer.enforce(&quot;alice&quot;, &quot;tenant-a&quot;, &quot;order:1001&quot;, &quot;read&quot;)</code></pre>
+<p>此时 <code>dom</code> 可以代表租户、公司、项目或工作空间。</p>
+<h3>4. Policy：定义授权数据的形状</h3>
+<pre><code class="language-plaintext">[policy_definition]
+p = sub, obj, act, eft</code></pre>
+<p>策略示例：</p>
+<pre><code class="language-plaintext">p, alice, order:1001, read, allow
+p, alice, order:1001, delete, deny</code></pre>
+<p>一行策略会绑定到 <code>p.sub</code>、<code>p.obj</code>、<code>p.act</code> 和 <code>p.eft</code>。<code>eft</code> 表示该策略的效果，通常是 <code>allow</code> 或 <code>deny</code>；未声明 <code>eft</code> 时，匹配策略默认按 allow 处理。</p>
+<p>模型与策略应分开治理：模型随代码评审和发布，策略作为动态业务数据存储在数据库或其他 Adapter 中。</p>
+<h3>5. Matchers：找出与请求相关的策略</h3>
+<p>最基本的 Matcher 是精确匹配：</p>
+<pre><code class="language-plaintext">[matchers]
+m = r.sub == p.sub &amp;&amp; r.obj == p.obj &amp;&amp; r.act == p.act</code></pre>
+<p>对请求 <code>alice / order:1001 / read</code>，Casbin 会把请求与候选策略逐条代入表达式。只有表达式为真的策略，才进入 Effect 聚合阶段。</p>
+<p>Matcher 也可以调用内置匹配函数：</p>
+<pre><code class="language-plaintext">m = r.sub == p.sub &amp;&amp; keyMatch(r.obj, p.obj) &amp;&amp; r.act == p.act</code></pre>
+<p>这样策略资源 <code>/orders/*</code> 可以匹配请求资源 <code>/orders/1001</code>。工程上应把成本低、过滤性强的条件放在前面，减少昂贵函数和角色图查询的执行次数。</p>
+<p>PyCasbin 还可以注册自定义函数：</p>
+<pre><code class="language-plaintext">def is_owner(user_id: str, owner_id: str) -&gt; bool:
+    return user_id == owner_id
+
+enforcer.add_function(&quot;isOwner&quot;, is_owner)</code></pre>
+<p>然后在 Matcher 中使用：</p>
+<pre><code class="language-plaintext">m = isOwner(r.sub, r.owner) || r.sub == &quot;root&quot;</code></pre>
+<p>自定义函数应保持纯函数、低延迟和可测试，避免在每条策略匹配时执行数据库或网络查询。</p>
+<h3>6. Effect：合并多条匹配结果</h3>
+<p>一次请求可能同时匹配多条 allow 和 deny 策略，因此需要 Effect 决定最终结果。</p>
+<h4>任意允许即可</h4>
+<pre><code class="language-plaintext">e = some(where (p.eft == allow))</code></pre>
+<p>只要存在一条匹配的 allow 策略就允许。这个表达式不会让 deny 自动覆盖 allow。</p>
+<h4>拒绝优先</h4>
+<pre><code class="language-plaintext">e = some(where (p.eft == allow)) &amp;&amp; !some(where (p.eft == deny))</code></pre>
+<p>必须至少存在一条 allow，并且不能存在任何 deny。</p>
+<p>匹配结果</p>
+<p>最终决策</p>
+<p>没有策略匹配</p>
+<p>deny</p>
+<p>只有 allow</p>
+<p>allow</p>
+<p>只有 deny</p>
+<p>deny</p>
+<p>allow 与 deny 同时存在</p>
+<p>deny</p>
+<p>Effect 解决的是“已经匹配的策略如何合并”，Matcher 解决的是“哪些策略与当前请求相关”，两者不能混为一谈。</p>
+<h3>7. RBAC：在 PERM 上增加角色关系</h3>
+<pre><code class="language-plaintext">[role_definition]
+g = _, _</code></pre>
+<p><code>g</code> 表示“用户属于角色”的二元关系：</p>
+<pre><code class="language-plaintext">g, alice, admin
+g, bob, reviewer</code></pre>
+<p>权限授予角色：</p>
+<pre><code class="language-plaintext">p, admin, order:1001, delete
+p, reviewer, order:1001, read</code></pre>
+<p>Matcher 改为：</p>
+<pre><code class="language-plaintext">m = g(r.sub, p.sub) &amp;&amp; r.obj == p.obj &amp;&amp; r.act == p.act</code></pre>
+<p>此时 <code>g(alice, admin)</code> 为真，因此 Alice 可以匹配授予 admin 的策略。角色还可以继承其他角色，但角色层级过深会增加理解和排查成本。</p>
+<h3>8. 多租户 RBAC</h3>
+<p>互联网后端常见的模型是“用户在不同租户拥有不同角色”：</p>
+<pre><code class="language-plaintext">[request_definition]
+r = sub, dom, obj, act
+
+[policy_definition]
+p = sub, dom, obj, act, eft
+
+[role_definition]
+g = _, _, _
+
+[policy_effect]
+e = some(where (p.eft == allow)) &amp;&amp; !some(where (p.eft == deny))
+
+[matchers]
+m = g(r.sub, p.sub, r.dom) &amp;&amp;
+    r.dom == p.dom &amp;&amp;
+    keyMatch(r.obj, p.obj) &amp;&amp;
+    r.act == p.act</code></pre>
+<p>角色关系：</p>
+<pre><code class="language-plaintext">g, alice, admin, tenant-a
+g, alice, member, tenant-b</code></pre>
+<p>策略：</p>
+<pre><code class="language-plaintext">p, admin, tenant-a, /orders/*, read, allow
+p, admin, tenant-a, /orders/*, write, allow
+p, member, tenant-b, /orders/*, read, allow</code></pre>
+<p>相同用户可以在不同 Domain 拥有不同角色，避免把租户信息拼进角色名称。</p>
+<h3>9. 一次鉴权的完整执行流程</h3>
+<p>抽象表达为：</p>
+<pre><code class="language-plaintext">授权结果 = Effect(Matcher(Request, Policy₁), Matcher(Request, Policy₂), ...)</code></pre>
+<p>可以把四部分记成：Request 提出问题，Policy 提供候选答案，Matchers 找出相关答案，Effect 合并所有答案。</p>
+<h3>10. 工程落地</h3>
+<ul><li>模型文件进入 Git，模型变更需要评审、自动化测试和版本记录。</li><li>动态策略存数据库，不要把生产权限长期维护在 CSV 中。</li><li>请求中的 <code>sub</code> 使用稳定用户 ID，而不是可能改名的昵称。</li><li><code>obj</code> 采用稳定、可审计的资源命名规范，例如 <code>order:1001</code> 或 <code>/orders/1001</code>。</li><li>默认拒绝；Casbin 调用失败、超时或模型未初始化时不要绕过鉴权。</li><li>Policy 管理接口本身也必须鉴权，避免普通用户为自己添加权限。</li><li>记录主体、资源、动作、最终决策、命中策略和请求追踪 ID，但不要在日志中泄露敏感数据。</li><li>为 allow、deny、无匹配、角色继承、租户隔离和冲突策略分别编写测试。</li><li>使用 Casbin Server 时，每次鉴权是网络调用，应设置超时、复用 gRPC Channel，并评估不可用时的 fail-closed 策略。</li></ul>
+<h3>11. 常见误区与故障排查</h3>
+<ol><li><strong>把认证当授权</strong>：JWT 有效只代表用户身份可信，不代表用户可以访问任意资源。</li><li><strong><code>enforce()</code></strong><strong> 参数顺序错误</strong>：先对照 Request Definition 检查数量和顺序。</li><li><strong>策略字段数量不匹配</strong>：Policy 数据必须与 Policy Definition 对齐。</li><li><strong>认为 deny 天然优先</strong>：最终冲突规则由 Effect 决定，必须显式检查表达式。</li><li><strong>RBAC 忘记调用 </strong><strong><code>g()</code></strong>：仅定义角色关系但 Matcher 不使用 <code>g()</code>，角色不会参与鉴权。</li><li><strong>多租户遗漏 Domain 条件</strong>：可能导致租户间权限串用，测试必须覆盖跨租户拒绝。</li><li><strong>Matcher 中进行远程查询</strong>：Matcher 可能对多条策略重复执行，容易造成延迟放大。</li><li><strong>修改数据库策略后结果未更新</strong>：检查 Adapter、Watcher、策略加载和多实例同步链路。</li></ol>
+<h3>面试问答阶梯</h3>
+<ol><li>Casbin 的 PERM 元模型分别是什么？</li><li>Matcher 和 Effect 分别解决什么问题？</li><li><code>g = _, _</code> 的两个占位符代表什么，为什么 RBAC Matcher 必须调用 <code>g()</code>？</li><li>当 allow 和 deny 同时匹配时，最终结果由什么决定？</li><li>如何设计一个用户在不同租户拥有不同角色的 Casbin 模型？</li><li>为什么不应在 Matcher 的自定义函数里查询数据库？</li><li>模型文件和策略数据分别应该如何存储、评审和发布？</li><li>使用 Casbin Server 时，如何处理延迟、超时、服务不可用和策略一致性？</li></ol>
+<h3>验证与实践</h3>
+<p>最小测试矩阵：</p>
+<pre><code class="language-plaintext">cases = [
+    (&quot;alice&quot;, &quot;tenant-a&quot;, &quot;/orders/1001&quot;, &quot;read&quot;, True),
+    (&quot;alice&quot;, &quot;tenant-a&quot;, &quot;/orders/1001&quot;, &quot;write&quot;, True),
+    (&quot;alice&quot;, &quot;tenant-b&quot;, &quot;/orders/1001&quot;, &quot;write&quot;, False),
+    (&quot;unknown&quot;, &quot;tenant-a&quot;, &quot;/orders/1001&quot;, &quot;read&quot;, False),
+]
+
+for sub, dom, obj, act, expected in cases:
+    assert enforcer.enforce(sub, dom, obj, act) is expected</code></pre>
+<ul><li>关键指标：鉴权 QPS、P95/P99 延迟、拒绝率、无匹配率、策略加载耗时和同步延迟。</li><li>项目应用：为一个多租户订单 API 实现 <code>read</code>、<code>write</code>、<code>delete</code> 权限并覆盖跨租户测试。</li><li>延伸方向：ABAC、RBAC with Domains、Policy Adapter、Watcher、缓存与分布式策略同步。</li></ul>
+<h3>参考资料</h3>
+<ul><li><a href="https://casbin.org/docs/how-it-works/" target="_blank" rel="noopener">Apache Casbin：How It Works</a></li><li><a href="https://casbin.org/docs/syntax-for-models/" target="_blank" rel="noopener">Apache Casbin：Syntax for Models</a></li><li><a href="https://github.com/apache/casbin-server" target="_blank" rel="noopener">Apache Casbin Server</a></li></ul>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 内容同步自飞书知识库</footer>
+</body>
+</html>

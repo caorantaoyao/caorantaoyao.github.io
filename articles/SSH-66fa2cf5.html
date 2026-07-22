@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SSH：从握手、认证到隧道与文件传输 — CAORAN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0b0b0d; --surface:#121215; --surface-raised:#1a1a1e; --border:#252528;
+    --text:#e4e0d8; --text-muted:#7a7670; --text-dim:#4a4642;
+    --accent:#c9a87c; --accent-dim:#8a6d4b; --green:#7a9a8a; --green-dim:#4a6a5a; --red:#c97c7c;
+    --font-serif:'Noto Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px;
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  .container { max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px); background:rgba(11,11,13,0.75); border-bottom:1px solid var(--border); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; }
+  .nav-back:hover { color:var(--text); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(201,124,124,0.3); }
+  h1.article-title { font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:#d4d0c8; }
+  .article-body h2 { font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:#c8c4bc; font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo">CAORAN</a>
+    <a href="/#essays" class="nav-back">← 返回文章列表</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.07.22</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">SSH：从握手、认证到隧道与文件传输</h1>
+    <div class="article-body">
+<p>面向计算机秋招的 SSH 机制笔记，仅采用 IETF SSH 标准与 OpenSSH/OpenBSD 官方手册作为资料来源。</p>
+<h3>1. SSH 到底解决什么问题</h3>
+<p>SSH（Secure Shell）不是“一个远程终端命令”，而是一套在不可信网络上提供安全远程登录及其他网络服务的协议族。它的目标至少包含三件事：</p>
+<ol><li><strong>服务器身份认证</strong>：客户端确认连接的是目标服务器，而不是中间人；</li><li><strong>机密性与完整性</strong>：传输内容不可被旁观者读取，也不能被无声篡改；</li><li><strong>用户身份认证</strong>：服务器确认当前客户端用户是否有权登录。</li></ol>
+<p>RFC 4251 把 SSH 分成三个叠加的主要协议：<a href="https://www.rfc-editor.org/rfc/rfc4251.html#section-1" target="_blank" rel="noopener">RFC 4251 §1</a></p>
+<pre><code class="language-plaintext">应用：Shell / Exec / SFTP / TCP 转发 / X11
+                 │
+Connection Protocol（连接协议，RFC 4254）
+  └─ 把一条加密连接复用成多个逻辑 Channel
+                 │
+User Authentication Protocol（用户认证协议，RFC 4252）
+  └─ 认证客户端用户：publickey/password/keyboard-interactive 等
+                 │
+Transport Layer Protocol（传输层协议，RFC 4253）
+  └─ 密钥交换、服务器认证、加密、完整性、可选压缩
+                 │
+       通常运行在 TCP 之上（默认端口 22）</code></pre>
+<p>这里的“Transport Layer”是 SSH 协议栈自己的传输层，不等同于 OSI/TCP/IP 分层中的传输层。它通常运行在 TCP 这样的可靠字节流之上。</p>
+<h3>2. 建立 SSH 连接：握手和密钥交换</h3>
+<h4>2.1 总体顺序</h4>
+<p>一次典型连接可以概括为：</p>
+<p>算法不是由某一端单方面强制决定。双方在 <code>SSH_MSG_KEXINIT</code> 中分别给出 KEX、服务器主机密钥、双向加密、双向 MAC 和压缩算法列表；例如加密算法按“客户端优先列表中，第一个也被服务器支持的算法”选出，没有共同算法就断开连接。<a href="https://www.rfc-editor.org/rfc/rfc4253.html#section-7.1" target="_blank" rel="noopener">RFC 4253 §7.1</a></p>
+<h4>2.2 密钥交换做了什么</h4>
+<p>以 RFC 4253 中的 Diffie–Hellman 流程为例：客户端发送临时交换值 <code>e</code>，服务器返回主机公钥 <code>K_S</code>、临时交换值 <code>f</code>，以及服务器用主机私钥对交换哈希 <code>H</code> 的签名。<code>H</code> 覆盖客户端/服务器版本字符串、双方 KEXINIT、服务器主机公钥、交换值以及共享秘密，因此把算法协商、临时密钥和服务器长期身份绑定在一起。<a href="https://www.rfc-editor.org/rfc/rfc4253.html#section-8" target="_blank" rel="noopener">RFC 4253 §8</a></p>
+<p>密钥交换输出：</p>
+<ul><li>共享秘密 <code>K</code>；</li><li>交换哈希 <code>H</code>；</li><li>由二者派生出的加密密钥、完整性密钥和 IV；</li><li>第一次交换的 <code>H</code> 同时成为整个连接不再改变的 <code>session identifier</code>，后续用户公钥认证签名也会包含它，从而把认证证明绑定到当前连接。<a href="https://www.rfc-editor.org/rfc/rfc4253.html#section-7.2" target="_blank" rel="noopener">RFC 4253 §7.2</a></li></ul>
+<p>SSH 可以在现有加密连接中重新进行 KEX（rekey），但会话标识保持不变。<a href="https://www.rfc-editor.org/rfc/rfc4253.html#section-9" target="_blank" rel="noopener">RFC 4253 §9</a></p>
+<h4>2.3 主机密钥不等于会话加密密钥</h4>
+<p>这是常见误区：服务器主机私钥通常不直接加密整段会话数据。它的核心用途是<strong>对密钥交换内容签名，证明服务器身份</strong>；会话数据由密钥交换产生的临时对称密钥加密。主机长期密钥与临时会话密钥分工，才让身份认证和高效传输同时成立。</p>
+<h3>3. 主机认证：<code>known_hosts</code> 信任服务器</h3>
+<p>服务器的主机公钥用于让客户端确认“我连接的是谁”。RFC 4251 给出两种信任模型：</p>
+<ul><li>客户端维护“主机名 → 主机公钥”的本地数据库；</li><li>由受信任 CA 为主机密钥签发证书，客户端只需信任 CA 根公钥。</li></ul>
+<p>首次连接时如果不验证主机密钥，连接仍能抵抗被动窃听，却容易遭受主动中间人攻击。<a href="https://www.rfc-editor.org/rfc/rfc4251.html#section-4.1" target="_blank" rel="noopener">RFC 4251 §4.1</a></p>
+<p>OpenSSH 的本地数据库就是：</p>
+<pre><code class="language-plaintext">用户级：~/.ssh/known_hosts
+系统级：/etc/ssh/ssh_known_hosts</code></pre>
+<p><code>known_hosts</code> 的每一行通常包含：可选 marker、主机名、密钥类型、Base64 公钥和可选注释；<code>@cert-authority</code> 表示主机 CA，<code>@revoked</code> 表示已撤销密钥。<a href="https://man.openbsd.org/sshd#SSH_KNOWN_HOSTS_FILE_FORMAT" target="_blank" rel="noopener">OpenBSD sshd(8)：SSH_KNOWN_HOSTS FILE FORMAT</a></p>
+<p><code>StrictHostKeyChecking</code> 的关键语义是：<a href="https://man.openbsd.org/ssh_config#StrictHostKeyChecking" target="_blank" rel="noopener">OpenBSD ssh_config(5)</a></p>
+<p>值</p>
+<p>新主机</p>
+<p>已知主机密钥变化</p>
+<p><code>yes</code></p>
+<p>拒绝自动加入，必须预置</p>
+<p>拒绝</p>
+<p><code>accept-new</code></p>
+<p>自动加入</p>
+<p>拒绝</p>
+<p><code>ask</code>（默认）</p>
+<p>询问后加入</p>
+<p>拒绝</p>
+<p><code>no/off</code></p>
+<p>自动加入</p>
+<p>在限制条件下仍可能继续，不适合作为常规安全配置</p>
+<p>安全要点：第一次显示的指纹只有通过可信的带外渠道（资产平台、管理员、控制台等）核对才真正建立身份信任；盲目输入 <code>yes</code> 只是“记住了当前看到的密钥”。<code>HashKnownHosts yes</code> 可以隐藏文件中可读的主机名，但不改变密钥验证机制。<a href="https://man.openbsd.org/ssh_config#HashKnownHosts" target="_blank" rel="noopener">OpenBSD ssh_config(5)：HashKnownHosts</a></p>
+<p>主机换机或轮换密钥时，不应养成直接删除警告的习惯，应先核实变更。OpenSSH 的 <code>UpdateHostKeys</code> 可在主机已被可信密钥认证后学习额外主机密钥，支持渐进式轮换。<a href="https://man.openbsd.org/ssh_config#UpdateHostKeys" target="_blank" rel="noopener">OpenBSD ssh_config(5)：UpdateHostKeys</a></p>
+<h3>4. 用户认证：<code>authorized_keys</code> 信任用户</h3>
+<p>主机认证完成后，用户认证协议在加密传输层之上运行。<a href="https://www.rfc-editor.org/rfc/rfc4252.html" target="_blank" rel="noopener">RFC 4252</a></p>
+<h4>4.1 公钥认证并不传私钥</h4>
+<p>客户端先声明用户名、服务、算法和公钥；正式认证时，用对应私钥对包含 <code>session identifier</code> 和整个认证请求的数据签名。服务器执行两个检查：</p>
+<ol><li>这把公钥是否被允许登录该账户；</li><li>签名是否正确，即客户端是否真正持有私钥。</li></ol>
+<p>私钥不会发送到服务器。<a href="https://www.rfc-editor.org/rfc/rfc4252.html#section-7" target="_blank" rel="noopener">RFC 4252 §7</a></p>
+<p>OpenSSH 通常从目标账户的以下文件判断哪些公钥被授权：</p>
+<pre><code class="language-plaintext">~/.ssh/authorized_keys</code></pre>
+<p>每行格式是：</p>
+<pre><code class="language-plaintext">[options] keytype base64-key [comment]</code></pre>
+<p><code>known_hosts</code> 与 <code>authorized_keys</code> 不可混淆：</p>
+<p>文件</p>
+<p>位于哪一端</p>
+<p>回答的问题</p>
+<p>客户端 <code>known_hosts</code></p>
+<p>发起连接的机器</p>
+<p>“这个服务器真的是目标服务器吗？”</p>
+<p>服务端 <code>authorized_keys</code></p>
+<p>被登录账户下</p>
+<p>“这把用户公钥可以登录这个账户吗？”</p>
+<p><code>authorized_keys</code> 不只是公钥清单，也可以对单把密钥做最小权限约束。<code>restrict</code> 会关闭端口、Agent、X11 转发、PTY 和 <code>~/.ssh/rc</code>；可再结合 <code>command=&quot;...&quot;</code> 强制命令、<code>from=&quot;...&quot;</code> 限制来源、<code>permitopen</code>/<code>permitlisten</code> 限制转发目的地或监听地址。<a href="https://man.openbsd.org/sshd#AUTHORIZED_KEYS_FILE_FORMAT" target="_blank" rel="noopener">OpenBSD sshd(8)：AUTHORIZED_KEYS FILE FORMAT</a></p>
+<h4>4.2 密码认证的准确含义</h4>
+<p>SSH 密码认证报文中包含明文密码字段，但<strong>整个 SSH 报文已被传输层加密</strong>；因此不是“先在客户端把密码做哈希再发送”。服务端最终仍会得到密码用于本地验证。RFC 4252 明确要求：如果底层 SSH 传输不提供机密性，就应禁用密码认证。<a href="https://www.rfc-editor.org/rfc/rfc4252.html#section-8" target="_blank" rel="noopener">RFC 4252 §8</a></p>
+<p>密码、<code>keyboard-interactive</code>、公钥是不同认证方法。OpenSSH 的 <code>AuthenticationMethods</code> 可要求多步认证，例如 <code>publickey,keyboard-interactive</code> 表示两种方法都必须成功，而不是二选一。<a href="https://man.openbsd.org/sshd_config#AuthenticationMethods" target="_blank" rel="noopener">OpenBSD sshd_config(5)：AuthenticationMethods</a></p>
+<h3>5. Channel：为什么一条 SSH 连接能同时做很多事</h3>
+<p>完成认证后，Connection Protocol 把单条加密隧道复用成多个逻辑 Channel。终端会话、命令执行、转发连接等都是 Channel；双方都可以发起，Channel 有各自编号、流量窗口和最大包大小。<a href="https://www.rfc-editor.org/rfc/rfc4254.html#section-5" target="_blank" rel="noopener">RFC 4254 §5</a></p>
+<p>常见 Channel/请求包括：</p>
+<ul><li><code>session</code>：远程 shell、执行单个命令、启动 subsystem；</li><li><code>pty-req</code>：在 session 中申请伪终端；</li><li><code>shell</code>：启动交互式 shell；</li><li><code>exec</code>：执行命令；</li><li><code>subsystem</code>：启动预定义子系统，例如 SFTP；</li><li><code>direct-tcpip</code> / <code>forwarded-tcpip</code>：TCP 端口转发。</li></ul>
+<p>所以 <code>ssh user@host</code>、<code>ssh user@host command</code>、SFTP、端口转发并不是几套完全独立的加密连接；它们都可以构建在同一个 SSH Connection Protocol 和 Channel 抽象之上。Channel 有独立流控，<code>EOF</code> 只表示一个方向不再发送，双向关闭需要双方交换 <code>SSH_MSG_CHANNEL_CLOSE</code>。<a href="https://www.rfc-editor.org/rfc/rfc4254.html#section-5.2" target="_blank" rel="noopener">RFC 4254 §5.2–5.3</a></p>
+<h3>6. 三种端口转发</h3>
+<h4>6.1 本地转发 <code>-L</code></h4>
+<pre><code class="language-plaintext">ssh -L 127.0.0.1:15432:db.internal:5432 user@bastion</code></pre>
+<p>含义：SSH 客户端在<strong>本机</strong>监听 <code>127.0.0.1:15432</code>；每个进入该端口的连接通过 SSH Channel 到远端，并由<strong>远端一侧</strong>连接 <code>db.internal:5432</code>。<a href="https://man.openbsd.org/ssh#L" target="_blank" rel="noopener">OpenBSD ssh(1)：</a><a href="https://man.openbsd.org/ssh#L" target="_blank" rel="noopener"><code>-L</code></a></p>
+<p>典型场景：本机通过堡垒机访问内网数据库。</p>
+<h4>6.2 远程转发 <code>-R</code></h4>
+<pre><code class="language-plaintext">ssh -R 127.0.0.1:18080:127.0.0.1:8080 user@server</code></pre>
+<p>含义：在<strong>远端服务器</strong>监听 <code>127.0.0.1:18080</code>；连接经 SSH 回到客户端，由<strong>客户端一侧</strong>访问 <code>127.0.0.1:8080</code>。<a href="https://man.openbsd.org/ssh#R" target="_blank" rel="noopener">OpenBSD ssh(1)：</a><a href="https://man.openbsd.org/ssh#R" target="_blank" rel="noopener"><code>-R</code></a></p>
+<p>远程监听默认通常只绑定回环地址；绑定外部接口还受服务端 <code>GatewayPorts</code> 控制。把监听地址设为 <code>0.0.0.0</code> 或 <code>*</code> 可能把原本本地的服务暴露给整个网络。</p>
+<h4>6.3 动态转发 <code>-D</code></h4>
+<pre><code class="language-plaintext">ssh -D 127.0.0.1:1080 user@bastion</code></pre>
+<p>客户端在本机提供 SOCKS4/5 代理，应用把目的地址交给 SOCKS；SSH 远端再连接实际目的地址。<a href="https://man.openbsd.org/ssh_config#DynamicForward" target="_blank" rel="noopener">OpenBSD ssh_config(5)：DynamicForward</a></p>
+<h4>6.4 转发本质与边界</h4>
+<p>端口转发不是 VPN 的同义词：通常它只代理选定 TCP 连接；<code>-D</code> 是 SOCKS 代理，不会自动接管所有系统流量。转发还可能绕过网络边界，因此服务端应按需要使用 <code>AllowTcpForwarding</code>、<code>PermitOpen</code>、<code>PermitListen</code>、<code>DisableForwarding</code>，单把 key 还可用 <code>authorized_keys</code> 选项收紧。<a href="https://man.openbsd.org/sshd_config" target="_blank" rel="noopener">OpenBSD sshd_config(5)</a></p>
+<h3>7. <code>ssh-agent</code>：保管私钥操作能力，而不是传送私钥</h3>
+<p><code>ssh-agent</code> 是保存私钥身份并代为执行签名的本地进程。客户端通过 <code>SSH_AUTH_SOCK</code> 指向的 Unix-domain socket 调用它；<code>ssh-add</code> 用于加入、列出或删除身份。<a href="https://man.openbsd.org/ssh-agent" target="_blank" rel="noopener">OpenBSD ssh-agent(1)</a>、<a href="https://man.openbsd.org/ssh-add" target="_blank" rel="noopener">OpenBSD ssh-add(1)</a></p>
+<p>实用命令：</p>
+<pre><code class="language-plaintext">eval &quot;$(ssh-agent -s)&quot;
+ssh-add ~/.ssh/id_ed25519
+ssh-add -l                 # 列出指纹
+ssh-add -t 1h -c ~/.ssh/id_ed25519  # 一小时有效，每次使用需确认
+ssh-add -D                 # 清空 Agent</code></pre>
+<p>Agent 转发 <code>ssh -A</code> 不会把私钥文件复制到跳板机，但会把“请求本地 Agent 签名”的能力转发过去。能访问远端转发 socket 的攻击者虽然不能直接导出密钥材料，却可能利用已加载身份发起认证。因此 OpenSSH 官方明确要求谨慎使用 Agent 转发，并指出 <code>ProxyJump</code> 往往是更安全的替代方案。<a href="https://man.openbsd.org/ssh#A" target="_blank" rel="noopener">OpenBSD ssh(1)：</a><a href="https://man.openbsd.org/ssh#A" target="_blank" rel="noopener"><code>-A</code></a></p>
+<p>降低风险的方法包括：默认不启用 <code>ForwardAgent</code>；为 key 设置生命周期 <code>ssh-add -t</code>、逐次确认 <code>-c</code>，或使用目的地主机约束 <code>ssh-add -h</code>；在可能时使用 <code>ProxyJump</code> 而不是把 Agent 暴露给堡垒机。</p>
+<h3>8. SFTP 与 SCP</h3>
+<h4>8.1 SFTP</h4>
+<p>SFTP 是通过加密 SSH transport 运行的文件传输协议/子系统，复用 SSH 的主机认证、用户认证和加密能力；它不是“FTP 加 TLS”，也通常不需要 FTP 的独立控制/数据端口。<a href="https://man.openbsd.org/sftp" target="_blank" rel="noopener">OpenBSD sftp(1)</a></p>
+<pre><code class="language-plaintext">sftp user@host
+sftp user@host:/remote/path</code></pre>
+<h4>8.2 SCP</h4>
+<p><code>scp</code> 是 OpenSSH 的文件复制命令。<strong>当前 OpenSSH 的 </strong><strong><code>scp</code></strong><strong> 默认使用 SFTP 协议传输</strong>，同时保留 <code>-O</code> 强制使用旧 SCP protocol 以兼容旧服务器或特定路径展开行为。<a href="https://man.openbsd.org/scp" target="_blank" rel="noopener">OpenBSD scp(1)</a></p>
+<p>因此必须区分：</p>
+<ul><li><code>scp</code>：命令行工具及其用户体验；</li><li>SFTP：当前 <code>scp</code> 默认使用的传输协议；</li><li>legacy SCP protocol：可通过 <code>scp -O</code> 显式启用的旧协议。</li></ul>
+<p>不要笼统地说“scp 永远使用旧 SCP 协议”。脚本需要目录同步、删除语义、断点或复杂筛选时，也不能仅凭“都走 SSH”就认为 <code>scp</code>、<code>sftp</code>、<code>rsync</code> 可完全互换。</p>
+<h3>9. 现代公钥算法：几个容易误解的名字</h3>
+<ul><li>RFC 8332 为 SSH 定义 <code>rsa-sha2-256</code> 和 <code>rsa-sha2-512</code> 签名算法，继续使用已有 RSA key format，但签名哈希改为 SHA-2；这说明“RSA 密钥”与“<code>ssh-rsa</code>（RSA + SHA-1 签名算法名）”不是同一个概念。<a href="https://www.rfc-editor.org/rfc/rfc8332.html" target="_blank" rel="noopener">RFC 8332</a></li><li>RFC 8709 定义 SSH 的 <code>ssh-ed25519</code> 与 <code>ssh-ed448</code> 公钥/签名算法。<a href="https://www.rfc-editor.org/rfc/rfc8709.html" target="_blank" rel="noopener">RFC 8709</a></li><li>实际客户端/服务端支持与默认算法应使用本机 <code>ssh -Q key</code>、<code>ssh -Q key-sig</code>、<code>ssh -Q kex</code>、<code>ssh -Q cipher</code> 查询，不应把某个版本的默认列表当成永恒标准。<a href="https://man.openbsd.org/ssh" target="_blank" rel="noopener">OpenBSD ssh(1)</a></li></ul>
+<p>新生成的一般软件密钥可优先考虑 Ed25519；已有 RSA 密钥在双方支持时可使用 RSA-SHA2 签名。兼容旧系统时应针对目标版本评估，而不是为了“能连上”全局重新启用弱旧算法。</p>
+<h3>10. 实用配置示例</h3>
+<p>客户端 <code>~/.ssh/config</code>：</p>
+<pre><code class="language-plaintext">Host work-bastion
+    HostName bastion.example.com
+    User caoran
+    IdentityFile ~/.ssh/id_ed25519_work
+    IdentitiesOnly yes
+    StrictHostKeyChecking yes
+    ForwardAgent no
+    ServerAliveInterval 30
+    ServerAliveCountMax 3
+
+Host internal-api
+    HostName api.internal.example.com
+    User deploy
+    ProxyJump work-bastion
+    IdentityFile ~/.ssh/id_ed25519_work
+    IdentitiesOnly yes</code></pre>
+<p>说明：配置项会按命令行、用户配置、系统配置依次读取，而且对每个参数通常采用“第一个获得的值”；因此更具体的 Host 块通常应放在通配块之前。<a href="https://man.openbsd.org/ssh_config" target="_blank" rel="noopener">OpenBSD ssh_config(5)</a></p>
+<h3>11. 安全实践清单</h3>
+<h4>客户端</h4>
+<ol><li>首次连接通过可信渠道核对主机指纹；自动化部署预置 <code>known_hosts</code> 或主机 CA，不使用 <code>StrictHostKeyChecking no</code> 掩盖问题。</li><li>私钥设置强口令并限制文件权限；<code>ssh-add</code> 会忽略可被其他人访问的 identity 文件。<a href="https://man.openbsd.org/ssh-add" target="_blank" rel="noopener">OpenBSD ssh-add(1)</a></li><li>不把私钥提交到 Git、镜像或服务器；按用途分 key，便于撤销和审计。</li><li>默认关闭 Agent 转发；确需使用时设置生命周期、确认或目的地约束。</li><li>对隧道显式绑定 <code>127.0.0.1</code>，除非确实需要向局域网/公网开放。</li><li>使用 <code>ssh -vvv</code> 排查连接与认证，用 <code>ssh -G host</code> 查看最终生效配置，不靠猜测。</li></ol>
+<h4>服务端</h4>
+<ol><li>优先公钥或硬件安全密钥；确认无密码业务需求后再关闭 <code>PasswordAuthentication</code>，避免配置变更把自己锁在门外。</li><li>限制 root 直接登录；OpenSSH 当前 <code>PermitRootLogin</code> 默认语义可配置为 <code>prohibit-password</code>、<code>forced-commands-only</code> 或 <code>no</code>。<a href="https://man.openbsd.org/sshd_config#PermitRootLogin" target="_blank" rel="noopener">OpenBSD sshd_config(5)：PermitRootLogin</a></li><li>使用 <code>AllowUsers</code>/<code>AllowGroups</code>、<code>Match</code> 按用户和来源收敛入口；高价值系统可用 <code>AuthenticationMethods</code> 要求多因素。</li><li>限制端口、Agent、X11、TUN 和 remote forwarding；自动化 key 用 <code>restrict,command=...</code> 做最小权限。</li><li>保证 <code>~/.ssh</code> 和 <code>authorized_keys</code> 不可被其他用户写入；<code>StrictModes</code> 默认会检查相关所有权和权限。<a href="https://man.openbsd.org/sshd" target="_blank" rel="noopener">OpenBSD sshd(8)</a></li><li>对暴力尝试和连接耗尽使用系统防火墙、日志审计以及 <code>MaxAuthTries</code>、<code>MaxStartups</code> 等控制；修改前用 <code>sshd -t</code> 检查配置语法。</li><li>不要盲目复制网络上的“最强算法清单”：OpenSSH 默认会演进，硬编码过窄列表容易造成升级或兼容故障；确需合规基线时再显式配置并持续复审。</li></ol>
+<h3>12. 高频误区纠正</h3>
+<p>误区</p>
+<p>正确理解</p>
+<p>“SSH 就是远程 Shell”</p>
+<p>Shell 只是 Connection Protocol 上的一种 session；SSH 还承载命令、SFTP、转发等。</p>
+<p>“使用密钥登录就不需要验证服务器”</p>
+<p>用户公钥认证解决服务器信任用户；<code>known_hosts</code>/主机 CA 才解决客户端信任服务器。</p>
+<p>“服务器主机密钥直接加密所有数据”</p>
+<p>主机密钥主要签名 KEX 以证明身份；会话数据使用协商派生的对称密钥。</p>
+<p>“SSH 密码先哈希后发送”</p>
+<p>Password 方法传输密码字段，但整个 SSH 报文由传输层加密。</p>
+<p>“公钥认证会把私钥传给服务器”</p>
+<p>客户端在本地签名，服务器使用公钥验证；私钥不离开客户端/Agent/硬件。</p>
+<p>“首次看到指纹输入 yes 就安全了”</p>
+<p>未经可信渠道核验时只能获得后续一致性，首次连接仍可能被 MITM。</p>
+<p>“<code>ssh-agent -A</code> 很安全，因为私钥没复制过去”</p>
+<p>私钥不被导出，但恶意远端可利用转发的 Agent 请求签名并冒用身份。</p>
+<p>“端口转发会自动保护所有网络流量”</p>
+<p><code>-L/-R</code> 只转发指定连接，<code>-D</code> 仅提供 SOCKS；应用必须实际使用它。</p>
+<p>“关闭服务端 TCP forwarding 就一定安全”</p>
+<p>有 shell 权限的用户可能运行自己的转发器；OpenSSH 手册明确指出，除非同时剥夺 shell，否则单独关闭 forwarding 并不必然提升安全性。<a href="https://man.openbsd.org/sshd_config#AllowTcpForwarding" target="_blank" rel="noopener">OpenBSD sshd_config(5)</a></p>
+<p>“<code>scp</code> 一定使用旧 SCP 协议”</p>
+<p>当前 OpenSSH <code>scp</code> 默认使用 SFTP，<code>-O</code> 才强制 legacy SCP protocol。</p>
+<p>“<code>ssh-rsa</code> 被弃用等于所有 RSA key 都不能用”</p>
+<p><code>ssh-rsa</code> 特指 SHA-1 签名算法；RFC 8332 的 RSA-SHA2 可继续使用 RSA key。</p>
+<h3>13. 面试回答主线</h3>
+<p>可以用下面的 90 秒结构回答“SSH 如何工作”：</p>
+<ol><li>SSH 是运行在可靠字节流（通常 TCP）上的三层协议族：Transport、User Authentication、Connection。</li><li>Transport 阶段双方协商 KEX、主机密钥、Cipher、MAC 等；KEX 产生共享秘密和会话密钥，服务器用主机私钥签名交换哈希。</li><li>客户端用 <code>known_hosts</code> 或主机 CA 验证服务器，避免 MITM。</li><li>安全通道建立后才进行用户认证；公钥认证是客户端对绑定当前 session 的请求签名，服务器用 <code>authorized_keys</code> 中的公钥验签，私钥不上传。</li><li>认证成功后 Connection Protocol 把一条连接复用成多个有独立流控的 Channel，用于 shell、exec、SFTP 和端口转发。</li><li>SSH 安全不仅靠密码算法，还依赖首次主机密钥核验、私钥保护、Agent 转发边界以及服务端最小权限配置。</li></ol>
+<h3>14. 一手来源索引</h3>
+<ul><li><a href="https://www.rfc-editor.org/rfc/rfc4251.html" target="_blank" rel="noopener">RFC 4251 — SSH Protocol Architecture</a></li><li><a href="https://www.rfc-editor.org/rfc/rfc4252.html" target="_blank" rel="noopener">RFC 4252 — SSH Authentication Protocol</a></li><li><a href="https://www.rfc-editor.org/rfc/rfc4253.html" target="_blank" rel="noopener">RFC 4253 — SSH Transport Layer Protocol</a></li><li><a href="https://www.rfc-editor.org/rfc/rfc4254.html" target="_blank" rel="noopener">RFC 4254 — SSH Connection Protocol</a></li><li><a href="https://www.rfc-editor.org/rfc/rfc8332.html" target="_blank" rel="noopener">RFC 8332 — RSA Keys with SHA-2 Signatures in SSH</a></li><li><a href="https://www.rfc-editor.org/rfc/rfc8709.html" target="_blank" rel="noopener">RFC 8709 — Ed25519 and Ed448 for SSH</a></li><li><a href="https://man.openbsd.org/ssh" target="_blank" rel="noopener">OpenBSD </a><a href="https://man.openbsd.org/ssh" target="_blank" rel="noopener"><code>ssh(1)</code></a></li><li><a href="https://man.openbsd.org/ssh_config" target="_blank" rel="noopener">OpenBSD </a><a href="https://man.openbsd.org/ssh_config" target="_blank" rel="noopener"><code>ssh_config(5)</code></a></li><li><a href="https://man.openbsd.org/sshd" target="_blank" rel="noopener">OpenBSD </a><a href="https://man.openbsd.org/sshd" target="_blank" rel="noopener"><code>sshd(8)</code></a></li><li><a href="https://man.openbsd.org/sshd_config" target="_blank" rel="noopener">OpenBSD </a><a href="https://man.openbsd.org/sshd_config" target="_blank" rel="noopener"><code>sshd_config(5)</code></a></li><li><a href="https://man.openbsd.org/ssh-agent" target="_blank" rel="noopener">OpenBSD </a><a href="https://man.openbsd.org/ssh-agent" target="_blank" rel="noopener"><code>ssh-agent(1)</code></a></li><li><a href="https://man.openbsd.org/ssh-add" target="_blank" rel="noopener">OpenBSD </a><a href="https://man.openbsd.org/ssh-add" target="_blank" rel="noopener"><code>ssh-add(1)</code></a></li><li><a href="https://man.openbsd.org/sftp" target="_blank" rel="noopener">OpenBSD </a><a href="https://man.openbsd.org/sftp" target="_blank" rel="noopener"><code>sftp(1)</code></a></li><li><a href="https://man.openbsd.org/scp" target="_blank" rel="noopener">OpenBSD </a><a href="https://man.openbsd.org/scp" target="_blank" rel="noopener"><code>scp(1)</code></a></li></ul>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 内容同步自飞书知识库</footer>
+</body>
+</html>

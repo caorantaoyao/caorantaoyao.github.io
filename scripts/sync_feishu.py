@@ -468,6 +468,8 @@ def main():
         a.pop("sort_ts", None)
 
     os.makedirs(DATA_DIR, exist_ok=True)
+    # 始终确保 articles/ 目录存在，避免 0 篇时工作流 `git add articles/` 报错
+    os.makedirs(ARTICLES_DIR, exist_ok=True)
     out = {
         "generated_at": dt.datetime.now(dt.timezone.utc).astimezone().isoformat(),
         "count": len(articles),

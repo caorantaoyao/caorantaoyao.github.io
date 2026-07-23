@@ -139,7 +139,7 @@ m = r.sub == p.sub &amp;&amp; r.obj == p.obj &amp;&amp; r.act == p.act</code></p
 <pre><code class="language-plaintext">p, alice, order:1001, read
 p, bob, order:1001, update</code></pre>
 <p>Python 调用：</p>
-<pre><code class="language-plaintext">import casbin
+<pre><code class="language-php">import casbin
 
 enforcer = casbin.Enforcer(&quot;model.conf&quot;, &quot;policy.csv&quot;)
 allowed = enforcer.enforce(&quot;alice&quot;, &quot;order:1001&quot;, &quot;read&quot;)</code></pre>
@@ -154,7 +154,7 @@ r = sub, obj, act</code></pre>
 <p>多租户系统可以定义为：</p>
 <pre><code class="language-plaintext">r = sub, dom, obj, act</code></pre>
 <p>对应调用：</p>
-<pre><code class="language-plaintext">enforcer.enforce(&quot;alice&quot;, &quot;tenant-a&quot;, &quot;order:1001&quot;, &quot;read&quot;)</code></pre>
+<pre><code class="language-php">enforcer.enforce(&quot;alice&quot;, &quot;tenant-a&quot;, &quot;order:1001&quot;, &quot;read&quot;)</code></pre>
 <p>此时 <code>dom</code> 可以代表租户、公司、项目或工作空间。</p>
 <h3>4. Policy：定义授权数据的形状</h3>
 <pre><code class="language-plaintext">[policy_definition]
@@ -173,7 +173,7 @@ m = r.sub == p.sub &amp;&amp; r.obj == p.obj &amp;&amp; r.act == p.act</code></p
 <pre><code class="language-plaintext">m = r.sub == p.sub &amp;&amp; keyMatch(r.obj, p.obj) &amp;&amp; r.act == p.act</code></pre>
 <p>这样策略资源 <code>/orders/*</code> 可以匹配请求资源 <code>/orders/1001</code>。工程上应把成本低、过滤性强的条件放在前面，减少昂贵函数和角色图查询的执行次数。</p>
 <p>PyCasbin 还可以注册自定义函数：</p>
-<pre><code class="language-plaintext">def is_owner(user_id: str, owner_id: str) -&gt; bool:
+<pre><code class="language-php">def is_owner(user_id: str, owner_id: str) -&gt; bool:
     return user_id == owner_id
 
 enforcer.add_function(&quot;isOwner&quot;, is_owner)</code></pre>
@@ -250,7 +250,7 @@ p, member, tenant-b, /orders/*, read, allow</code></pre>
 <ol><li>Casbin 的 PERM 元模型分别是什么？</li><li>Matcher 和 Effect 分别解决什么问题？</li><li><code>g = _, _</code> 的两个占位符代表什么，为什么 RBAC Matcher 必须调用 <code>g()</code>？</li><li>当 allow 和 deny 同时匹配时，最终结果由什么决定？</li><li>如何设计一个用户在不同租户拥有不同角色的 Casbin 模型？</li><li>为什么不应在 Matcher 的自定义函数里查询数据库？</li><li>模型文件和策略数据分别应该如何存储、评审和发布？</li><li>使用 Casbin Server 时，如何处理延迟、超时、服务不可用和策略一致性？</li></ol>
 <h3>验证与实践</h3>
 <p>最小测试矩阵：</p>
-<pre><code class="language-plaintext">cases = [
+<pre><code class="language-php">cases = [
     (&quot;alice&quot;, &quot;tenant-a&quot;, &quot;/orders/1001&quot;, &quot;read&quot;, True),
     (&quot;alice&quot;, &quot;tenant-a&quot;, &quot;/orders/1001&quot;, &quot;write&quot;, True),
     (&quot;alice&quot;, &quot;tenant-b&quot;, &quot;/orders/1001&quot;, &quot;write&quot;, False),

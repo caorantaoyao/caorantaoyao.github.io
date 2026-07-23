@@ -175,7 +175,7 @@ wiki.example.com      知识库</code></pre>
 <pre><code class="language-plaintext">code_challenge = BASE64URL(SHA256(code_verifier))
 code_challenge_method = S256</code></pre>
 <h4>5.2 浏览器重定向到授权端点</h4>
-<pre><code class="language-plaintext">GET https://sso.example.com/authorize?
+<pre><code class="language-java">GET https://sso.example.com/authorize?
     client_id=knowledge-base&amp;
     redirect_uri=https://kb.example.com/callback&amp;
     response_type=code&amp;
@@ -187,10 +187,10 @@ code_challenge_method = S256</code></pre>
 <p><code>scope=openid</code> 表示这是 OIDC 身份认证请求。</p>
 <h4>5.3 IdP 认证并返回授权码</h4>
 <p>IdP 检查自己的会话 Cookie：有可接受的会话就继续，否则要求密码、扫码、Passkey 或 MFA。成功后重定向到业务系统注册过的回调地址：</p>
-<pre><code class="language-plaintext">GET https://kb.example.com/callback?code=temporary-code&amp;state=random-state</code></pre>
+<pre><code class="language-java">GET https://kb.example.com/callback?code=temporary-code&amp;state=random-state</code></pre>
 <p>授权码应短时有效、只能使用一次，并绑定客户端、准确回调地址和 PKCE Challenge。</p>
 <h4>5.4 后端交换令牌</h4>
-<pre><code class="language-plaintext">POST https://sso.example.com/token
+<pre><code class="language-java">POST https://sso.example.com/token
 Content-Type: application/x-www-form-urlencoded
 
 grant_type=authorization_code
@@ -202,7 +202,7 @@ grant_type=authorization_code
 <h3>6. 三种令牌的职责</h3>
 <h4>ID Token</h4>
 <p>回答“刚才完成认证的是谁”，典型 Claims 包括：</p>
-<pre><code class="language-plaintext">{
+<pre><code class="language-json">{
   &quot;iss&quot;: &quot;https://sso.example.com&quot;,
   &quot;sub&quot;: &quot;user_123456&quot;,
   &quot;aud&quot;: &quot;knowledge-base&quot;,
@@ -217,7 +217,7 @@ grant_type=authorization_code
 <p>用于 Access Token 过期后的续期。它生命周期更长、风险更高，应保存在可信后端或安全设备存储中，并支持轮换、撤销和重用检测。</p>
 <h3>7. 为什么业务系统还需要本地 Session</h3>
 <p>业务后端验证身份后，通常建立本地 Session，并向浏览器设置：</p>
-<pre><code class="language-plaintext">Set-Cookie: session_id=abc123;
+<pre><code class="language-java">Set-Cookie: session_id=abc123;
             HttpOnly;
             Secure;
             SameSite=Lax;
@@ -276,7 +276,7 @@ grant_type=authorization_code
 <p><code>10001</code></p>
 <p>首次登录可以执行 JIT Provisioning，但应明确自动注册范围、邮箱验证、默认角色、账号冻结和离职同步策略。</p>
 <p>与 Casbin 结合时：</p>
-<pre><code class="language-plaintext"># OIDC 确认用户是谁
+<pre><code class="language-php"># OIDC 确认用户是谁
 current_user_id = session[&quot;user_id&quot;]
 
 # Casbin 判断该用户能做什么

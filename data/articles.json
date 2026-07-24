@@ -1,7 +1,15 @@
 {
-  "generated_at": "2026-07-23T23:15:58.549120+00:00",
-  "count": 33,
+  "generated_at": "2026-07-24T23:38:25.656540+00:00",
+  "count": 34,
   "articles": [
+    {
+      "title": "SQLAlchemy 2.x：从 Engine、ORM 映射到 Session 与异步并发",
+      "date": "2026.07.24",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "面向 Python 后端与计算机秋招的研究笔记。资料仅来自 SQLAlchemy 2.0 官方文档与官方项目页面；示例采用 SQLAlchemy 2.x 风格。检索时官方稳定系列为 2.0，文档页面显示当前版本 2.0.51（2026-06…",
+      "url": "/articles/SQLAlchemy-2-x--Engine-ORM--Session-567fd1e1.html"
+    },
     {
       "title": "SSH：从握手、认证到隧道与文件传输",
       "date": "2026.07.22",

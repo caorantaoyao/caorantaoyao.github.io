@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SQLAlchemy 2.x：从 Engine、ORM 映射到 Session 与异步并发 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.07.24</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">SQLAlchemy 2.x：从 Engine、ORM 映射到 Session 与异步并发</h1>
+    <div class="article-body">
+<p>面向 Python 后端与计算机秋招的研究笔记。资料仅来自 SQLAlchemy 2.0 官方文档与官方项目页面；示例采用 SQLAlchemy 2.x 风格。检索时官方稳定系列为 2.0，文档页面显示当前版本 2.0.51（2026-06-15）。</p>
+<h3>1. SQLAlchemy 是什么</h3>
+<p>SQLAlchemy 不是单纯的“把 Python 对象存进数据库”的 ORM。它由两套互相衔接的 API 构成：</p>
+<ul><li><strong>SQLAlchemy Core</strong>：提供 SQL 表达式语言、<code>Engine</code>、<code>Connection</code>、事务、结果集、类型系统和连接池；</li><li><strong>SQLAlchemy ORM</strong>：在 Core 之上增加 Python 类与表的映射、<code>Session</code>、Identity Map、Unit of Work、对象生命周期和关系加载。</li></ul>
+<p>SQLAlchemy 2.x 把两者进一步统一：ORM 查询使用 Core 风格的 <code>select()</code>，Core <code>Connection</code> 与 ORM <code>Session</code> 的事务语义也保持一致。因此，Core 与 ORM 不是互斥的两个框架，而是“底层 SQL/连接能力”和“其上的对象工作单元”。</p>
+<p><strong>官方来源：</strong><a href="https://docs.sqlalchemy.org/en/20/tutorial/index.html" target="_blank" rel="noopener">SQLAlchemy Unified Tutorial</a>、<a href="https://www.sqlalchemy.org/features.html" target="_blank" rel="noopener">SQLAlchemy Overview</a></p>
+<h3>2. Core 与 ORM 应该怎么选</h3>
+<p>维度</p>
+<p>Core</p>
+<p>ORM</p>
+<p>主要抽象</p>
+<p>表、列、SQL 表达式、行</p>
+<p>领域对象、对象关系、工作单元</p>
+<p>执行入口</p>
+<p><code>Connection.execute()</code></p>
+<p><code>Session.execute()</code> / <code>Session.scalars()</code></p>
+<p>状态追踪</p>
+<p>不追踪 Python 对象</p>
+<p>跟踪对象状态与属性变化</p>
+<p>写入方式</p>
+<p>显式 <code>insert/update/delete</code></p>
+<p>修改对象，flush 时生成 DML</p>
+<p>适合场景</p>
+<p>报表、批处理、复杂 SQL、基础设施层</p>
+<p>业务系统、聚合关系、对象生命周期</p>
+<p>典型项目可以混用：普通业务实体使用 ORM，批量更新、复杂聚合或数据库特有 SQL 使用 Core 表达式。ORM 查询本身也直接使用 <code>select()</code>、<code>update()</code>、<code>delete()</code> 等 SQL 构造。</p>
+<p>应避免把 ORM 理解成“无需理解 SQL”。加载策略、事务隔离、索引和执行计划仍由数据库规律决定；ORM 只改变代码表达与状态管理方式。</p>
+<p><strong>官方来源：</strong><a href="https://docs.sqlalchemy.org/en/20/tutorial/index.html" target="_blank" rel="noopener">SQLAlchemy Unified Tutorial</a>、<a href="https://docs.sqlalchemy.org/en/20/orm/queryguide/index.html" target="_blank" rel="noopener">ORM Querying Guide</a></p>
+<h3>3. Engine、Connection 与连接池</h3>
+<h4>3.1 Engine 是什么</h4>
+<p>每个连接数据库的 SQLAlchemy 应用都需要 <code>Engine</code>。它是特定数据库的中心连接源，同时持有 <strong>Dialect</strong>（数据库/驱动适配）和 <strong>Pool</strong>（连接池）。<code>create_engine()</code> 通常是惰性的：创建 <code>Engine</code> 时并不会立刻打开真实 DBAPI 连接，第一次调用 <code>connect()</code> 或执行数据库操作时才从池中取连接。</p>
+<pre><code class="language-php">from sqlalchemy import create_engine
+
+engine = create_engine(
+    &quot;postgresql+psycopg://app:secret@db.example.com/app&quot;,
+    pool_pre_ping=True,
+    echo=False,
+)</code></pre>
+<p><code>Engine</code> 和 <code>sessionmaker</code> 都是工厂，通常放在模块级，供多个请求/线程创建各自的 <code>Connection</code> 或 <code>Session</code>；不要为每条 SQL 创建一个新 <code>Engine</code>。</p>
+<h4>3.2 Connection 是什么</h4>
+<p><code>Connection</code> 代表从 <code>Engine</code> 检出的一个连接资源及其事务上下文。推荐通过上下文管理器明确归还连接：</p>
+<pre><code class="language-php">from sqlalchemy import text
+
+with engine.connect() as conn:
+    result = conn.execute(text(&quot;select id, name from users where id=:id&quot;), {&quot;id&quot;: 1})
+    row = result.one_or_none()</code></pre>
+<p>写操作可以采用两种 2.x 事务风格：</p>
+<pre><code class="language-php"># begin once：代码块成功则提交，异常则回滚
+with engine.begin() as conn:
+    conn.execute(...)
+    conn.execute(...)
+
+# commit as you go：第一次执行时 autobegin，显式结束
+with engine.connect() as conn:
+    conn.execute(...)
+    conn.commit()</code></pre>
+<p>退出 <code>engine.connect()</code> 块但没有提交时，未结束事务会被回滚；“关闭连接”通常是把 DBAPI 连接归还池，而非真正断开 TCP。</p>
+<p><strong>官方来源：</strong><a href="https://docs.sqlalchemy.org/en/20/tutorial/engine.html" target="_blank" rel="noopener">Establishing Connectivity - the Engine</a>、<a href="https://docs.sqlalchemy.org/en/20/tutorial/dbapi_transactions.html" target="_blank" rel="noopener">Working with Transactions and the DBAPI</a>、<a href="https://docs.sqlalchemy.org/en/20/core/connections.html" target="_blank" rel="noopener">Working with Engines and Connections</a></p>
+<h3>4. SQLAlchemy 2.x 的声明式映射</h3>
+<p>Declarative 是官方所称的主要映射风格。2.x 推荐用 <code>DeclarativeBase</code>、<code>Mapped[T]</code> 和 <code>mapped_column()</code>；<code>DeclarativeBase</code> 取代了旧式 <code>declarative_base()</code> 作为更适合 PEP 484 类型工具的写法。</p>
+<pre><code class="language-php">from __future__ import annotations
+
+from sqlalchemy import ForeignKey, String
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class User(Base):
+    __tablename__ = &quot;user_account&quot;
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(50), unique=True)
+    full_name: Mapped[str | None]
+
+    addresses: Mapped[list[Address]] = relationship(
+        back_populates=&quot;user&quot;,
+        cascade=&quot;all, delete-orphan&quot;,
+    )
+
+
+class Address(Base):
+    __tablename__ = &quot;address&quot;
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(320))
+    user_id: Mapped[int] = mapped_column(ForeignKey(&quot;user_account.id&quot;))
+
+    user: Mapped[User] = relationship(back_populates=&quot;addresses&quot;)</code></pre>
+<p>关键点：</p>
+<ul><li><code>Mapped[int]</code> 描述 ORM 映射属性；<code>mapped_column()</code> 描述列的额外数据库配置；</li><li><code>Mapped[str]</code> 与 <code>Mapped[str | None]</code> 可参与推导列类型和可空性，但约束仍应按数据库设计明确检查；</li><li>每个 ORM 映射通常必须有主键，因为 Identity Map 需要用数据库身份识别对象；</li><li><code>relationship()</code> 描述对象之间的关联与加载/级联行为，外键列才是数据库层面的引用约束；</li><li><code>Base.metadata.create_all(engine)</code> 适合教程、小工具和测试，不应被当成生产数据库迁移系统。</li></ul>
+<p><strong>官方来源：</strong><a href="https://docs.sqlalchemy.org/en/20/orm/declarative_mapping.html" target="_blank" rel="noopener">Mapping Classes with Declarative</a>、<a href="https://docs.sqlalchemy.org/en/20/orm/declarative_styles.html" target="_blank" rel="noopener">Declarative Mapping Styles</a>、<a href="https://docs.sqlalchemy.org/en/20/orm/declarative_tables.html" target="_blank" rel="noopener">Table Configuration with Declarative</a></p>
+<h3>5. Session：ORM 的工作边界</h3>
+<p><code>Session</code> 是 ORM 与数据库交互的主接口，也是已加载/关联对象的“持有区”。它会在需要时从绑定的 <code>Engine</code> 取出 <code>Connection</code> 并建立事务，在提交、回滚或关闭后归还连接。</p>
+<p>推荐把 <code>sessionmaker</code> 作为长期工厂，把 <code>Session</code> 实例限定在一次明确的逻辑操作中：</p>
+<pre><code class="language-php">from sqlalchemy.orm import sessionmaker
+
+SessionLocal = sessionmaker(engine, expire_on_commit=False)
+
+with SessionLocal.begin() as session:
+    session.add(User(name=&quot;alice&quot;))
+# 正常退出：flush + commit + close；异常退出：rollback + close</code></pre>
+<p>Web 应用常见边界是“每个请求一个 Session”：请求开始创建，写请求在业务成功后提交，异常回滚，请求结束关闭。事务边界应由调用层统一掌控，不要让每个仓储函数私自创建和提交 Session，否则跨多个写操作的原子性会被切碎。</p>
+<p><strong>官方来源：</strong><a href="https://docs.sqlalchemy.org/en/20/orm/session_basics.html" target="_blank" rel="noopener">Session Basics</a></p>
+<h3>6. Identity Map 与 Unit of Work</h3>
+<h4>6.1 Identity Map</h4>
+<p>Identity Map 保证在同一 <code>Session</code> 内，同一个映射类、同一个主键通常对应同一个 Python 对象：</p>
+<pre><code class="language-php">u1 = session.get(User, 1)
+u2 = session.get(User, 1)
+assert u1 is u2</code></pre>
+<p>它不是通用查询缓存：按非主键条件执行 <code>select()</code> 仍会访问数据库，只是在结果回填时复用 Identity Map 中已有身份的对象。<code>Session.get(User, 1)</code> 才会先直接检查 Identity Map。</p>
+<h4>6.2 Unit of Work</h4>
+<p>Session 监控映射对象的新增、修改和删除，在 <strong>flush</strong> 时分析依赖关系并生成 INSERT、UPDATE、DELETE。这个模式叫 Unit of Work。</p>
+<pre><code class="language-php">user = session.get(User, 1)
+user.name = &quot;new-name&quot;      # 只修改内存状态
+session.flush()              # SQL 已发出，但事务尚未提交
+session.commit()             # 提交数据库事务</code></pre>
+<p>必须区分：</p>
+<ul><li><code>flush()</code>：把内存变更同步为当前事务中的 SQL，仍可回滚；</li><li><code>commit()</code>：会先无条件 flush，再提交事务；</li><li><code>autoflush</code>：执行某些查询前自动 flush，让查询看见本事务内的待写入状态；它不是自动提交；</li><li>flush 失败后，即便数据库驱动已经回滚，也必须显式 <code>session.rollback()</code>，才能让 Session 恢复可用状态。</li></ul>
+<p><strong>官方来源：</strong><a href="https://docs.sqlalchemy.org/en/20/orm/session_basics.html#what-does-the-session-do" target="_blank" rel="noopener">What does the Session do?</a>、<a href="https://docs.sqlalchemy.org/en/20/orm/session_basics.html#flushing" target="_blank" rel="noopener">Flushing</a>、<a href="https://docs.sqlalchemy.org/en/20/orm/session_basics.html#committing" target="_blank" rel="noopener">Committing</a></p>
+<h3>7. ORM 对象生命周期</h3>
+<p>映射实例有五个核心状态：</p>
+<ul><li><strong>Transient（瞬时）</strong>：未进入 Session、未持久化，没有数据库身份；</li><li><strong>Pending（待持久化）</strong>：已 <code>add()</code>，等待下一次 flush INSERT；</li><li><strong>Persistent（持久）</strong>：在 Session 内并对应数据库记录；</li><li><strong>Deleted（待删除）</strong>：DELETE 已 flush，但事务还未完成；</li><li><strong>Detached（游离）</strong>：具有数据库身份，但不再关联 Session。</li></ul>
+<p>Detached 对象中已经加载且未过期的普通属性仍可读；它不能再触发延迟加载或刷新。可用 <code>inspect(obj)</code> 查看 <code>transient/pending/persistent/deleted/detached</code>。</p>
+<p><strong>官方来源：</strong><a href="https://docs.sqlalchemy.org/en/20/orm/session_state_management.html" target="_blank" rel="noopener">State Management</a></p>
+<h3>8. 事务：autobegin、commit、rollback 与 SAVEPOINT</h3>
+<p><code>Session</code> 默认使用 <strong>autobegin</strong>：第一次 <code>add()</code>、<code>execute()</code>、查询或修改持久对象时进入事务状态；这不等同于旧式库级 autocommit。也可以用 <code>Session.begin()</code> 明确框定边界：</p>
+<pre><code class="language-php">with SessionLocal() as session:
+    try:
+        with session.begin():
+            # 一个原子业务操作
+            ...
+    except Exception:
+        # begin 上下文已回滚
+        raise</code></pre>
+<p>嵌套局部失败可使用 <code>session.begin_nested()</code> 建立 SAVEPOINT，但是否支持及具体行为受数据库影响。SQLAlchemy 2.x 中 <code>commit()</code> / <code>rollback()</code> 作用于最外层事务；SAVEPOINT 句柄需由嵌套事务对象自行提交或回滚。</p>
+<p>保持事务短小：不要在事务中等待网络调用、人工输入或耗时计算。Session 生命周期与事务生命周期不是同一个概念；一个 Session 技术上可依次承载多个事务，但一次业务操作一个清晰 Session/事务边界通常最容易推理。</p>
+<p><strong>官方来源：</strong><a href="https://docs.sqlalchemy.org/en/20/orm/session_basics.html#auto-begin" target="_blank" rel="noopener">Session Basics - Auto Begin</a>、<a href="https://docs.sqlalchemy.org/en/20/orm/session_transaction.html" target="_blank" rel="noopener">Transactions and Connection Management</a></p>
+<h3>9. SQLAlchemy 2.x 的查询方式</h3>
+<p>2.x 推荐使用 <code>select()</code>，不再以旧式 <code>session.query()</code> 作为主线：</p>
+<pre><code class="language-php">from sqlalchemy import select
+
+stmt = (
+    select(User)
+    .where(User.name.ilike(&quot;a%&quot;))
+    .order_by(User.id.desc())
+    .limit(20)
+)
+
+users = session.scalars(stmt).all()</code></pre>
+<p>常见返回方式：</p>
+<pre><code class="language-php">session.execute(select(User.id, User.name)).all()   # Row 元组式结果
+session.scalars(select(User)).all()                 # 只取每行第一列，即 User
+session.scalar(select(User).where(User.id == 1))    # 单个标量或 None
+session.scalars(stmt).one()                         # 必须恰好一个，否则异常
+session.scalars(stmt).one_or_none()                 # 0 或 1 个
+session.get(User, 1)                                # 按主键，优先 Identity Map</code></pre>
+<p>不要用 <code>.first()</code> 误以为自动给 SQL 加 <code>LIMIT 1</code>；2.x 的 Result API 中 <code>first()</code> 本身不会自动修改语句，应在查询上显式 <code>.limit(1)</code>。当 <code>joinedload()</code> 加载一对多/多对多集合造成父行重复时，需要对结果调用 <code>.unique()</code>，官方会在缺少它时抛错。</p>
+<p><strong>官方来源：</strong><a href="https://docs.sqlalchemy.org/en/20/orm/queryguide/select.html" target="_blank" rel="noopener">Writing SELECT statements for ORM Mapped Classes</a>、<a href="https://docs.sqlalchemy.org/en/20/orm/queryguide/index.html" target="_blank" rel="noopener">ORM Querying Guide</a>、<a href="https://docs.sqlalchemy.org/en/20/changelog/migration_20.html#orm-query-unified-with-core-select" target="_blank" rel="noopener">SQLAlchemy 2.0 Migration - ORM Usage</a></p>
+<h3>10. relationship 到底做了什么</h3>
+<p><code>relationship()</code> 建立的是 ORM 对象导航和 Unit of Work 依赖，不会代替数据库外键。双向关系推荐用显式 <code>back_populates</code>：</p>
+<pre><code class="language-php">class User(Base):
+    # ...
+    addresses: Mapped[list[Address]] = relationship(back_populates=&quot;user&quot;)
+
+class Address(Base):
+    # ...
+    user_id: Mapped[int] = mapped_column(ForeignKey(&quot;user_account.id&quot;))
+    user: Mapped[User] = relationship(back_populates=&quot;addresses&quot;)</code></pre>
+<p>类型注解能表达常见基数：集合注解表示 one-to-many；非集合标量可表示 many-to-one 或约定上的 one-to-one。真正的一对一还应配数据库 <code>UNIQUE</code> 约束，防止并发写入破坏唯一性。</p>
+<p>级联需要谨慎：</p>
+<ul><li>默认 <code>save-update, merge</code> 不是数据库的 <code>ON DELETE</code>；</li><li><code>delete-orphan</code> 通常配置在一对多的“一”侧，表示子对象脱离父集合后应删除；</li><li>多对多双方都配置 <code>cascade=&quot;all, delete&quot;</code> 可能沿整个关系图级联加载并删除；</li><li>数据库已有 <code>ON DELETE CASCADE</code> 时，ORM 通常还需匹配 <code>cascade</code>，并根据需要设置 <code>passive_deletes=True</code>，使两套状态管理一致。</li></ul>
+<p><strong>官方来源：</strong><a href="https://docs.sqlalchemy.org/en/20/orm/basic_relationships.html" target="_blank" rel="noopener">Basic Relationship Patterns</a>、<a href="https://docs.sqlalchemy.org/en/20/orm/cascades.html" target="_blank" rel="noopener">Cascades</a></p>
+<h3>11. 关系加载策略与 N+1</h3>
+<p>关系加载分为延迟加载、预加载和禁止加载。未另行配置的 <code>relationship()</code> 默认是 <code>lazy=&quot;select&quot;</code>：第一次访问属性时额外执行 SELECT。这很方便，也可能产生 N+1。</p>
+<pre><code class="language-php"># 1 条查询取 N 个用户
+users = session.scalars(select(User)).all()
+
+# 若 addresses 未预加载，循环最多再发 N 条 SELECT
+for user in users:
+    print(user.addresses)</code></pre>
+<p>常用策略：</p>
+<p>策略</p>
+<p>行为</p>
+<p>典型选择</p>
+<p><code>lazyload</code> / 默认 lazy</p>
+<p>访问关系时逐个 SELECT</p>
+<p>偶尔访问、简单 many-to-one 且目标已在 Identity Map</p>
+<p><code>selectinload</code></p>
+<p>主查询后用父主键 <code>IN (...)</code> 批量加载</p>
+<p>通常是集合关系的首选</p>
+<p><code>joinedload</code></p>
+<p>同一结果集 LEFT OUTER JOIN</p>
+<p>常见 many-to-one；集合时注意行膨胀和 <code>.unique()</code></p>
+<p><code>subqueryload</code></p>
+<p>以原查询子查询再加载</p>
+<p>特定后端/复杂场景；一般不如 select-in 简洁</p>
+<p><code>raiseload</code></p>
+<p>本应 lazy load 时直接报错</p>
+<p>测试或接口层防止意外 SQL</p>
+<pre><code class="language-php">from sqlalchemy.orm import raiseload, selectinload
+
+stmt = (
+    select(User)
+    .options(selectinload(User.addresses), raiseload(&quot;*&quot;))
+)
+users = session.scalars(stmt).all()</code></pre>
+<p>官方建议中，一对多/多对多集合通常优先 <code>selectinload()</code>；many-to-one 通常可选 <code>joinedload()</code>。选择标准不是“查询条数越少越好”，而是 SQL 次数、SQL 复杂度、返回数据量与数据库限制之间的权衡。</p>
+<p><strong>官方来源：</strong><a href="https://docs.sqlalchemy.org/en/20/orm/queryguide/relationships.html" target="_blank" rel="noopener">Relationship Loading Techniques</a></p>
+<h3>12. DetachedInstanceError、过期与 expire_on_commit</h3>
+<h4>12.1 为什么出现 DetachedInstanceError</h4>
+<p>对象离开 Session 后，如果访问的是未加载关系、deferred 列或已过期属性，ORM 需要查数据库，却没有可用 Session，于是出现类似：</p>
+<pre><code class="language-plaintext">Parent instance &lt;x&gt; is not bound to a Session;
+lazy load/deferred load/refresh/etc. operation cannot proceed</code></pre>
+<p>常见触发链：查询对象 → 提交使属性过期 → 关闭 Session 使对象 detached → 模板/序列化器再访问属性。</p>
+<h4>12.2 正确处理</h4>
+<p>优先方案是：</p>
+<ol><li>在 Session 有效期内，用 <code>selectinload()</code> / <code>joinedload()</code> 加载输出需要的数据；</li><li>在数据访问层转换为 DTO/Pydantic/普通 dict，再离开 Session；</li><li>若确实需要继续操作 detached 对象，显式重新关联或 <code>merge()</code>，理解它返回的是 Session 内的目标实例；</li><li>不要把“让全局 Session 永不关闭”当修复，这会混乱事务边界和连接资源。</li></ol>
+<h4>12.3 expire_on_commit</h4>
+<p>同步 Session 默认 <code>expire_on_commit=True</code>：提交后实例属性被标为 expired，下次访问会在新的事务中重新加载，以获得较新的状态。若对象此时已经 detached，则无法自动刷新。</p>
+<p>Web 展示层经常设置 <code>expire_on_commit=False</code>，使提交后已加载字段仍可读；代价是对象可能保留提交时的快照，必要时应显式 <code>refresh()</code> 或重新查询。异步 ORM 示例通常也设置 <code>expire_on_commit=False</code>，避免提交后的普通属性访问触发隐式 IO。</p>
+<p><strong>官方来源：</strong><a href="https://docs.sqlalchemy.org/en/20/errors.html#parent-instance-x-is-not-bound-to-a-session-lazy-load-deferred-load-refresh-etc-operation-cannot-proceed" target="_blank" rel="noopener">Error: Parent instance is not bound to a Session</a>、<a href="https://docs.sqlalchemy.org/en/20/orm/session_basics.html#committing" target="_blank" rel="noopener">Session Basics - Committing</a>、<a href="https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html#preventing-implicit-io-when-using-asyncsession" target="_blank" rel="noopener">Asyncio - Preventing Implicit IO</a></p>
+<h3>13. 并发、线程与 AsyncSession</h3>
+<p><code>Session</code> 是一个可变、有状态、代表单个数据库事务的对象，不是线程安全共享容器。<code>AsyncSession</code> 是同步 <code>Session</code> 的薄代理，也不允许多个 asyncio task 同时共享一个实例。</p>
+<p>官方并发模型非常明确：</p>
+<ul><li><strong>Session per thread</strong>；</li><li><strong>AsyncSession per task</strong>。</li></ul>
+<pre><code class="language-php">from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+async_engine = create_async_engine(
+    &quot;postgresql+asyncpg://app:secret@db.example.com/app&quot;,
+    pool_pre_ping=True,
+)
+AsyncSessionLocal = async_sessionmaker(
+    async_engine,
+    expire_on_commit=False,
+)
+
+async def create_user(name: str) -&gt; None:
+    async with AsyncSessionLocal.begin() as session:
+        session.add(User(name=name))</code></pre>
+<p>在 <code>asyncio.gather()</code> 中，每个子任务内部都要各自创建 <code>AsyncSession</code>。异步模式还要避免普通属性访问产生隐式 IO：应提前 eager load、用 <code>AsyncAttrs.awaitable_attrs</code> 显式等待，或配置 <code>lazy=&quot;raise&quot;</code>；官方通常建议 AsyncSession 使用 <code>expire_on_commit=False</code>。</p>
+<p>异步驱动不是让一个事务并行执行多条命令。一个数据库连接/事务本身有顺序状态；真正并发意味着多个任务拥有各自的 Session、Connection 与事务。</p>
+<p><strong>官方来源：</strong><a href="https://docs.sqlalchemy.org/en/20/orm/session_basics.html#is-the-session-thread-safe-is-asyncsession-safe-to-share-in-concurrent-tasks" target="_blank" rel="noopener">Is the Session thread-safe?</a>、<a href="https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html#using-asyncsession-with-concurrent-tasks" target="_blank" rel="noopener">AsyncSession with Concurrent Tasks</a>、<a href="https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html#preventing-implicit-io-when-using-asyncsession" target="_blank" rel="noopener">Preventing Implicit IO</a></p>
+<h3>14. 连接池：性能资源也是容量边界</h3>
+<p>大多数同步 <code>create_engine()</code> 默认已集成 <code>QueuePool</code>，通常无需手动“开启连接池”。常用参数是：</p>
+<pre><code class="language-php">engine = create_engine(
+    url,
+    pool_size=10,       # 常驻池容量
+    max_overflow=20,    # 超出 pool_size 的临时连接上限
+    pool_timeout=30,    # 等待连接的超时秒数
+    pool_recycle=1800,  # 超过年龄后在下次 checkout 时回收
+    pool_pre_ping=True, # checkout 时检测失效连接
+)</code></pre>
+<p>常见误区：</p>
+<ul><li><strong>池耗尽不是单纯把池调大就好</strong>：先检查 Session/Connection/Result 是否按时关闭、事务是否过长、数据库最大连接数是否匹配；</li><li><strong><code>pool_pre_ping</code></strong><strong> 只处理取连接时发现的陈旧连接</strong>：不能无损挽救事务执行到一半发生的断线；原事务已丢失，应由应用决定是否重试整个事务；</li><li><strong><code>pool_recycle</code></strong><strong> 是连接年龄回收，不是查询超时</strong>；</li><li><strong>fork 后不能共享父进程池里的真实连接</strong>：子进程应初始化自己的 Engine/Pool，或在子进程初始化时 <code>engine.dispose(close=False)</code>，确保新建连接池；</li><li><strong>Engine 可全局，Connection/Session 不可跨并发任务共享</strong>。</li></ul>
+<p>AsyncEngine 会使用与 asyncio 兼容的池；<code>create_async_engine()</code> 不能搭配普通 <code>QueuePool</code>。SQLite 等方言可能根据数据库形式选择不同池实现，因此不要假设所有后端行为完全相同。</p>
+<p><strong>官方来源：</strong><a href="https://docs.sqlalchemy.org/en/20/core/pooling.html" target="_blank" rel="noopener">Connection Pooling</a>、<a href="https://docs.sqlalchemy.org/en/20/core/pooling.html#sqlalchemy.pool.QueuePool" target="_blank" rel="noopener">QueuePool API</a>、<a href="https://docs.sqlalchemy.org/en/20/core/pooling.html#using-connection-pools-with-multiprocessing-or-os-fork" target="_blank" rel="noopener">Using Connection Pools with Multiprocessing or os.fork()</a></p>
+<h3>15. 一套推荐的同步项目骨架</h3>
+<pre><code class="language-php"># db.py
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+engine = create_engine(DB_URL, pool_pre_ping=True)
+SessionLocal = sessionmaker(engine, expire_on_commit=False)</code></pre>
+<pre><code class="language-php"># service.py
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+
+def get_user_detail(user_id: int) -&gt; dict | None:
+    with SessionLocal() as session:
+        stmt = (
+            select(User)
+            .where(User.id == user_id)
+            .options(selectinload(User.addresses))
+        )
+        user = session.scalar(stmt)
+        if user is None:
+            return None
+        return {
+            &quot;id&quot;: user.id,
+            &quot;name&quot;: user.name,
+            &quot;addresses&quot;: [a.email for a in user.addresses],
+        }
+
+def rename_user(user_id: int, new_name: str) -&gt; None:
+    with SessionLocal.begin() as session:
+        user = session.get(User, user_id)
+        if user is None:
+            raise LookupError(&quot;user not found&quot;)
+        user.name = new_name</code></pre>
+<p>这套骨架体现四个边界：Engine/工厂长期存在；Session 按操作创建；事务由外层上下文管理；返回到展示层前完成必要加载或 DTO 转换。</p>
+<p><strong>官方来源：</strong><a href="https://docs.sqlalchemy.org/en/20/orm/session_basics.html" target="_blank" rel="noopener">Session Basics</a>、<a href="https://docs.sqlalchemy.org/en/20/orm/queryguide/relationships.html" target="_blank" rel="noopener">Relationship Loading Techniques</a></p>
+<h3>16. 高频判断题与纠错</h3>
+<ol><li><strong><code>commit()</code></strong><strong> 才会发 INSERT？</strong> 错。查询前 autoflush 或显式 <code>flush()</code> 都可能先发 DML；commit 负责最终提交。</li><li><strong>Session 是一级缓存，所以相同条件查询不会访问数据库？</strong> 错。Identity Map 按主键身份复用对象，不缓存任意查询结果。</li><li><strong>关闭 Session 后对象完全不能读？</strong> 错。已加载且未过期属性通常还能读，不能的是需要数据库 IO 的属性。</li><li><strong><code>relationship()</code></strong><strong> 自动建立数据库外键？</strong> 错。<code>ForeignKey</code>/DDL 才建立数据库约束，relationship 管对象关系。</li><li><strong>异步 Session 可以被 gather 中的任务共享？</strong> 错。必须 AsyncSession per task。</li><li><strong>N+1 的唯一解是 JOIN？</strong> 错。集合通常优先 <code>selectinload()</code>；<code>joinedload()</code> 还可能造成行膨胀。</li><li><strong><code>expire_on_commit=False</code></strong><strong> 会关闭事务一致性？</strong> 不准确。它只阻止提交后自动过期；对象可能变旧，数据库事务隔离仍由数据库控制。</li><li><strong>连接池越大吞吐越高？</strong> 错。数据库容量、事务耗时、锁竞争和应用并发共同决定最佳值。</li><li><strong>Engine 每请求创建更安全？</strong> 错。Engine 是连接池和连接工厂，通常长期复用；每请求创建的是 Session。</li><li><strong>flush 失败后捕获异常即可继续用 Session？</strong> 错。必须 rollback 或关闭丢弃 Session。</li></ol>
+<h3>17. 面试回答主线</h3>
+<p>如果被问“SQLAlchemy ORM 是怎么工作的”，可以按这条链路回答：</p>
+<ol><li><code>Engine</code> 封装数据库 Dialect 与连接池，提供连接资源；</li><li>Declarative Mapping 用 Mapper 把 Python 类属性映射到 Table/Column；</li><li><code>Session</code> 表示一次对象级数据库会话和逻辑事务；</li><li>Identity Map 保证同一 Session 内同一数据库身份只有一个对象实例；</li><li>Unit of Work 追踪 new/dirty/deleted，在 flush 时按依赖生成 DML；</li><li><code>select()</code> 生成 SQL 表达式，Session 执行后把行装配成对象；</li><li><code>relationship()</code> 提供对象导航，但加载策略决定是否出现额外 SQL；</li><li>提交会先 flush，默认再使对象过期；关闭会释放事务/连接资源并使对象 detached；</li><li>并发遵循 Session per thread、AsyncSession per task。</li></ol>
+<p>这条主线把“连接 → 映射 → 查询 → 对象状态 → 写入 → 事务 → 资源释放”串成一个完整系统，而不是只背 API。</p>
+<h3>18. 官方资料索引</h3>
+<ul><li><a href="https://docs.sqlalchemy.org/en/20/" target="_blank" rel="noopener">SQLAlchemy 2.0 Documentation</a></li><li><a href="https://docs.sqlalchemy.org/en/20/tutorial/index.html" target="_blank" rel="noopener">SQLAlchemy Unified Tutorial</a></li><li><a href="https://docs.sqlalchemy.org/en/20/orm/quickstart.html" target="_blank" rel="noopener">ORM Quick Start</a></li><li><a href="https://docs.sqlalchemy.org/en/20/orm/declarative_mapping.html" target="_blank" rel="noopener">Mapping Classes with Declarative</a></li><li><a href="https://docs.sqlalchemy.org/en/20/orm/session_basics.html" target="_blank" rel="noopener">Session Basics</a></li><li><a href="https://docs.sqlalchemy.org/en/20/orm/session_state_management.html" target="_blank" rel="noopener">State Management</a></li><li><a href="https://docs.sqlalchemy.org/en/20/orm/queryguide/index.html" target="_blank" rel="noopener">ORM Querying Guide</a></li><li><a href="https://docs.sqlalchemy.org/en/20/orm/queryguide/relationships.html" target="_blank" rel="noopener">Relationship Loading Techniques</a></li><li><a href="https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html" target="_blank" rel="noopener">Asyncio Extension</a></li><li><a href="https://docs.sqlalchemy.org/en/20/core/pooling.html" target="_blank" rel="noopener">Connection Pooling</a></li><li><a href="https://github.com/sqlalchemy/sqlalchemy" target="_blank" rel="noopener">SQLAlchemy Official Source Repository</a></li></ul>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>单服务器上的 AI Agent 多租户与容器隔离 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.07.27</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">单服务器上的 AI Agent 多租户与容器隔离</h1>
+    <div class="article-body">
+<p><strong>核心结论：</strong>一台服务器完全可以运行多个容器。镜像只保存一份，容器按照每次 Agent Run 临时创建；服务器达到并发上限后，新任务进入队列，而不是无限创建容器。</p>
+<h2>一、问题背景</h2>
+<p>在 AI Agent 运行平台中，用户提交的任务可能执行 Python 代码、调用浏览器、读写临时文件或访问外部工具。如果所有用户和所有任务共享同一个运行环境，前一个任务留下的文件、环境变量、后台进程或访问令牌，就可能被后一个任务读取。</p>
+<p>因此，多租户隔离不能只考虑数据库，还要同时处理身份、数据、运行环境、网络、凭证与资源配额。</p>
+<h2>二、容器为什么能在一台服务器上运行很多个</h2>
+<p>容器不是完整虚拟机。多个容器共享宿主机的 Linux 内核，只隔离进程、文件系统、网络和资源视图。它们不需要分别启动一套操作系统，因此启动更快、额外开销通常也更小。</p>
+<p>对比维度</p>
+<p>虚拟机</p>
+<p>容器</p>
+<p>操作系统</p>
+<p>每台虚拟机包含独立 Guest OS</p>
+<p>共享宿主机内核</p>
+<p>启动速度</p>
+<p>通常较慢</p>
+<p>通常较快</p>
+<p>隔离强度</p>
+<p>通常更强</p>
+<p>依赖 namespace、cgroup 和安全配置</p>
+<p>适合场景</p>
+<p>强隔离、不同操作系统</p>
+<p>高频创建的 Agent 任务沙箱</p>
+<p><strong>镜像与容器不是一回事：</strong>镜像是只读模板，可以只有一份；容器是由镜像启动出的运行实例。十个任务可以共用同一份镜像，但拥有十个相互隔离的容器实例。</p>
+<h2>三、推荐架构：常驻控制面 + 临时运行沙箱</h2>
+<p>单服务器上的服务分为两类：</p>
+<ul><li><strong>长期运行：</strong>API 服务、PostgreSQL、Redis、任务调度器、Sandbox Manager。</li><li><strong>按需运行：</strong>每次 Agent Run 创建的临时沙箱容器，任务结束后销毁。</li></ul>
+<p>持久化状态必须放在容器之外，例如 PostgreSQL、对象存储或受控工作区。临时容器本身不应成为数据长期保存的位置。</p>
+<h2>四、为什么按 Run 创建容器，而不是每个用户永久一个容器</h2>
+<p>“每个用户一个永久容器”看起来直观，但同一用户也可能并发运行多个 Agent。若多个 Run 共享同一容器，它们仍可能相互读取文件、覆盖依赖、争抢端口或继承后台进程。</p>
+<p>更合理的三层模型是：</p>
+<ol><li><strong>租户层：</strong>隔离数据库、对象存储目录、密钥命名空间、预算与配额。</li><li><strong>用户层：</strong>负责登录身份、角色和操作权限。</li><li><strong>Run 层：</strong>每次执行创建独立临时容器，隔离文件、进程、网络与短期凭证。</li></ol>
+<p>因此，推荐原则是：<strong>数据按租户长期隔离，执行按 Run 临时隔离。</strong></p>
+<h2>五、单机并发如何控制</h2>
+<p>容器数量由平台调度器控制，不是有多少用户就同时创建多少容器。假设服务器只允许两个 Agent 并发运行，五个任务到达时：</p>
+<p>任务</p>
+<p>状态</p>
+<p>运行位置</p>
+<p>任务 1</p>
+<p>运行中</p>
+<p>容器 A</p>
+<p>任务 2</p>
+<p>运行中</p>
+<p>容器 B</p>
+<p>任务 3</p>
+<p>排队</p>
+<p>等待容器 A 或 B 释放</p>
+<p>任务 4</p>
+<p>排队</p>
+<p>等待</p>
+<p>任务 5</p>
+<p>排队</p>
+<p>等待</p>
+<p>任务 1 完成后，容器 A 被销毁；调度器再为任务 3 创建一个全新的干净容器。服务器不会永久积累大量运行容器。</p>
+<pre><code class="language-php">MAX_CONCURRENT_RUNS = 2
+
+async with global_run_semaphore:
+    sandbox = await create_clean_sandbox(run_id)
+    try:
+        return await execute_agent(sandbox)
+    finally:
+        await destroy_sandbox(sandbox)</code></pre>
+<h2>六、Agent Run 的完整生命周期</h2>
+<ol><li>验证用户身份、租户状态和 Agent 权限。</li><li>检查租户预算、并发额度和剩余资源。</li><li>任务进入 Redis 队列。</li><li>调度器获得并发槽位后创建干净容器。</li><li>只挂载本次 Run 必需的输入和临时目录。</li><li>通过 Tool Gateway 提供最小权限、短生命周期凭证。</li><li>执行 Agent，并持续采集日志、资源使用量和审计事件。</li><li>将结果与制品写入容器外的持久化存储。</li><li>撤销临时凭证并销毁容器，释放并发槽位。</li></ol>
+<h2>七、容器资源与安全限制</h2>
+<pre><code class="language-plaintext">docker run --rm \
+  --user 10001:10001 \
+  --read-only \
+  --memory 1g \
+  --cpus 1 \
+  --pids-limit 128 \
+  --cap-drop ALL \
+  --security-opt no-new-privileges:true \
+  --tmpfs /tmp:rw,noexec,nosuid,size=256m \
+  --network none \
+  agent-python:2026.07</code></pre>
+<ul><li><strong>CPU 与内存：</strong>避免单个 Run 抢占整台服务器。</li><li><strong>进程数：</strong>防止 fork bomb 等进程耗尽攻击。</li><li><strong>只读根文件系统：</strong>只允许写入指定 tmpfs 或工作目录。</li><li><strong>非 root 用户：</strong>降低容器逃逸后的影响范围。</li><li><strong>删除 Linux capabilities：</strong>不给任务不需要的内核能力。</li><li><strong>运行超时：</strong>超时后终止任务并强制回收容器。</li></ul>
+<p>绝不能把宿主机的 Docker Socket 挂载到 Agent 容器中，否则容器内代码可能直接控制宿主机上的所有容器，等同于获得极高权限。</p>
+<h2>八、网络和外部工具隔离</h2>
+<p>默认使用 <code>--network none</code> 最安全。如果 Agent 必须访问互联网，不应直接开放任意网络，而应通过统一的 Egress Proxy 或 Tool Gateway：</p>
+<ul><li>按工具和域名设置 allowlist。</li><li>阻断 localhost、内网网段和云元数据地址，例如 169.254.169.254。</li><li>限制请求频率、响应大小和总流量。</li><li>记录租户、用户、Run、工具和目标地址，便于审计。</li></ul>
+<p>GitHub、飞书、云厂商等长期密钥不应直接注入容器。更好的方式是容器调用 Tool Gateway，由网关持有真实密钥并签发短期、最小权限的调用结果。</p>
+<h2>九、数据库多租户隔离</h2>
+<p>容器解决的是运行时隔离，数据库仍需独立设计。初期可以采用共享数据库、共享表，并要求所有业务表包含 <code>tenant_id</code>；查询时必须绑定当前租户上下文。高敏感租户可以升级到独立 Schema 或独立数据库。</p>
+<p>模式</p>
+<p>优点</p>
+<p>代价</p>
+<p>共享库共享表</p>
+<p>成本低、迁移简单</p>
+<p>必须防止遗漏 tenant_id 条件</p>
+<p>每租户 Schema</p>
+<p>逻辑隔离更强</p>
+<p>迁移和连接管理更复杂</p>
+<p>每租户数据库</p>
+<p>隔离、备份与迁移边界清晰</p>
+<p>数据库实例、连接池和运维成本高</p>
+<p>无论采用哪种方式，租户 ID 都不能直接信任客户端传入，而应由认证结果、域名或可信租户映射解析得到。</p>
+<h2>十、容量规划示例</h2>
+<p>以 4 核 8 GB 单服务器为例，可以先采用保守配置：</p>
+<ul><li>API、Redis、PostgreSQL 与调度服务预留约 3～4 GB。</li><li>每个 Agent 容器限制为 1 CPU、1 GB 内存。</li><li>全局最大并发设置为 2，其余任务排队。</li><li>每个租户再设置独立并发上限，防止单个租户占满全部槽位。</li><li>持续监控内存、CPU、磁盘、容器启动时延和队列等待时间，再调整并发。</li></ul>
+<p>这里的数字只是起步值，最终容量取决于 Agent 是否运行浏览器、模型推理、代码编译以及任务平均执行时间。</p>
+<h2>十一、从单机到多机如何演进</h2>
+<ol><li><strong>MVP：</strong>单机 Docker + PostgreSQL + Redis，限制并发为 1～2。</li><li><strong>增长期：</strong>数据库或对象存储外置，增加多台 Worker，队列统一调度。</li><li><strong>规模化：</strong>使用 Kubernetes、Nomad 或专门沙箱编排系统，按节点池隔离不同风险等级。</li><li><strong>高风险代码：</strong>根据威胁模型升级到 rootless 容器、gVisor、Kata Containers 或 Firecracker 等更强隔离方案。</li></ol>
+<p>如果从一开始就把“控制面、队列、持久化状态、临时沙箱”分开，后续从一台服务器扩展到多台服务器时，业务模型不需要推倒重来。</p>
+<h2>十二、常见误区</h2>
+<ul><li><strong>误区 1：</strong>一个用户一个镜像。正确做法通常是一组版本化公共镜像，按 Run 创建容器。</li><li><strong>误区 2：</strong>任务结束后清理目录就能安全复用容器。清理很难覆盖后台进程、内存状态、挂载和凭证，跨租户最好直接销毁。</li><li><strong>误区 3：</strong>数据库隔离就等于多租户隔离。Agent 平台还必须隔离运行环境、网络、密钥、缓存、日志和配额。</li><li><strong>误区 4：</strong>容器数量越多吞吐量越高。超过机器资源后只会导致抖动、OOM 和整体失败，应通过队列施加背压。</li><li><strong>误区 5：</strong>容器天然安全。容器只是基础边界，仍需要非 root、cgroup、capability、网络策略和凭证治理。</li></ul>
+<h2>十三、面试回答模板</h2>
+<p>我的 AI Agent 平台即使初期只有一台服务器，也不会让所有任务共用一个运行环境。我会把 API、数据库、Redis 和调度器作为常驻控制面，把每次 Agent 执行放进临时容器。镜像只保留少量版本化模板，容器按 Run 创建，任务结束后销毁；并发超过服务器容量时进入队列。数据按租户隔离，执行按 Run 隔离，同时限制 CPU、内存、进程数、运行时间和网络访问。这样既能在单机上控制成本，也为后续增加 Worker 节点预留了扩展路径。</p>
+<h2>十四、最终设计原则</h2>
+<p><strong>租户数据库隔离 + Agent Run 沙箱隔离 + 队列并发控制 + 短期工具凭证。</strong></p>
+<p>一台服务器不是不能运行多个容器，而是必须明确资源上限：并发运行少量容器，其余任务排队；任务结束后立即销毁，不保留跨 Run 状态。</p>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

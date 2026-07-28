@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Redis 入门：为什么需要 Redis — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.07.28</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">Redis 入门：为什么需要 Redis</h1>
+    <div class="article-body">
+<p><strong>一句话结论：</strong>Redis 是一个独立运行的内存数据存储服务。它不是为了替代 PostgreSQL，而是负责缓存、短期状态、任务队列、计数、限流和跨进程协调。</p>
+<h2>一、Redis 到底是什么</h2>
+<p>Redis 的全称可以理解为 Remote Dictionary Server，即“远程字典服务器”。它以独立服务进程运行，主要使用服务器内存保存数据，其他程序通过网络连接它。</p>
+<p>Redis 不是一块独立的物理内存。假设服务器有 8 GB 内存，操作系统、FastAPI、PostgreSQL、Redis 和 Agent 容器都会共同使用这 8 GB；只不过 Redis 有自己的进程、端口、配置和内存上限。</p>
+<pre><code class="language-plaintext">8 GB 服务器内存
+├── 操作系统：1.5 GB
+├── FastAPI：0.5 GB
+├── PostgreSQL：2 GB
+├── Redis：1 GB
+├── Agent 容器：2 GB
+└── 剩余缓冲：1 GB</code></pre>
+<h2>二、Redis 与 Python 字典的区别</h2>
+<p>Python 字典只属于当前 Python 进程：</p>
+<pre><code class="language-php">cache = {&quot;user:1001&quot;: {&quot;name&quot;: &quot;曹然&quot;}}</code></pre>
+<ul><li>程序重启后，字典内容通常消失。</li><li>其他进程和其他服务器不能直接共享。</li><li>没有统一的过期时间、持久化和主从复制能力。</li></ul>
+<p>Redis 相当于一个可以被多个服务共同访问的增强型字典服务器：</p>
+<pre><code class="language-plaintext">FastAPI ─────┐
+Agent Worker ─┼── Redis
+调度器 ──────┘</code></pre>
+<h2>三、为什么不能只使用 PostgreSQL</h2>
+<p>PostgreSQL 擅长长期、可靠地保存核心业务数据，也支持复杂查询、约束和事务。但系统中还有大量高频、短期、结构简单的状态，例如验证码、缓存、任务进度和并发计数。</p>
+<p>如果 Agent 每秒更新一次执行状态，一百个任务就会不断产生大量短小读写。这些状态可能几分钟后便失去价值，却会持续占用数据库连接和 I/O。</p>
+<p><strong>职责划分：</strong>PostgreSQL 负责长期正确的数据，Redis 负责快速访问和短期协调。</p>
+<h2>四、Redis 最经典的用途：缓存</h2>
+<p>这种模式称为 Cache Aside，也叫旁路缓存：</p>
+<ol><li>先查询 Redis。</li><li>命中时直接返回。</li><li>未命中时查询数据库。</li><li>把结果写入 Redis，并设置过期时间。</li><li>返回查询结果。</li></ol>
+<pre><code class="language-php">import json
+import redis.asyncio as redis
+
+cache = redis.Redis(host=&quot;localhost&quot;, port=6379, decode_responses=True)
+
+async def get_user(user_id: int):
+    key = f&quot;user:{user_id}&quot;
+    cached = await cache.get(key)
+    if cached is not None:
+        return json.loads(cached)
+
+    user = await query_user_from_database(user_id)
+    await cache.set(key, json.dumps(user), ex=300)
+    return user</code></pre>
+<p><code>ex=300</code> 表示这个缓存 300 秒后自动失效。</p>
+<h2>五、Redis 支持哪些数据结构</h2>
+<p>数据结构</p>
+<p>特点</p>
+<p>典型用途</p>
+<p>String</p>
+<p>字符串、数字、JSON 或二进制</p>
+<p>缓存、验证码、Token、计数器</p>
+<p>Hash</p>
+<p>类似字段字典</p>
+<p>用户对象、配置项</p>
+<p>List</p>
+<p>按顺序保存元素</p>
+<p>简单队列、时间线</p>
+<p>Set</p>
+<p>元素无序且不重复</p>
+<p>去重、标签、权限集合</p>
+<p>Sorted Set</p>
+<p>元素按照分数排序</p>
+<p>排行榜、优先级和延迟任务</p>
+<p>Stream</p>
+<p>持久化消息流和消费者组</p>
+<p>任务事件、轻量消息队列</p>
+<h2>六、Redis 为什么快</h2>
+<ul><li>主要数据位于内存，减少磁盘访问。</li><li>核心命令和数据结构设计简单。</li><li>许多常用操作时间复杂度很低。</li><li>单条 Redis 命令通常具有原子性。</li><li>网络协议与事件处理经过专门优化。</li></ul>
+<p>但 Redis 快不代表容量无限。它明显受服务器内存限制，不能把所有长期数据都无脑放入 Redis。</p>
+<h2>七、过期时间与短期数据</h2>
+<pre><code class="language-plaintext">SET verification:13800000000 9527 EX 300
+TTL verification:13800000000</code></pre>
+<p>Redis 可以自动删除过期 Key，非常适合验证码、Session、临时 Token、幂等键、限流窗口和 Agent 短期运行状态。</p>
+<h2>八、Redis 在 AI Agent 平台中的职责</h2>
+<h3>1. 任务队列</h3>
+<p>服务器只能并发运行少量 Agent，其余任务先进入队列。某个任务完成后，Worker 再领取下一个任务，避免 CPU 和内存被瞬间耗尽。</p>
+<h3>2. 运行状态</h3>
+<pre><code class="language-plaintext">agent:run:1001:status = queued
+agent:run:1002:status = running
+agent:run:1003:status = succeeded</code></pre>
+<p>Redis 适合提供实时状态查询，但最终结果和审计记录仍应写入 PostgreSQL。</p>
+<h3>3. 并发控制</h3>
+<pre><code class="language-plaintext">tenant:1001:running_tasks = 2</code></pre>
+<p>任务启动时原子加一，结束时原子减一；达到租户上限后让新任务排队。</p>
+<h3>4. 限流</h3>
+<p>按照租户、用户或 API 维护时间窗口计数，防止单个租户耗尽整个平台资源。</p>
+<h3>5. 分布式锁</h3>
+<p>多个 Worker 可能同时争抢同一个任务。Redis 锁可以减少重复处理，但必须设置唯一持有者、过期时间和安全释放逻辑，不能简单地随意删除锁 Key。</p>
+<h2>九、Redis 和数据库如何分工</h2>
+<p>维度</p>
+<p>Redis</p>
+<p>PostgreSQL</p>
+<p>主要介质</p>
+<p>内存</p>
+<p>磁盘与缓存</p>
+<p>访问特点</p>
+<p>Key 和数据结构操作，速度快</p>
+<p>复杂 SQL、关系、约束和事务</p>
+<p>典型数据</p>
+<p>缓存、状态、计数、队列、锁</p>
+<p>用户、租户、订单、账单、审计</p>
+<p>生命周期</p>
+<p>经常是短期或可重建</p>
+<p>长期、权威数据</p>
+<h2>十、Redis 数据会不会丢失</h2>
+<p>有可能。Redis 主要使用内存，进程异常或服务器故障可能造成数据丢失。常见持久化机制包括：</p>
+<ul><li><strong>RDB：</strong>定期生成数据快照，文件紧凑、恢复较快，但两次快照之间的数据可能丢失。</li><li><strong>AOF：</strong>记录写命令，通常能缩小数据丢失窗口，但文件和恢复成本可能更高。</li></ul>
+<p>Redis 可以同时启用 RDB 与 AOF，但核心业务数据仍不应该只保存在 Redis。</p>
+<h2>十一、常见缓存问题</h2>
+<p>问题</p>
+<p>含义</p>
+<p>常见方案</p>
+<p>缓存穿透</p>
+<p>不断查询不存在的数据</p>
+<p>参数校验、缓存空值、布隆过滤器</p>
+<p>缓存击穿</p>
+<p>热点 Key 失效时大量请求访问数据库</p>
+<p>互斥更新、逻辑过期、提前刷新</p>
+<p>缓存雪崩</p>
+<p>大量 Key 同时失效</p>
+<p>过期时间随机化、预热、限流降级</p>
+<p>大 Key</p>
+<p>单个 Key 保存过多数据</p>
+<p>拆分数据、限制集合大小</p>
+<p>热 Key</p>
+<p>请求集中于少数 Key</p>
+<p>本地缓存、分片、请求合并</p>
+<h2>十二、什么时候不需要 Redis</h2>
+<p>如果项目只有一个 FastAPI 进程、用户量很小、没有后台任务，也没有明显的数据库压力，可以先只使用 PostgreSQL。不要为了技术栈看起来完整而强行增加 Redis。</p>
+<p>出现以下需求时再引入更合理：</p>
+<ul><li>需要任务队列或后台 Worker。</li><li>多个进程需要共享短期状态。</li><li>大量重复查询需要缓存。</li><li>需要验证码、Session、限流或并发控制。</li><li>需要排行榜、高速计数器或分布式锁。</li></ul>
+<h2>十三、面试回答模板</h2>
+<p>Redis 是一个以内存为主要存储介质的高性能数据结构服务器，支持 String、Hash、List、Set、Sorted Set 和 Stream 等结构，常用于缓存、Session、计数器、排行榜、限流、分布式锁和任务队列。它一般与关系型数据库配合使用：数据库保存长期权威数据，Redis 处理高频访问和短期协调。同时需要关注持久化、缓存一致性、穿透、击穿、雪崩、大 Key、热 Key 和高可用问题。</p>
+<h2>十四、针对当前 Agent 平台的结论</h2>
+<p><strong>PostgreSQL：</strong>用户、租户、Agent 配置、任务最终结果、账单和审计日志。</p>
+<p><strong>Redis：</strong>任务队列、实时运行状态、并发计数、限流、临时锁和短期缓存。</p>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

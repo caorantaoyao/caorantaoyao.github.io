@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent 工具调用：从 Function Calling 到安全执行 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.07.28</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">Agent 工具调用：从 Function Calling 到安全执行</h1>
+    <div class="article-body">
+<p><strong>一句话理解：</strong>模型负责决定“调用哪个工具、传什么参数”，Agent 程序负责校验、鉴权和真正执行，再把结果交回模型。</p>
+<p>工具调用（Tool Calling / Function Calling）让大模型能够读取实时数据、访问数据库、操作业务系统和执行外部动作。它是 Agent 区别于普通聊天机器人的核心能力之一。</p>
+<h2>1. 为什么需要工具调用</h2>
+<p>模型只能根据当前上下文生成内容，并不知道数据库中的最新订单、Redis 中的状态、用户的飞书日程或服务器上的文件。遇到需要外部信息或实际操作的任务时，模型必须通过工具与外部世界交互。</p>
+<pre><code class="language-plaintext">用户：查询订单 20260729001 的状态
+        ↓
+模型决定调用 query_order
+        ↓
+Agent 程序验证参数与权限
+        ↓
+Python 工具查询数据库
+        ↓
+工具返回 status=shipped
+        ↓
+模型回答：订单已经发货</code></pre>
+<h2>2. 最重要的边界：模型不会真正执行函数</h2>
+<p>模型生成的是结构化“调用建议”，例如：</p>
+<pre><code class="language-json">{
+  &quot;name&quot;: &quot;get_weather&quot;,
+  &quot;arguments&quot;: {
+    &quot;city&quot;: &quot;北京&quot;
+  }
+}</code></pre>
+<p>真正执行 <code>get_weather(city=&quot;北京&quot;)</code> 的是你的 Python 程序。程序有权拒绝、修改、延迟或要求人工批准，不能因为模型提出调用就盲目执行。</p>
+<p><strong>安全原则：</strong>模型输出是不可信输入。工具名、参数、身份、租户、权限和风险等级都必须由确定性程序检查。</p>
+<h2>3. 工具调用的完整流程</h2>
+<ol><li>用户向 Agent 提出目标。</li><li>Agent 将消息、系统指令和工具说明交给模型。</li><li>模型选择工具并生成结构化参数。</li><li>Agent 校验工具是否存在、参数是否合法。</li><li>Agent 完成身份鉴别、权限检查和风险判断。</li><li>Python 程序执行函数、HTTP、RPC、SQL 或 MCP 调用。</li><li>程序把工具结果与 tool_call_id 一起交回模型。</li><li>模型根据结果继续调用工具或生成最终回答。</li></ol>
+<h2>4. 一个工具由什么组成</h2>
+<p>组成</p>
+<p>作用</p>
+<p>示例</p>
+<p>名称</p>
+<p>帮助模型识别能力</p>
+<p>get_weather</p>
+<p>描述</p>
+<p>说明何时使用、不能做什么</p>
+<p>查询指定城市当前天气</p>
+<p>参数 Schema</p>
+<p>规定字段、类型、范围和必填性</p>
+<p>city: string</p>
+<p>执行函数</p>
+<p>真正访问外部系统</p>
+<p>Python 函数或 RPC 客户端</p>
+<p>结果 Schema</p>
+<p>让模型稳定理解成功与失败</p>
+<p>ok、data、error</p>
+<p>安全策略</p>
+<p>控制权限、审批和审计</p>
+<p>auto、confirm、approval</p>
+<p>工具描述本质上是写给模型看的 API 文档。名称模糊、工具边界重叠或错误语义不清，都会增加模型选错工具的概率。</p>
+<h2>5. 工具定义与真实函数的区别</h2>
+<pre><code class="language-php">def get_weather(city: str) -&gt; dict:
+    return {
+        &quot;city&quot;: city,
+        &quot;temperature&quot;: 31,
+        &quot;condition&quot;: &quot;多云&quot;,
+    }</code></pre>
+<pre><code class="language-php">weather_tool = {
+    &quot;name&quot;: &quot;get_weather&quot;,
+    &quot;description&quot;: &quot;查询指定城市当前的天气情况&quot;,
+    &quot;parameters&quot;: {
+        &quot;type&quot;: &quot;object&quot;,
+        &quot;properties&quot;: {
+            &quot;city&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;description&quot;: &quot;需要查询天气的城市名称&quot;,
+            }
+        },
+        &quot;required&quot;: [&quot;city&quot;],
+        &quot;additionalProperties&quot;: False,
+    },
+}</code></pre>
+<p>模型看到 Schema 并生成参数；运行时根据工具名称找到对应 Python 函数并执行。</p>
+<h2>6. 使用 Pydantic 校验模型参数</h2>
+<pre><code class="language-php">from pydantic import BaseModel, ConfigDict, Field
+
+
+class WeatherArguments(BaseModel):
+    model_config = ConfigDict(extra=&quot;forbid&quot;)
+
+    city: str = Field(
+        min_length=1,
+        max_length=50,
+        description=&quot;城市名称&quot;,
+    )
+
+
+raw_arguments = {&quot;city&quot;: &quot;北京&quot;}
+arguments = WeatherArguments.model_validate(raw_arguments)
+result = get_weather(**arguments.model_dump())</code></pre>
+<p><code>extra=&quot;forbid&quot;</code> 可以拒绝模型生成的多余字段。参数格式通过校验只代表“结构合法”，仍需继续判断业务语义和权限。</p>
+<h2>7. 工具注册表与统一执行器</h2>
+<pre><code class="language-php">from collections.abc import Callable
+from pydantic import BaseModel
+
+
+class ToolDefinition:
+    def __init__(
+        self,
+        argument_model: type[BaseModel],
+        handler: Callable[..., dict],
+    ):
+        self.argument_model = argument_model
+        self.handler = handler
+
+
+TOOLS = {
+    &quot;get_weather&quot;: ToolDefinition(
+        argument_model=WeatherArguments,
+        handler=get_weather,
+    ),
+}
+
+
+def execute_tool(name: str, raw_arguments: dict) -&gt; dict:
+    tool = TOOLS.get(name)
+
+    if tool is None:
+        return {
+            &quot;ok&quot;: False,
+            &quot;error&quot;: {
+                &quot;code&quot;: &quot;TOOL_NOT_FOUND&quot;,
+                &quot;retryable&quot;: False,
+            },
+        }
+
+    try:
+        arguments = tool.argument_model.model_validate(raw_arguments)
+        output = tool.handler(**arguments.model_dump())
+        return {&quot;ok&quot;: True, &quot;data&quot;: output}
+    except ValueError as exc:
+        return {
+            &quot;ok&quot;: False,
+            &quot;error&quot;: {
+                &quot;code&quot;: &quot;INVALID_ARGUMENTS&quot;,
+                &quot;message&quot;: str(exc),
+                &quot;retryable&quot;: False,
+            },
+        }
+    except TimeoutError:
+        return {
+            &quot;ok&quot;: False,
+            &quot;error&quot;: {
+                &quot;code&quot;: &quot;TOOL_TIMEOUT&quot;,
+                &quot;retryable&quot;: True,
+            },
+        }</code></pre>
+<p>真实系统还应在执行前加入认证上下文、权限判断、审批策略、Deadline、幂等键和审计日志。</p>
+<h2>8. Agent Loop 如何处理工具调用</h2>
+<pre><code class="language-php">MAX_STEPS = 10
+messages = [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;查询北京天气&quot;}]
+
+for step in range(MAX_STEPS):
+    response = call_model(
+        messages=messages,
+        tools=get_tool_schemas(),
+    )
+
+    if response.has_final_answer:
+        final_answer = response.final_answer
+        break
+
+    messages.append(response.assistant_message)
+
+    for tool_call in response.tool_calls:
+        result = execute_tool(
+            name=tool_call.name,
+            raw_arguments=tool_call.arguments,
+        )
+
+        messages.append({
+            &quot;role&quot;: &quot;tool&quot;,
+            &quot;tool_call_id&quot;: tool_call.id,
+            &quot;content&quot;: result,
+        })
+else:
+    raise RuntimeError(&quot;Agent 超过最大执行步数&quot;)</code></pre>
+<p>核心循环是：模型提出工具调用，程序执行并写回结果，模型根据观察结果决定下一步。<code>tool_call_id</code> 用来关联工具请求和对应结果。</p>
+<h2>9. 一个任务可以连续调用多个工具</h2>
+<p>例如用户要求：“查询订单状态，如果已经发货，就给我发送通知。”</p>
+<pre><code class="language-plaintext">query_order(order_id)
+        ↓ status=shipped
+send_notification(message)
+        ↓ success
+模型生成最终回答</code></pre>
+<p>第二次调用不是程序预先写死的，而是模型根据第一次工具结果动态决定的。这就是 Agent 相比单次 LLM 请求更强的地方，同时也带来了循环、费用和安全风险。</p>
+<h2>10. 工具的三种类型</h2>
+<p>类型</p>
+<p>作用</p>
+<p>示例</p>
+<p>数据工具</p>
+<p>读取上下文和实时数据</p>
+<p>search_documents、query_order</p>
+<p>操作工具</p>
+<p>改变外部系统状态</p>
+<p>send_email、create_task、delete_file</p>
+<p>编排工具</p>
+<p>把专门 Agent 作为能力调用</p>
+<p>research_agent、code_review_agent</p>
+<p>普通函数能够完成的任务，不需要包装成子 Agent。多 Agent 会额外增加成本、延迟、上下文传递和调试难度。</p>
+<h2>11. 如何设计高质量工具</h2>
+<ul><li><strong>名称具体：</strong>使用 search_documents、get_order，而不是 process 或 tool_1。</li><li><strong>职责单一：</strong>查询、创建、取消和退款应有清晰边界。</li><li><strong>参数明确：</strong>通过类型、枚举、长度和数值范围减少歧义。</li><li><strong>返回结构化：</strong>统一 ok、data、error.code 和 retryable。</li><li><strong>控制结果大小：</strong>分页、裁剪、摘要，只返回必要字段。</li><li><strong>工具边界不重叠：</strong>否则模型难以稳定选择。</li><li><strong>描述包含限制：</strong>明确何时不应该使用工具。</li></ul>
+<h2>12. 错误模型：告诉 Agent 下一步应该做什么</h2>
+<pre><code class="language-json">{
+  &quot;ok&quot;: false,
+  &quot;error&quot;: {
+    &quot;code&quot;: &quot;ORDER_NOT_FOUND&quot;,
+    &quot;message&quot;: &quot;订单不存在&quot;,
+    &quot;retryable&quot;: false
+  }
+}</code></pre>
+<p>错误</p>
+<p>是否重试</p>
+<p>处理方式</p>
+<p>INVALID_ARGUMENTS</p>
+<p>否</p>
+<p>修正参数或询问用户</p>
+<p>PERMISSION_DENIED</p>
+<p>否</p>
+<p>停止并说明权限不足</p>
+<p>NOT_FOUND</p>
+<p>通常否</p>
+<p>检查标识或返回业务结果</p>
+<p>TOOL_TIMEOUT</p>
+<p>可能</p>
+<p>在 Deadline 内有限重试</p>
+<p>RATE_LIMITED</p>
+<p>可能</p>
+<p>退避后重试或降级</p>
+<p>如果工具只返回“执行失败”，模型无法判断是应该修改参数、重新调用、换工具还是转交人工。</p>
+<h2>13. 多租户与权限边界</h2>
+<p>模型可能生成：</p>
+<pre><code class="language-json">{
+  &quot;name&quot;: &quot;query_documents&quot;,
+  &quot;arguments&quot;: {
+    &quot;tenant_id&quot;: &quot;company-b&quot;,
+    &quot;query&quot;: &quot;财务数据&quot;
+  }
+}</code></pre>
+<p>如果当前用户属于 company-a，不能按照模型参数访问 company-b。可信身份必须来自服务端认证上下文：</p>
+<pre><code class="language-php">def query_documents(arguments, context):
+    trusted_tenant_id = context.tenant_id
+
+    authorize(
+        user_id=context.user_id,
+        tenant_id=trusted_tenant_id,
+        action=&quot;document:read&quot;,
+    )
+
+    return repository.search(
+        tenant_id=trusted_tenant_id,
+        query=arguments.query,
+    )</code></pre>
+<p>身份、tenant_id、角色、权限和配额来自 JWT、Session 或服务端上下文，不能由模型自由提供。Casbin/RBAC 可用于判断调用者能否执行某项工具能力。</p>
+<h2>14. 写操作必须考虑幂等</h2>
+<p>Agent 调用 create_task 成功，但响应在网络中丢失；如果自动重试，可能创建两个相同任务。解决办法是给同一次逻辑操作使用稳定的幂等键。</p>
+<pre><code class="language-php">def create_task(title: str, idempotency_key: str):
+    existing = repository.find_by_idempotency_key(
+        idempotency_key
+    )
+
+    if existing:
+        return existing
+
+    return repository.create(
+        title=title,
+        idempotency_key=idempotency_key,
+    )</code></pre>
+<p>工具调用决定“调用什么”；HTTP/RPC 决定“如何调用远程服务”；幂等保证“超时重试不会重复产生副作用”。</p>
+<h2>15. 工具风险分级与人工确认</h2>
+<p>工具</p>
+<p>风险</p>
+<p>建议策略</p>
+<p>搜索知识库</p>
+<p>低</p>
+<p>自动执行</p>
+<p>查询订单</p>
+<p>低</p>
+<p>自动执行并审计</p>
+<p>创建草稿</p>
+<p>中</p>
+<p>自动执行或执行后提示</p>
+<p>发送邮件</p>
+<p>中高</p>
+<p>预览并确认</p>
+<p>删除文件</p>
+<p>高</p>
+<p>强制确认</p>
+<p>付款、生产部署</p>
+<p>极高</p>
+<p>强制审批与最小权限</p>
+<p>风险策略应由程序配置，而不是让模型自行判断“这个操作是否安全”。</p>
+<h2>16. 工具调用、API、RPC 与 MCP 的关系</h2>
+<pre><code class="language-plaintext">用户目标
+  ↓
+模型生成 Function Call
+  ↓
+Agent Runtime 校验、鉴权、审批
+  ↓
+Python 工具函数
+  ↓
+HTTP / RPC / SQL / Redis / MCP
+  ↓
+外部系统</code></pre>
+<ul><li><strong>Function Calling：</strong>模型如何表达“我要调用某个工具”。</li><li><strong>Python 工具函数：</strong>Agent 程序中的执行适配层。</li><li><strong>HTTP/RPC：</strong>程序之间如何传输请求。</li><li><strong>MCP：</strong>外部工具和上下文如何被统一发现、描述与调用。</li><li><strong>Casbin/RBAC：</strong>调用者是否有权使用某项工具。</li></ul>
+<h2>17. 生产环境常见错误</h2>
+<ul><li>模型返回什么就直接执行，没有参数校验和鉴权。</li><li>把 tenant_id、user_id 和角色交给模型决定。</li><li>工具返回大量原始数据，浪费上下文并泄露敏感字段。</li><li>所有失败都返回普通字符串，没有稳定错误码。</li><li>写操作自动重试，却没有幂等键。</li><li>没有最大步骤数、Deadline、费用预算和取消机制。</li><li>高风险工具没有操作预览与人工审批。</li><li>工具名称和职责重叠，导致模型频繁选错。</li><li>日志记录完整参数、Token 或敏感数据，没有脱敏。</li></ul>
+<h2>18. 工具调用检查清单</h2>
+<p class="todo">☐ 工具名称、描述和使用边界是否清晰？</p>
+<p class="todo">☐ 输入是否使用 JSON Schema 或 Pydantic 严格校验？</p>
+<p class="todo">☐ 身份、租户和权限是否来自可信服务端上下文？</p>
+<p class="todo">☐ 写操作是否具有稳定幂等键？</p>
+<p class="todo">☐ 错误是否包含稳定错误码和 retryable 标记？</p>
+<p class="todo">☐ 是否限制超时、重试、最大步骤数和费用？</p>
+<p class="todo">☐ 高风险操作是否需要预览、确认或审批？</p>
+<p class="todo">☐ 工具结果是否分页、裁剪和脱敏？</p>
+<p class="todo">☐ 是否记录 Trace、tool_call_id、耗时和审计事件？</p>
+<p class="todo">☐ 是否测试参数错误、越权、重复调用和工具超时？</p>
+<h2>19. 面试回答模板</h2>
+<p>工具调用是指模型根据用户目标，从程序提供的工具集合中选择工具并生成结构化参数。模型本身不执行函数，Agent 运行时需要验证工具名称与参数，完成鉴权、风险判断和人工确认，然后调用真实的 Python 函数、HTTP API、RPC 或数据库，再将工具结果与原 tool_call_id 一起返回模型，使模型决定下一步或生成最终回答。生产环境还必须处理超时、有限重试、幂等、租户隔离、结果截断、审计和最大执行步数。</p>
+<h2>20. 一句话总结</h2>
+<p><strong>模型负责提出工具调用，程序负责验证和执行，工具结果再驱动模型决定下一步。</strong></p>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

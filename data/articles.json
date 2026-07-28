@@ -1,7 +1,55 @@
 {
-  "generated_at": "2026-07-27T23:42:20.609470+00:00",
-  "count": 35,
+  "generated_at": "2026-07-28T23:33:28.638584+00:00",
+  "count": 41,
   "articles": [
+    {
+      "title": "Agent Trace：从执行链路到可观测性",
+      "date": "2026.07.28",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "一句话理解：Agent Trace 把一次 Agent 任务从用户请求到最终结果的每一步记录成一棵执行树，让我们能够还原模型调用、工具执行、RAG、RPC、审批、重试、耗时和费用。",
+      "url": "/articles/Agent-Trace-5aa39404.html"
+    },
+    {
+      "title": "Agent 工具调用：从 Function Calling 到安全执行",
+      "date": "2026.07.28",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "一句话理解：模型负责决定“调用哪个工具、传什么参数”，Agent 程序负责校验、鉴权和真正执行，再把结果交回模型。",
+      "url": "/articles/Agent---Function-Calling-b8aa2cb9.html"
+    },
+    {
+      "title": "四层与七层负载均衡：从连接转发到应用路由",
+      "date": "2026.07.28",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "一句话理解：四层负载均衡根据 IP、端口和 TCP/UDP 连接选择后端；七层负载均衡能够理解 HTTP、HTTPS 或 gRPC 请求，并根据域名、路径、Header、Cookie 等应用信息路由。",
+      "url": "/articles/2c115873.html"
+    },
+    {
+      "title": "RPC：不同服务之间如何进行同步调用",
+      "date": "2026.07.28",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "一句话理解：RPC（Remote Procedure Call，远程过程调用）让一个服务像调用本地函数一样，请求另一个进程或机器上的服务，并等待结果返回。",
+      "url": "/articles/RPC-6b1bebac.html"
+    },
+    {
+      "title": "消息队列：从异步解耦到 Agent 任务调度",
+      "date": "2026.07.28",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "一句话结论：消息队列是服务之间传递消息的中间件。生产者把消息发送给 Broker，消费者按照自己的处理能力异步消费，从而实现异步处理、流量削峰、服务解耦和失败重试。",
+      "url": "/articles/Agent-84c3fe0f.html"
+    },
+    {
+      "title": "Redis 入门：为什么需要 Redis",
+      "date": "2026.07.28",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "一句话结论：Redis 是一个独立运行的内存数据存储服务。它不是为了替代 PostgreSQL，而是负责缓存、短期状态、任务队列、计数、限流和跨进程协调。",
+      "url": "/articles/Redis---Redis-caa71a6f.html"
+    },
     {
       "title": "单服务器上的 AI Agent 多租户与容器隔离",
       "date": "2026.07.27",

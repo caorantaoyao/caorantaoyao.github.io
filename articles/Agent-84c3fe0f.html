@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>消息队列：从异步解耦到 Agent 任务调度 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.07.28</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">消息队列：从异步解耦到 Agent 任务调度</h1>
+    <div class="article-body">
+<p><strong>一句话结论：</strong>消息队列是服务之间传递消息的中间件。生产者把消息发送给 Broker，消费者按照自己的处理能力异步消费，从而实现异步处理、流量削峰、服务解耦和失败重试。</p>
+<h2>一、从现实中的排队理解消息队列</h2>
+<p>消息队列类似银行取号：顾客不需要一直占着柜台等待，先取号进入队列；柜台空闲后再处理下一个号码。</p>
+<pre><code class="language-plaintext">顾客取号 → 号码进入等待队列 → 柜台空闲 → 叫下一个号码</code></pre>
+<p>在 AI Agent 平台中：</p>
+<pre><code class="language-plaintext">用户提交 Agent 任务
+        ↓
+     消息队列
+        ↓
+空闲 Worker 获取任务
+        ↓
+创建临时容器执行 Agent</code></pre>
+<h2>二、为什么不能让 API 直接执行 Agent</h2>
+<p>如果 FastAPI 收到请求后立即创建容器，并一直等待 Agent 执行完成，长任务会占用连接并面临超时。大量任务突然到达时，还可能同时抢占 CPU 和内存。</p>
+<ul><li>HTTP 请求可能保持数分钟甚至数十分钟。</li><li>API 连接和进程资源长期占用。</li><li>并发任务可能直接压垮单服务器。</li><li>失败任务不方便统一重试。</li><li>API 服务重启可能导致任务状态丢失。</li></ul>
+<p>加入消息队列后，FastAPI 只负责创建任务和发布消息，然后立即返回 <code>run_id</code>：</p>
+<pre><code class="language-json">{
+  &quot;run_id&quot;: &quot;run-1001&quot;,
+  &quot;status&quot;: &quot;queued&quot;
+}</code></pre>
+<p>Agent 在后台执行，客户端通过轮询、SSE 或 WebSocket 获取进度。</p>
+<h2>三、消息队列的三个核心角色</h2>
+<p>角色</p>
+<p>职责</p>
+<p>Agent 平台对应组件</p>
+<p>Producer</p>
+<p>创建并发送消息</p>
+<p>FastAPI 控制服务</p>
+<p>Broker</p>
+<p>接收、保存和投递消息</p>
+<p>Redis、RabbitMQ 或 Kafka</p>
+<p>Consumer</p>
+<p>获取并处理消息</p>
+<p>Agent Worker</p>
+<h2>四、消息队列解决的四个核心问题</h2>
+<h3>1. 异步处理</h3>
+<p>任务提交和任务执行解耦。用户快速获得任务编号，耗时工作在后台运行。</p>
+<h3>2. 流量削峰</h3>
+<p>如果服务器最多同时运行两个 Agent，而瞬间收到一百个任务，只启动两个，其余九十八个排队。队列不会提高单个任务速度，但能把突发流量摊平。</p>
+<h3>3. 服务解耦</h3>
+<p>FastAPI 不需要知道哪台 Worker 执行任务，也不需要了解 Worker 使用 Docker、gVisor 还是其他沙箱。</p>
+<h3>4. 失败重试</h3>
+<p>网络抖动、模型限流或临时资源不足时，可以延迟重试；确定性的参数错误和权限错误则不应重试。</p>
+<h2>五、消息中应该保存什么</h2>
+<p>消息应尽量只保存任务标识和少量路由信息：</p>
+<pre><code class="language-json">{
+  &quot;message_id&quot;: &quot;msg-9001&quot;,
+  &quot;run_id&quot;: &quot;run-1001&quot;,
+  &quot;tenant_id&quot;: &quot;tenant-8&quot;,
+  &quot;agent_id&quot;: &quot;agent-3&quot;
+}</code></pre>
+<p>完整提示词、文件和长期密钥不应直接进入队列：</p>
+<ul><li>PostgreSQL 保存任务元数据和权威状态。</li><li>对象存储保存大文件和运行制品。</li><li>密钥服务或 Tool Gateway 管理敏感凭证。</li><li>消息队列只负责传递任务标识和事件。</li></ul>
+<h2>六、消息从生产到 ACK 的生命周期</h2>
+<p>ACK 是消费者对 Broker 的确认：消息已经处理成功，可以删除或推进消费位置。通常应先完成业务和结果保存，再发送 ACK。</p>
+<h2>七、为什么消息可能重复</h2>
+<p>如果 Worker 完成任务并保存结果后，在发送 ACK 前崩溃，Broker 不知道业务已经成功，便可能重新投递同一条消息。</p>
+<pre><code class="language-plaintext">业务执行成功 → 结果已保存 → ACK 前宕机 → 消息重新投递</code></pre>
+<p>因此，“消费者收到同一消息多次”是正常工程场景，不能假设 Broker 永远只投递一次。</p>
+<h2>八、三种消息投递语义</h2>
+<p>语义</p>
+<p>含义</p>
+<p>主要问题</p>
+<p>At Most Once</p>
+<p>最多处理一次</p>
+<p>可能丢失</p>
+<p>At Least Once</p>
+<p>至少处理一次</p>
+<p>可能重复</p>
+<p>Exactly Once</p>
+<p>业务效果恰好一次</p>
+<p>实现成本高，需多组件协作</p>
+<p>工程中最常见的目标是：<strong>消息至少投递一次，业务效果通过幂等保证只有一次。</strong></p>
+<h2>九、消费者如何保证幂等</h2>
+<p>幂等表示同一个操作执行多次，最终结果与执行一次相同。常用方法包括：</p>
+<ul><li>为消息设置全局唯一 <code>message_id</code>。</li><li>建立消费去重表，并添加唯一约束。</li><li>使用业务唯一键，例如订单号或 <code>run_id</code>。</li><li>通过数据库状态机阻止重复状态转换。</li><li>支付、库存等关键操作使用数据库事务和唯一约束兜底。</li></ul>
+<pre><code class="language-rust">UPDATE agent_runs
+SET status = &#x27;running&#x27;
+WHERE id = :run_id
+  AND status = &#x27;queued&#x27;;</code></pre>
+<p>如果影响行数为零，说明任务已经被其他 Worker 领取、取消或执行，不应再次运行。</p>
+<h2>十、消息重试和指数退避</h2>
+<p>适合重试的错误：</p>
+<ul><li>网络超时；</li><li>下游服务暂时不可用；</li><li>模型 API 限流；</li><li>数据库短暂连接失败；</li><li>容器节点暂时没有资源。</li></ul>
+<p>不适合重试的错误：</p>
+<ul><li>参数格式错误；</li><li>用户权限不足；</li><li>Agent 配置不存在；</li><li>余额或配额不足；</li><li>确定性的业务规则拒绝。</li></ul>
+<pre><code class="language-plaintext">第 1 次失败：5 秒后重试
+第 2 次失败：30 秒后重试
+第 3 次失败：2 分钟后重试
+第 4 次失败：10 分钟后重试</code></pre>
+<p>应加入随机抖动，避免大量失败任务在同一时间重新请求下游服务，形成重试风暴。</p>
+<h2>十一、死信队列</h2>
+<p>消息超过最大重试次数后，应进入死信队列，而不是无限重试：</p>
+<pre><code class="language-plaintext">正常队列 → 多次失败 → 死信队列 → 人工排查或重新投递</code></pre>
+<p>死信记录至少应包含任务 ID、重试次数、最后错误、失败时间和原始消息摘要。</p>
+<h2>十二、消息顺序</h2>
+<p>消息队列通常不能保证全局顺序。严格顺序往往需要牺牲并行度。</p>
+<ul><li>同一业务实体使用相同 Partition 或 Routing Key。</li><li>同一 Key 只由一个有序消费者处理。</li><li>通过业务版本号拒绝旧事件。</li><li>使用数据库状态机阻止非法转换。</li></ul>
+<p>Kafka 只能天然保证同一个 Partition 内有序，不能保证所有 Partition 的全局顺序。</p>
+<h2>十三、消息积压</h2>
+<p>如果生产速度大于消费速度，队列长度会不断增加。例如每秒生产 1000 条、只能消费 500 条，每秒将积压 500 条。</p>
+<p>常见原因：</p>
+<ul><li>Worker 数量不足；</li><li>单个任务耗时过长；</li><li>下游模型或数据库变慢；</li><li>大量消息重复重试；</li><li>分区数量不足或负载不均；</li><li>消费者发生阻塞或故障。</li></ul>
+<p>处理方式包括限制生产流量、扩容 Worker、增加分区、优化慢任务、隔离异常消息，以及显示预计等待时间。</p>
+<h2>十四、任务队列和消息队列的区别</h2>
+<p>类型</p>
+<p>典型语义</p>
+<p>示例</p>
+<p>消息队列</p>
+<p>某件事情已经发生</p>
+<p>订单已创建、支付已完成</p>
+<p>任务队列</p>
+<p>某件事情需要执行</p>
+<p>发送邮件、运行 Agent、生成报告</p>
+<p>你的 Agent 平台使用的是：<strong>基于消息中间件实现的后台任务队列。</strong></p>
+<h2>十五、Redis、RabbitMQ 和 Kafka 如何选择</h2>
+<p>维度</p>
+<p>Redis / Streams</p>
+<p>RabbitMQ</p>
+<p>Kafka</p>
+<p>定位</p>
+<p>内存数据与轻量队列</p>
+<p>可靠消息代理</p>
+<p>分布式事件流</p>
+<p>复杂度</p>
+<p>较低</p>
+<p>中等</p>
+<p>较高</p>
+<p>路由</p>
+<p>相对简单</p>
+<p>非常灵活</p>
+<p>Topic 与 Partition</p>
+<p>消息保留</p>
+<p>通常偏短期</p>
+<p>消费后通常删除</p>
+<p>可长期保留和重复消费</p>
+<p>适合场景</p>
+<p>小型任务队列</p>
+<p>可靠业务任务</p>
+<p>大吞吐事件流与日志</p>
+<p>当前单服务器 MVP 可以优先使用 Redis 配合 Celery、Dramatiq、RQ 或 Arq。可靠路由要求提高时考虑 RabbitMQ；需要高吞吐事件流、审计事件和多个独立消费者时再考虑 Kafka。</p>
+<h2>十六、Python 中的 Celery + Redis 示例</h2>
+<pre><code class="language-php">from celery import Celery
+
+app = Celery(
+    &quot;agent_tasks&quot;,
+    broker=&quot;redis://localhost:6379/0&quot;,
+    backend=&quot;redis://localhost:6379/1&quot;,
+)
+
+@app.task(
+    bind=True,
+    autoretry_for=(TimeoutError,),
+    retry_backoff=True,
+    max_retries=3,
+)
+def run_agent(self, run_id: str):
+    execute_agent_run(run_id)</code></pre>
+<pre><code class="language-php">@api.post(&quot;/agent-runs&quot;)
+async def create_agent_run():
+    run_id = await save_run_to_database(status=&quot;queued&quot;)
+    run_agent.delay(run_id)
+    return {&quot;run_id&quot;: run_id, &quot;status&quot;: &quot;queued&quot;}</code></pre>
+<p>Celery Worker 独立运行，从 Redis 获取任务并调用 <code>run_agent</code>。</p>
+<h2>十七、数据库与消息发送的一致性</h2>
+<p>以下流程存在失败窗口：</p>
+<pre><code class="language-plaintext">1. 数据库创建任务成功
+2. 向队列发送消息失败
+结果：数据库中永久存在 queued 任务，但 Worker 永远收不到</code></pre>
+<p>常用解决方案是 Transactional Outbox：</p>
+<ol><li>在同一个数据库事务中写入 <code>agent_runs</code> 和 <code>outbox_events</code>。</li><li>独立发布器扫描未发布的 Outbox 事件。</li><li>将事件发送到消息队列。</li><li>发布成功后标记事件已发布。</li></ol>
+<p>发布器崩溃后可以继续扫描。事件可能重复发布，因此消费者仍需幂等。</p>
+<h2>十八、Agent Run 状态机</h2>
+<pre><code class="language-plaintext">created
+   ↓
+queued
+   ↓
+running
+   ├── succeeded
+   ├── failed
+   ├── cancelled
+   └── timed_out</code></pre>
+<p>推荐字段：</p>
+<ul><li><code>id、tenant_id、user_id、agent_id</code>；</li><li><code>status、priority、retry_count</code>；</li><li><code>queued_at、started_at、finished_at</code>；</li><li><code>heartbeat_at、error_code、result_location</code>。</li></ul>
+<p>还需要全局和租户并发上限、任务超时、心跳、Worker 失联回收、最大重试次数、死信处理、用户取消和审计日志。</p>
+<h2>十九、面试回答模板</h2>
+<p>消息队列是一种异步通信中间件，由生产者、Broker 和消费者组成，主要用于异步处理、服务解耦、流量削峰和失败重试。使用消息队列时需要重点考虑消息丢失、重复消费、幂等、顺序性、消息积压、重试和死信队列。工程中通常采用至少一次投递，并通过数据库唯一约束、状态机或去重表保证业务幂等。数据库写入与消息发送的一致性可以使用 Transactional Outbox 解决。</p>
+<h2>二十、针对当前 Agent 平台的结论</h2>
+<p><strong>MVP：</strong>FastAPI + PostgreSQL + Redis + Celery/Dramatiq + 临时 Agent 容器。</p>
+<p><strong>可靠性底线：</strong>任务状态持久化、幂等领取、成功后 ACK、有限重试、死信队列、心跳回收和租户并发配额。</p>
+<p><strong>演进路径：</strong>任务可靠路由需求提高时引入 RabbitMQ；大规模执行事件流和多消费者分析时引入 Kafka。</p>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

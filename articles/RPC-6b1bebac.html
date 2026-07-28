@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RPC：不同服务之间如何进行同步调用 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.07.28</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">RPC：不同服务之间如何进行同步调用</h1>
+    <div class="article-body">
+<p><strong>一句话理解：</strong>RPC（Remote Procedure Call，远程过程调用）让一个服务像调用本地函数一样，请求另一个进程或机器上的服务，并等待结果返回。</p>
+<p>RPC 是微服务、分布式系统和 AI Agent 平台的基础通信方式。真正需要掌握的不是某个框架的 API，而是同步调用背后的网络、超时、重试、幂等、服务发现、负载均衡和故障治理。</p>
+<h2>1. 为什么需要 RPC</h2>
+<p>单体应用中，用户服务、订单服务和支付逻辑位于同一进程，可以直接调用函数。拆成多个服务以后，它们拥有独立的进程、端口、运行环境甚至服务器，普通函数调用无法跨越进程边界。</p>
+<p>此时调用方必须完成一整套通信工作：找到目标服务、把参数编码成字节、通过网络发送、等待对方执行、接收响应、解码结果并处理错误。RPC 框架把这些细节封装起来，让开发者面对一个接近函数调用的接口。</p>
+<h2>2. 什么是“同步调用”</h2>
+<p>同步描述的是业务依赖关系：调用方发出请求后，需要拿到结果才能继续当前流程。线程是否被阻塞、代码是否使用 async/await，是实现方式层面的问题，不能简单等同于业务上的同步或异步。</p>
+<ul><li><strong>同步 RPC：</strong>用户服务调用权限服务校验身份，未得到结果前不能继续。</li><li><strong>异步消息：</strong>订单创建后发送“订单已创建”事件，通知、积分等消费者稍后处理。</li></ul>
+<p><strong>关键判断：</strong>当前步骤是否必须立即得到下游结果？如果必须，通常使用同步 RPC；如果允许稍后处理，优先考虑消息队列。</p>
+<h2>3. RPC 与消息队列的区别</h2>
+<p>维度</p>
+<p>RPC</p>
+<p>消息队列</p>
+<p>交互模式</p>
+<p>请求—响应</p>
+<p>生产—消费</p>
+<p>结果需求</p>
+<p>通常立即需要结果</p>
+<p>通常不等待最终处理结果</p>
+<p>时间耦合</p>
+<p>调用时下游应可用</p>
+<p>消费者可稍后处理</p>
+<p>典型场景</p>
+<p>鉴权、查询、实时推理</p>
+<p>通知、削峰、任务调度</p>
+<p>主要风险</p>
+<p>级联超时、重试放大</p>
+<p>重复消费、消息积压</p>
+<p>两者不是互相替代的关系。一个完整系统经常用 RPC 完成必须立即返回的核心路径，用消息队列承接耗时、可延后或需要削峰的工作。</p>
+<h2>4. 一次 RPC 调用到底发生了什么</h2>
+<ol><li><strong>构造请求：</strong>方法名、参数、请求 ID、认证信息、Trace ID、超时或截止时间。</li><li><strong>序列化：</strong>把内存中的对象转换为可传输的字节。</li><li><strong>寻址与连接：</strong>根据服务发现和负载均衡结果连接一个实例。</li><li><strong>网络传输：</strong>通过 HTTP、HTTP/2 或自定义 TCP 协议发送数据。</li><li><strong>服务端分发：</strong>Server Stub 解码请求并路由到实际方法。</li><li><strong>执行业务：</strong>服务端完成查询、计算或写入。</li><li><strong>返回响应：</strong>结果或错误被序列化并沿网络返回。</li><li><strong>客户端还原：</strong>Client Stub 将响应转回业务对象，或抛出可识别的异常。</li></ol>
+<h2>5. Stub：为什么远程调用看起来像本地函数</h2>
+<p><strong>Client Stub</strong> 是调用方的本地代理，负责隐藏网络细节；<strong>Server Stub</strong> 负责接收请求、反序列化、调用真实业务函数和返回响应。很多 RPC 框架会根据接口定义文件自动生成两端代码。</p>
+<p>这种抽象提高了开发效率，但也容易造成“远程调用和本地调用一样”的错觉。实际上远程调用比本地调用多出网络延迟、部分失败、序列化兼容、跨服务观测等复杂性。</p>
+<h2>6. 序列化与接口契约</h2>
+<p>网络只能传输字节，所以请求参数和返回值必须序列化。常见格式包括 JSON、Protocol Buffers、MessagePack 等。</p>
+<p>格式</p>
+<p>特点</p>
+<p>适合场景</p>
+<p>JSON</p>
+<p>可读性好、生态广、体积相对大</p>
+<p>开放 API、调试友好的内部服务</p>
+<p>Protocol Buffers</p>
+<p>二进制、体积小、解析快、强契约</p>
+<p>gRPC、高性能内部服务</p>
+<p>MessagePack</p>
+<p>二进制、结构接近 JSON</p>
+<p>需要紧凑传输但仍保留动态结构</p>
+<p>接口契约不仅包括字段名称，还包括字段类型、必填性、错误码和版本兼容规则。演进接口时应优先新增可选字段，避免复用旧字段编号、随意改变含义或删除仍被旧客户端使用的字段。</p>
+<h2>7. REST 和 gRPC 都能做服务调用</h2>
+<p>RPC 是一种调用思想，不等于某个具体协议。REST API 也能承担服务间同步调用；gRPC 则提供更典型的 RPC 体验。</p>
+<p>维度</p>
+<p>REST/HTTP + JSON</p>
+<p>gRPC + Protobuf</p>
+<p>接口表达</p>
+<p>资源与 HTTP 方法</p>
+<p>服务与方法</p>
+<p>数据格式</p>
+<p>通常 JSON</p>
+<p>通常 Protobuf</p>
+<p>协议能力</p>
+<p>HTTP/1.1 或 HTTP/2</p>
+<p>基于 HTTP/2，支持流式调用</p>
+<p>调试体验</p>
+<p>浏览器、curl 直接调试</p>
+<p>通常需要生成代码或专用工具</p>
+<p>典型用途</p>
+<p>外部 API、简单内部服务</p>
+<p>强类型、高性能内部服务</p>
+<p>面试中不要回答“RPC 与 HTTP 是并列协议”。RPC 可以运行在 HTTP 之上，gRPC 就是典型例子。</p>
+<h2>8. 最重要的认知：超时不代表服务端没有执行</h2>
+<p>客户端只知道“在规定时间内没有收到响应”，却无法仅凭超时判断请求处于哪种状态：</p>
+<ul><li>请求根本没有到达服务端；</li><li>请求已到达，但服务端尚未执行；</li><li>服务端正在执行；</li><li>服务端已经执行成功，但响应丢失；</li><li>服务端执行失败，错误响应也没有及时到达。</li></ul>
+<p><strong>分布式系统的核心难点是结果不确定性。</strong>因此重试不能单独存在，必须和幂等、超时、错误分类及可观测性一起设计。</p>
+<h2>9. 超时：任何 RPC 都必须有边界</h2>
+<p>没有超时的调用可能无限等待，占用线程、连接和内存，最终拖垮整个服务。通常需要区分连接超时、读取超时和整体截止时间。</p>
+<ul><li><strong>连接超时：</strong>多长时间内无法建立连接就放弃。</li><li><strong>读取超时：</strong>连接建立后，多长时间没有收到响应就放弃。</li><li><strong>Deadline：</strong>整个请求链允许消耗的绝对时间上限。</li></ul>
+<p>超时时间不能凭感觉设置，应参考下游延迟分布、用户体验目标、调用链长度和是否允许重试。</p>
+<h2>10. 超时预算与 Deadline 传播</h2>
+<p>假设网关要求 2 秒内返回，服务 A 调用 B，B 再调用 C。A 不能给 B 2 秒、B 又给 C 2 秒，否则总时间会突破用户侧预算。</p>
+<p>更合理的做法是传播同一个截止时间。每一层先扣除已消耗时间和自身处理余量，再把剩余预算交给下一层。如果剩余时间已不足，应尽早失败，而不是发起一个注定来不及完成的请求。</p>
+<h2>11. 重试：只对“可能恢复”的错误使用</h2>
+<p>适合重试的情况通常包括瞬时网络错误、连接被重置、服务暂时过载或明确的可重试错误码。不适合重试的情况包括参数错误、权限不足、资源不存在和业务规则拒绝。</p>
+<ul><li>限制最大重试次数；</li><li>使用指数退避，逐步拉长等待时间；</li><li>加入随机抖动，避免大量客户端同时重试；</li><li>重试必须服从整体 Deadline；</li><li>写操作只有具备幂等保护后才能安全自动重试。</li></ul>
+<h2>12. 幂等：同一请求执行多次，结果保持一致</h2>
+<p>查询通常天然幂等；创建订单、扣款、发放奖励等写操作通常不是。常见做法是由调用方生成唯一的 <code>Idempotency-Key</code>，服务端将它与处理状态和结果持久化。</p>
+<ol><li>第一次收到幂等键：执行业务并记录结果。</li><li>相同请求再次到达：不重复执行业务，直接返回已记录结果。</li><li>相同幂等键携带不同参数：拒绝请求并记录异常。</li></ol>
+<p>只在内存中记录幂等键并不可靠；进程重启或多实例部署时会失效。关键业务应使用具有唯一约束的数据库或可靠共享存储。</p>
+<h2>13. 服务发现：调用方如何找到服务</h2>
+<p>生产环境中的服务实例会扩缩容、重启和迁移，IP 地址并不固定。服务发现系统维护“服务名到健康实例列表”的映射。</p>
+<ol><li>服务实例启动后向注册中心登记地址和元数据。</li><li>调用方或网关根据服务名查询可用实例。</li><li>注册中心通过心跳或健康检查剔除异常实例。</li></ol>
+<p>常见实现包括 Kubernetes Service/DNS、Consul、etcd、Nacos，以及由服务网格代理完成的发现机制。</p>
+<h2>14. 负载均衡与健康检查</h2>
+<p>同一服务通常有多个实例。负载均衡选择具体实例，常见策略包括轮询、随机、最少连接、一致性哈希和基于延迟的选择。</p>
+<p>健康检查分为存活检查与就绪检查：进程活着不代表它已准备好接收流量。数据库连接未建立、模型尚未加载、依赖未就绪时，实例应处于“不就绪”状态。</p>
+<h2>15. 熔断、降级与限流</h2>
+<ul><li><strong>熔断：</strong>下游连续失败达到阈值后，暂时停止真实调用并快速失败；经过冷却期后用少量请求探测恢复情况。</li><li><strong>降级：</strong>核心依赖不可用时，返回缓存、默认值、简化结果或提示稍后再试。</li><li><strong>限流：</strong>限制单位时间内的请求量或并发数，保护服务和昂贵资源。</li></ul>
+<p>三者目标不同：限流控制入口压力，熔断阻止失败扩散，降级保证系统在异常时仍提供有限能力。</p>
+<h2>16. 连接池与长连接</h2>
+<p>每次 RPC 都重新建立 TCP/TLS 连接会产生握手开销。客户端通常使用连接池复用长连接。连接池需要设置最大连接数、空闲超时、连接寿命和等待队列上限。</p>
+<p>连接池过小会排队，过大则可能耗尽客户端或服务端的文件描述符和内存。连接池不是越大越好，应结合实例并发能力和延迟目标进行压测。</p>
+<h2>17. 重试放大与级联故障</h2>
+<p>假设 A 调用 B、B 调用 C，每层都最多重试 3 次；在最坏情况下，C 可能收到 3 × 3 = 9 次请求。如果链路更长，请求量会指数放大。</p>
+<p>下游越慢，上游越重试；重试又让下游更慢，形成正反馈。治理方法包括统一超时预算、只在一层重试、限制次数、指数退避、熔断、并发隔离和负载保护。</p>
+<h2>18. 错误模型：不要把所有失败都变成 500</h2>
+<p>调用方需要知道错误是否可重试、是否是自身参数问题、是否需要用户处理。建议至少区分：</p>
+<ul><li><strong>业务错误：</strong>余额不足、状态不允许、配额用尽；通常不可重试。</li><li><strong>客户端错误：</strong>参数非法、未认证、无权限；修正请求后再调用。</li><li><strong>瞬时基础设施错误：</strong>连接重置、服务过载；可能重试。</li><li><strong>永久服务错误：</strong>接口不存在、版本不兼容；自动重试无意义。</li><li><strong>超时与取消：</strong>必须单独表达，因为服务端执行状态可能不确定。</li></ul>
+<p>错误响应可包含稳定错误码、简短信息、是否可重试和请求 ID，但不要向外泄露堆栈、密钥或内部拓扑。</p>
+<h2>19. 可观测性：日志、指标与链路追踪</h2>
+<p>一个请求跨多个服务后，仅查看单个服务日志很难定位问题。RPC 元数据中应传播 <code>Trace ID</code> 和 <code>Span ID</code>，让分布式追踪系统还原完整调用链。</p>
+<ul><li><strong>指标：</strong>请求量、成功率、错误率、P50/P95/P99 延迟、超时率、重试率。</li><li><strong>日志：</strong>请求 ID、服务名、方法、错误码、耗时、重试次数；敏感参数要脱敏。</li><li><strong>Trace：</strong>展示每一跳耗时、父子关系和错误位置。</li></ul>
+<p>常见经验是关注 RED：Rate（请求速率）、Errors（错误）、Duration（耗时）。</p>
+<h2>20. Python 示例：使用 FastAPI 与 httpx 完成同步业务调用</h2>
+<p>下面的“同步”指订单服务必须得到库存结果才能继续；代码使用异步 I/O，是为了等待网络时不阻塞事件循环。</p>
+<pre><code class="language-php">from fastapi import FastAPI, HTTPException
+import httpx
+import uuid
+
+app = FastAPI()
+
+@app.post(&quot;/orders&quot;)
+async def create_order(sku_id: str, quantity: int):
+    request_id = str(uuid.uuid4())
+    timeout = httpx.Timeout(connect=0.3, read=1.2, write=0.5, pool=0.2)
+
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        try:
+            response = await client.post(
+                &quot;http://inventory-service/reservations&quot;,
+                json={&quot;sku_id&quot;: sku_id, &quot;quantity&quot;: quantity},
+                headers={
+                    &quot;X-Request-ID&quot;: request_id,
+                    &quot;Idempotency-Key&quot;: request_id,
+                },
+            )
+            response.raise_for_status()
+        except httpx.TimeoutException:
+            # 此时不能断言库存一定没有被锁定
+            raise HTTPException(status_code=504, detail=&quot;库存服务响应超时&quot;)
+        except httpx.HTTPStatusError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f&quot;库存服务失败: {exc.response.status_code}&quot;,
+            )
+
+    reservation = response.json()
+    return {&quot;request_id&quot;: request_id, &quot;reservation&quot;: reservation}</code></pre>
+<p>实际项目中不要为每次请求都新建客户端，应在应用生命周期内复用 <code>AsyncClient</code>，从而复用连接池。重试策略也应集中封装，而不是散落在业务代码中。</p>
+<h2>21. 在 AI Agent 运行平台中如何划分同步与异步</h2>
+<ul><li><strong>适合同步 RPC：</strong>鉴权、租户配置读取、配额校验、短时检索、模型网关调用、用户正在等待的工具操作。</li><li><strong>适合消息队列：</strong>长时间代码执行、批量文档处理、离线评测、大文件解析、可延后的索引构建。</li></ul>
+<p>不要让一个 HTTP/RPC 请求无限等待长任务。可以同步创建任务并返回 <code>task_id</code>，再由队列执行，客户端通过轮询、SSE、WebSocket 或通知获取进度和结果。</p>
+<h2>22. Agent 平台中的额外注意事项</h2>
+<ul><li><strong>多租户上下文传播：</strong>每次调用显式携带可信的 tenant_id、user_id、权限声明和 Trace ID；下游不能仅相信客户端自由传入的租户字段。</li><li><strong>模型调用超时：</strong>区分首 Token 延迟、整体生成截止时间和客户端取消。</li><li><strong>流式 RPC：</strong>生成式模型适合边生成边返回，但仍需处理背压、断线和取消传播。</li><li><strong>工具副作用：</strong>发邮件、扣费、创建资源等操作必须使用幂等键和审计记录。</li><li><strong>资源隔离：</strong>按租户或任务限制并发、Token、CPU/GPU 和工具调用次数，避免噪声邻居。</li></ul>
+<h2>23. 设计一个 RPC 接口时的检查清单</h2>
+<p class="todo">☐ 这个步骤真的必须同步等待吗？</p>
+<p class="todo">☐ 接口契约是否清晰，并支持向后兼容？</p>
+<p class="todo">☐ 连接、读取和整体 Deadline 是否明确？</p>
+<p class="todo">☐ 哪些错误可重试，重试次数和退避策略是什么？</p>
+<p class="todo">☐ 写操作是否有可靠的幂等键与唯一约束？</p>
+<p class="todo">☐ 是否有服务发现、健康检查和负载均衡？</p>
+<p class="todo">☐ 是否配置限流、熔断、降级和并发隔离？</p>
+<p class="todo">☐ Trace ID、指标、日志和错误码能否定位问题？</p>
+<p class="todo">☐ 租户、用户和权限上下文是否安全传播？</p>
+<p class="todo">☐ 是否进行了超时、下游宕机和重试风暴演练？</p>
+<h2>24. 面试回答模板</h2>
+<p>RPC 是让一个服务调用另一个进程或机器上服务的方法抽象。客户端代理负责序列化、服务发现、负载均衡和网络发送，服务端代理负责反序列化、路由和执行业务，再把结果返回。远程调用与本地调用最大的不同是网络延迟和部分失败：超时并不代表服务端没有执行。因此工程上必须同时设计 Deadline、错误分类、有限重试、幂等、熔断、限流和链路追踪。对于必须立即拿结果的路径使用 RPC；耗时或可延后的工作更适合消息队列。</p>
+<h2>25. 一句话总结</h2>
+<p>RPC 解决“服务之间如何像调用函数一样通信”；可靠 RPC 设计解决“网络不可靠、结果不确定时，系统如何仍然可控”。</p>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

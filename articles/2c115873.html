@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>四层与七层负载均衡：从连接转发到应用路由 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.07.28</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">四层与七层负载均衡：从连接转发到应用路由</h1>
+    <div class="article-body">
+<p><strong>一句话理解：</strong>四层负载均衡根据 IP、端口和 TCP/UDP 连接选择后端；七层负载均衡能够理解 HTTP、HTTPS 或 gRPC 请求，并根据域名、路径、Header、Cookie 等应用信息路由。</p>
+<p>“四层”和“七层”来自 OSI 网络模型。它们不是产品等级，也不代表七层一定优于四层，而是描述负载均衡器在转发请求时能够理解到哪一层信息。</p>
+<h2>1. 先回顾 OSI 层次</h2>
+<pre><code class="language-plaintext">第七层：应用层——HTTP、HTTPS、gRPC、WebSocket
+第四层：传输层——TCP、UDP
+第三层：网络层——IP</code></pre>
+<p>四层负载均衡主要处理连接；七层负载均衡能够解析具体的应用请求。</p>
+<h2>2. 用同一个 HTTP 请求理解差异</h2>
+<pre><code class="language-java">POST /api/agent/run HTTP/1.1
+Host: platform.example.com
+Authorization: Bearer ***
+X-Tenant-ID: tenant-a
+X-Model: deepseek
+Content-Type: application/json</code></pre>
+<p><strong>四层负载均衡主要看到：</strong>源 IP、源端口、目标 IP、目标端口、TCP/UDP 协议和连接状态。</p>
+<p><strong>七层负载均衡还可以看到：</strong>域名、URL 路径、HTTP 方法、Header、Cookie、Content-Type 等应用层信息。</p>
+<p>如果只需要回答“这个连接交给哪台机器”，四层往往足够；如果需要回答“这个请求是什么业务，再交给哪个服务”，通常需要七层。</p>
+<h2>3. 核心区别对比</h2>
+<p>维度</p>
+<p>四层负载均衡</p>
+<p>七层负载均衡</p>
+<p>工作层次</p>
+<p>TCP/UDP 传输层</p>
+<p>HTTP、HTTPS、gRPC 等应用层</p>
+<p>主要依据</p>
+<p>IP、端口、协议、连接状态</p>
+<p>域名、路径、方法、Header、Cookie</p>
+<p>转发粒度</p>
+<p>通常是连接级</p>
+<p>可以是请求级</p>
+<p>HTTP 感知</p>
+<p>通常不解析</p>
+<p>能够解析</p>
+<p>性能与开销</p>
+<p>通常吞吐更高、开销更低</p>
+<p>解析与 TLS 处理带来更多开销</p>
+<p>路由能力</p>
+<p>较简单</p>
+<p>非常灵活</p>
+<p>协议范围</p>
+<p>TCP、UDP 等通用协议</p>
+<p>取决于代理能够理解的应用协议</p>
+<p>常见用途</p>
+<p>数据库、Redis、游戏、DNS、TLS 透传</p>
+<p>网站、API 网关、微服务、Agent 平台</p>
+<h2>4. 四层负载均衡如何工作</h2>
+<p>假设用户连接统一入口 <code>10.0.0.10:443</code>，后端有三个实例。负载均衡器在建立 TCP 连接时选择实例 B，后续这个连接中的数据通常继续转发给 B。</p>
+<pre><code class="language-plaintext">客户端 203.0.113.10:52100
+            │ TCP 连接
+            ▼
+四层负载均衡 10.0.0.10:443
+            │ 选择实例 B
+            ▼
+后端实例 B 10.0.1.12:8000</code></pre>
+<p>常见选择依据包括轮询、加权轮询、最少连接、源 IP 哈希和网络五元组哈希。</p>
+<p><strong>网络五元组：</strong>源 IP、源端口、目标 IP、目标端口、传输层协议。</p>
+<h2>5. 七层负载均衡如何工作</h2>
+<p>七层负载均衡器接收并解析 HTTP 请求，即使多个请求访问相同 IP 和 443 端口，也能按照业务内容分发。</p>
+<pre><code class="language-plaintext">客户端 HTTPS 请求
+        │
+        ▼
+七层网关 / 负载均衡器
+        ├── /api/users/*  → 用户服务
+        ├── /api/orders/* → 订单服务
+        └── /api/agent/*  → Agent 编排服务</code></pre>
+<p>它还能根据 Header 路由：</p>
+<pre><code class="language-plaintext">X-Model: qwen      → Qwen 模型实例池
+X-Model: deepseek  → DeepSeek 模型实例池
+X-Model: embedding → 向量模型实例池</code></pre>
+<h2>6. 为什么 HTTPS 会涉及 TLS 终止</h2>
+<p>HTTPS 会加密路径、Header、Cookie 和请求正文。如果负载均衡器只透传加密数据，就无法根据这些内容做七层路由。要读取 HTTP 内容，通常需要在负载均衡器处终止 TLS。</p>
+<h3>6.1 TLS 透传</h3>
+<pre><code class="language-plaintext">客户端 ==加密==&gt; 四层负载均衡器 ==加密==&gt; 后端</code></pre>
+<p>负载均衡器不解密请求，证书通常部署在后端，适合四层转发。</p>
+<h3>6.2 TLS 终止</h3>
+<pre><code class="language-plaintext">客户端 ==HTTPS==&gt; 七层负载均衡器 ——HTTP——&gt; 后端</code></pre>
+<p>证书部署在负载均衡器上，内部链路可能使用明文 HTTP。</p>
+<h3>6.3 TLS 再加密</h3>
+<pre><code class="language-plaintext">客户端 ==HTTPS==&gt; 七层负载均衡器 ==HTTPS==&gt; 后端</code></pre>
+<p>负载均衡器解密、检查和路由后，再与后端建立新的 TLS 连接。安全要求较高的系统还会使用内部 mTLS。</p>
+<h2>7. 七层负载均衡能提供哪些能力</h2>
+<ul><li><strong>按域名路由：</strong><code>api.example.com</code> 与 <code>admin.example.com</code> 进入不同服务。</li><li><strong>按路径路由：</strong><code>/api/users</code>、<code>/api/orders</code>、<code>/api/agent</code> 分别转发。</li><li><strong>按 Header 或 Cookie 路由：</strong>区分租户、版本、模型和用户组。</li><li><strong>灰度发布：</strong>把少量请求或测试用户导向新版本。</li><li><strong>请求处理：</strong>添加请求 ID、重写路径、压缩响应、修改 Header。</li><li><strong>入口治理：</strong>认证、接口级限流、跨域配置和访问日志。</li></ul>
+<h2>8. 为什么四层通常性能更高</h2>
+<p>四层转发通常不需要完成 TLS 解密、HTTP 解析、URL 匹配、Header 检查、Cookie 解析和内容修改，因此延迟更低、吞吐量更高、CPU 开销更小，也更容易支持任意 TCP/UDP 协议。</p>
+<p>但不能简单回答“七层很慢”。现代 Nginx、Envoy 和云负载均衡器能够提供很高性能。在普通 Web 系统中，应先根据路由和治理需求选择层次，再通过压测验证性能。</p>
+<h2>9. 连接级和请求级负载均衡</h2>
+<p><strong>四层通常按连接选择实例：</strong>TCP 连接建立时选中 A，该连接里的后续流量通常继续发给 A。</p>
+<pre><code class="language-plaintext">TCP 连接 1 → 实例 A
+TCP 连接 2 → 实例 B</code></pre>
+<p><strong>七层可以按请求选择实例：</strong>理解 HTTP 后，可以对不同请求分别选择后端。</p>
+<pre><code class="language-plaintext">HTTP 请求 1 → 实例 A
+HTTP 请求 2 → 实例 B
+HTTP 请求 3 → 实例 C</code></pre>
+<p>对于 HTTP/2、gRPC、WebSocket 等长连接，仅仅做到“连接数均衡”不一定代表“请求量或计算量均衡”。一个连接可能承载大量并发流或长时间任务。</p>
+<h2>10. 分别适合什么场景</h2>
+<h3>10.1 更适合四层的场景</h3>
+<ul><li>MySQL、PostgreSQL 等数据库连接；</li><li>Redis 和其他自定义 TCP 服务；</li><li>DNS 的 TCP/UDP 流量；</li><li>游戏服务器；</li><li>TLS 透传；</li><li>不需要理解应用内容、追求高吞吐的网络入口。</li></ul>
+<h3>10.2 更适合七层的场景</h3>
+<ul><li>网站和 REST API；</li><li>微服务 API 网关；</li><li>Kubernetes Ingress；</li><li>gRPC 服务路由；</li><li>灰度发布和 A/B 测试；</li><li>需要鉴权、限流、Header 修改的入口；</li><li>根据租户、模型或任务类型路由的 AI Agent 平台。</li></ul>
+<h2>11. 真实系统经常组合使用</h2>
+<pre><code class="language-plaintext">用户
+  │
+  ▼
+云负载均衡器（四层）
+  │ 分配 TCP 连接
+  ▼
+Nginx / Envoy 网关集群（七层）
+  ├── 用户服务
+  ├── Agent 编排服务
+  ├── 文件服务
+  └── 模型网关</code></pre>
+<p>四层入口负责高吞吐连接转发，并把流量分配给多个网关实例；七层网关负责域名和路径路由、身份认证、API 限流、灰度发布与请求追踪。</p>
+<h2>12. 在 AI Agent 平台中的落地方式</h2>
+<p>需求</p>
+<p>推荐层次</p>
+<p>原因</p>
+<p>公网 API 入口</p>
+<p>七层</p>
+<p>需要鉴权、路径路由、租户限流和 Trace ID</p>
+<p>按模型类型路由</p>
+<p>七层</p>
+<p>需要读取路径或 X-Model Header</p>
+<p>Redis、数据库代理入口</p>
+<p>四层</p>
+<p>基于 TCP 连接，不需要解析 HTTP</p>
+<p>模型推理实例分配</p>
+<p>七层或专用调度器</p>
+<p>普通连接数无法表示 Token、显存和排队负载</p>
+<p>WebSocket 长连接入口</p>
+<p>四层或七层</p>
+<p>需要结合连接保持、鉴权和升级协议决定</p>
+<p>模型推理不能只用普通轮询。更合理的调度指标包括模型是否已加载、当前排队长度、GPU 显存、KV Cache 占用、输入输出 Token 估算和历史响应延迟。</p>
+<h2>13. 常见误区</h2>
+<h3>13.1 “Nginx 就是七层负载均衡器”</h3>
+<p>不完整。Nginx 的 HTTP 模块可以做七层负载均衡，<code>stream</code> 模块也可以做四层 TCP/UDP 负载均衡。</p>
+<h3>13.2 “四层是硬件，七层是软件”</h3>
+<p>错误。四层和七层描述处理信息的层次，与硬件或软件没有必然关系。云服务、硬件设备和软件代理都可能同时支持两者。</p>
+<h3>13.3 “七层更高级，所以全部使用七层”</h3>
+<p>错误。七层功能丰富但解析开销更高，并且不能天然处理所有自定义协议。是否需要理解应用层内容才是选择依据。</p>
+<h3>13.4 “负载均衡等于高可用”</h3>
+<p>错误。还需要健康检查、多负载均衡实例、超时、熔断、限流和后端无状态化。单个负载均衡器自己也可能成为单点。</p>
+<h2>14. 选型检查清单</h2>
+<p class="todo">☐ 是否需要根据域名、路径、Header 或 Cookie 路由？</p>
+<p class="todo">☐ 目标协议是 HTTP/gRPC，还是普通 TCP/UDP？</p>
+<p class="todo">☐ 是否需要 TLS 透传、TLS 终止或再次加密？</p>
+<p class="todo">☐ 路由单位应当是连接还是每个请求？</p>
+<p class="todo">☐ 是否需要认证、灰度发布、接口级限流和请求改写？</p>
+<p class="todo">☐ 长连接数量能否真实反映后端计算负载？</p>
+<p class="todo">☐ 负载均衡器自身是否做了高可用？</p>
+<p class="todo">☐ 健康检查是否区分存活与就绪？</p>
+<h2>15. 面试回答模板</h2>
+<p>四层负载均衡工作在传输层，主要根据源目标 IP、端口和 TCP/UDP 连接选择后端，通常按连接转发，性能高且协议通用，但无法根据 URL 和 Header 路由。七层负载均衡工作在应用层，能够解析 HTTP、HTTPS 或 gRPC，根据域名、路径、Header、Cookie 等进行请求级路由，还能实现鉴权、限流和灰度发布，但解析和 TLS 终止会产生更多开销。真实系统中经常用四层负载均衡承接入口连接，再用七层网关完成业务路由。</p>
+<h2>16. 一句话总结</h2>
+<p><strong>四层看连接：</strong>把这个 TCP/UDP 连接交给哪台机器；<strong>七层看请求：</strong>先判断这个应用请求是什么，再决定交给哪个服务。</p>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

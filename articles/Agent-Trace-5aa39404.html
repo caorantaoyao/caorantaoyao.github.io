@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Trace：从执行链路到可观测性 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.07.28</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">Agent Trace：从执行链路到可观测性</h1>
+    <div class="article-body">
+<p><strong>一句话理解：</strong>Agent Trace 把一次 Agent 任务从用户请求到最终结果的每一步记录成一棵执行树，让我们能够还原模型调用、工具执行、RAG、RPC、审批、重试、耗时和费用。</p>
+<p>Agent 的执行路径由模型动态决定，同一个输入可能产生不同工具选择和调用次数。仅查看最终答案或零散日志，很难解释 Agent 为什么成功、失败、变慢或陷入循环，因此 Trace 是 Agent 生产化的基础能力。</p>
+<h2>1. 先看一次完整的 Agent Trace</h2>
+<p>用户提出：“查询订单 20260729001，如果已经发货就给我发送通知。”</p>
+<pre><code class="language-plaintext">Trace: order_notification_agent
+│
+├── Span: authenticate_user             12ms
+├── Span: agent_turn_1                 840ms
+│   └── Span: llm_generation           825ms
+│       └── 决定调用 query_order
+├── Span: tool.query_order             125ms
+│   └── Span: rpc.order_service        110ms
+│       └── 返回 status=shipped
+├── Span: agent_turn_2                 760ms
+│   └── 决定调用 send_notification
+├── Span: approval                       8s
+│   └── 用户确认发送
+├── Span: tool.send_notification       230ms
+└── Span: final_response               580ms</code></pre>
+<p>这棵树既展示控制流，也展示每一步的父子关系、耗时、状态和业务信息。</p>
+<h2>2. Trace 与 Span</h2>
+<h3>2.1 Trace</h3>
+<p>Trace 表示一次完整的端到端操作，例如“查询订单并发送通知”，通常拥有唯一 <code>trace_id</code>。它是所有相关 Span 的容器。</p>
+<h3>2.2 Span</h3>
+<p>Span 表示一个具有开始和结束时间的具体操作，例如模型生成、工具调用、数据库查询或人工审批。Span 通常包含：</p>
+<ul><li><code>span_id</code>：当前操作的唯一标识；</li><li><code>parent_span_id</code>：父操作标识；</li><li>开始、结束时间与耗时；</li><li>状态、属性和事件；</li><li>异常、重试和业务元数据。</li></ul>
+<pre><code class="language-plaintext">Trace: agent.run
+└── Span: tool.query_order
+    └── Span: rpc.order_service
+        └── Span: db.select_order</code></pre>
+<h2>3. Log、Metric 与 Trace 的区别</h2>
+<p>类型</p>
+<p>主要回答的问题</p>
+<p>示例</p>
+<p>Log</p>
+<p>具体发生了什么事件？</p>
+<p>订单 RPC 返回 504</p>
+<p>Metric</p>
+<p>系统整体运行得怎么样？</p>
+<p>P95 延迟升到 12 秒</p>
+<p>Trace</p>
+<p>这一次请求经过了哪些步骤？</p>
+<p>慢在工具 RPC，而不是模型</p>
+<p>Metric 发现趋势，Trace 定位链路，Log 提供具体细节。三者互相补充，而不是互相替代。</p>
+<h2>4. 为什么 Agent 特别需要 Trace</h2>
+<p>普通后端服务通常执行固定的 Controller、Service、Repository 路径；Agent 会根据模型结果动态选择工具、决定是否重试、是否 Handoff、是否继续循环。非确定性使得“同样输入、不同轨迹”成为常态。</p>
+<ul><li>回答慢：到底慢在模型、RAG、工具还是人工审批？</li><li>结果错：选择了错误工具，还是工具返回了错误数据？</li><li>成本高：模型调用过多，还是上下文过长？</li><li>产生副作用：为什么重复发邮件或重复创建任务？</li><li>陷入循环：哪些工具被重复调用，停止条件为何没有触发？</li></ul>
+<h2>5. Agent Trace 应记录哪些步骤</h2>
+<p>步骤</p>
+<p>建议记录</p>
+<p>Agent Run</p>
+<p>Agent、工作流版本、总状态、总步骤、总 Token、费用</p>
+<p>模型调用</p>
+<p>模型、Prompt 版本、Token、首 Token 延迟、停止原因、重试</p>
+<p>工具调用</p>
+<p>tool_call_id、工具名、参数摘要、结果、耗时、幂等键</p>
+<p>RAG</p>
+<p>查询、top_k、文档 ID、分数、重排、权限过滤、最终上下文</p>
+<p>状态变化</p>
+<p>当前节点、下一节点、Checkpoint、重试、剩余预算</p>
+<p>Handoff</p>
+<p>源 Agent、目标 Agent、原因、传递上下文与子任务结果</p>
+<p>Guardrail</p>
+<p>触发规则、允许、阻止或修改结果</p>
+<p>人工审批</p>
+<p>审批状态、等待时间和决定，不记录不必要的个人信息</p>
+<h2>6. Trace 不等于模型思维链</h2>
+<p>Agent Trace 记录的是可观察系统行为：调用了哪个工具、结构化参数是什么、工具返回什么、状态如何变化、发生哪些重试。它不要求记录模型隐藏的完整思维过程。</p>
+<p>推荐记录“决策结果”，例如 <code>decision=tool_call</code>、<code>tool=query_order</code>，而不是强迫模型输出或存储冗长内部推理。</p>
+<h2>7. Trace、Run、Thread 与会话</h2>
+<p>不建议把整个长期对话做成一个无限增长的 Trace。更合理的是“一次用户任务一个 Trace”，再通过 <code>thread_id</code>、<code>conversation_id</code> 或 <code>group_id</code> 将多个 Trace 关联起来。</p>
+<pre><code class="language-plaintext">Thread: conversation_123
+├── Trace 1: 查询订单
+├── Trace 2: 修改收货地址
+└── Trace 3: 申请退款</code></pre>
+<p><code>run_id</code> 表示一次 Agent 执行；<code>trace_id</code> 表示一次端到端链路；不同框架的命名可能略有差异，但核心关系相同。</p>
+<h2>8. 跨 HTTP、RPC 传播 Trace</h2>
+<p>如果 Agent 编排服务通过 RPC 调用模型网关、工具服务和订单服务，Trace Context 必须跨服务传播。HTTP 常使用 W3C <code>traceparent</code> Header：</p>
+<pre><code class="language-java">traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01</code></pre>
+<ol><li>上游创建或读取 Trace Context。</li><li>下游创建新的子 Span。</li><li>通过 Header 继续向更下游传播。</li><li>最终在可观测平台还原完整调用树。</li></ol>
+<pre><code class="language-plaintext">Agent Run
+└── tool.query_order
+    └── HTTP order-service
+        └── SQL SELECT orders</code></pre>
+<h2>9. 通过消息队列传播 Trace</h2>
+<p>长任务进入 Kafka、RabbitMQ 或其他队列时，应把 Trace Context 放入消息 Header，而不是仅放在进程内存中。</p>
+<pre><code class="language-json">{
+  &quot;traceparent&quot;: &quot;00-...&quot;,
+  &quot;task_id&quot;: &quot;task_123&quot;,
+  &quot;run_id&quot;: &quot;run_456&quot;,
+  &quot;checkpoint_id&quot;: &quot;cp_789&quot;
+}</code></pre>
+<p>Worker 消费后继续创建 Consumer Span。由于异步任务可能很久以后执行，还应持久化 task_id、run_id、tenant_id 和工作流版本。</p>
+<pre><code class="language-plaintext">Trace: document_processing
+├── producer.publish_task
+└── consumer.process_task
+    ├── parse_pdf
+    ├── embedding
+    └── save_vectors</code></pre>
+<h2>10. Python：使用 OpenTelemetry 手动埋点</h2>
+<pre><code class="language-php">from opentelemetry import trace
+
+tracer = trace.get_tracer(&quot;agent-platform&quot;)
+
+
+def run_agent(user_input: str):
+    with tracer.start_as_current_span(&quot;agent.run&quot;) as run_span:
+        run_span.set_attribute(&quot;agent.name&quot;, &quot;order-agent&quot;)
+        run_span.set_attribute(&quot;agent.workflow_version&quot;, &quot;v1.3&quot;)
+
+        with tracer.start_as_current_span(&quot;llm.generate&quot;) as model_span:
+            response = call_model(user_input)
+
+            model_span.set_attribute(&quot;gen_ai.model&quot;, response.model)
+            model_span.set_attribute(
+                &quot;gen_ai.usage.input_tokens&quot;,
+                response.input_tokens,
+            )
+            model_span.set_attribute(
+                &quot;gen_ai.usage.output_tokens&quot;,
+                response.output_tokens,
+            )
+
+        if response.tool_call:
+            return execute_tool_with_trace(response.tool_call)
+
+        return response.final_output</code></pre>
+<pre><code class="language-php">def execute_tool_with_trace(tool_call):
+    span_name = f&quot;tool.{tool_call.name}&quot;
+
+    with tracer.start_as_current_span(span_name) as span:
+        span.set_attribute(&quot;tool.name&quot;, tool_call.name)
+        span.set_attribute(&quot;tool.call_id&quot;, tool_call.id)
+
+        try:
+            result = execute_tool(
+                name=tool_call.name,
+                arguments=tool_call.arguments,
+            )
+            span.set_attribute(&quot;tool.success&quot;, True)
+            return result
+        except Exception as exc:
+            span.set_attribute(&quot;tool.success&quot;, False)
+            span.record_exception(exc)
+            raise</code></pre>
+<h2>11. 使用 Agent 框架的自动 Trace</h2>
+<p>许多 Agent 框架会自动记录模型生成、函数工具、Guardrail 与 Handoff。以 OpenAI Agents SDK 的概念为例：</p>
+<pre><code class="language-php">from agents import Agent, Runner, trace
+
+agent = Agent(
+    name=&quot;Order Agent&quot;,
+    instructions=&quot;帮助用户查询订单。&quot;,
+    tools=[query_order],
+)
+
+
+async def handle_request(user_input: str):
+    with trace(
+        &quot;Order Agent Workflow&quot;,
+        group_id=&quot;conversation_123&quot;,
+        metadata={
+            &quot;environment&quot;: &quot;production&quot;,
+            &quot;workflow_version&quot;: &quot;v1.3&quot;,
+        },
+    ):
+        return await Runner.run(agent, user_input)</code></pre>
+<p>自动埋点适合快速开始，但生产环境仍需为数据库、Redis、RPC、消息队列和业务状态增加 Span。</p>
+<h2>12. 推荐的 Trace 属性</h2>
+<pre><code class="language-plaintext">trace_id
+span_id
+parent_span_id
+run_id
+task_id
+workflow_name
+workflow_version
+agent_name
+model_name
+tool_name
+tool_call_id
+status
+duration
+retry_count
+input_tokens
+output_tokens
+estimated_cost
+error_code
+approval_status
+checkpoint_id</code></pre>
+<p>多租户平台还需要 tenant_id、project_id 等关联信息，但应使用内部 ID、脱敏值或哈希，并避免把高基数字段直接作为 Metric Label。</p>
+<h2>13. 敏感数据与隐私</h2>
+<p>以下内容可能包含敏感信息：</p>
+<ul><li>System Prompt、用户完整输入和模型完整输出；</li><li>工具参数、工具结果和数据库记录；</li><li>RAG 检索文本和企业文档正文；</li><li>Authorization Header、Cookie、Access Token 和密钥；</li><li>邮箱、手机号、身份证号等个人信息。</li></ul>
+<p>生产环境应默认禁止记录密钥和认证头，对 Prompt 与工具参数按字段脱敏，设置采样率、保留期限、租户隔离和访问审计。必要时只记录摘要、长度、分类或内容哈希。</p>
+<h2>14. 从 Trace 聚合哪些指标</h2>
+<p>类别</p>
+<p>指标</p>
+<p>质量</p>
+<p>任务成功率、工具选择准确率、人工接管率、循环终止率</p>
+<p>性能</p>
+<p>端到端 P50/P95/P99、首 Token、模型、RAG、工具延迟</p>
+<p>成本</p>
+<p>单任务 Token、调用次数、模型费用、租户费用</p>
+<p>稳定性</p>
+<p>工具失败率、限流率、超时率、重试率、恢复率</p>
+<p>安全</p>
+<p>Guardrail 触发率、越权阻断率、高风险审批率</p>
+<h2>15. Trace 如何帮助排查问题</h2>
+<h3>15.1 回答特别慢</h3>
+<pre><code class="language-plaintext">LLM: 1.2 秒
+RAG: 0.3 秒
+工具 RPC: 18 秒</code></pre>
+<p>问题明显在工具服务，而不是模型。</p>
+<h3>15.2 重复发送邮件</h3>
+<pre><code class="language-plaintext">send_email → timeout → retry → send_email</code></pre>
+<p>这通常说明写操作缺少稳定幂等键，或超时后的状态判断不正确。</p>
+<h3>15.3 Agent 陷入循环</h3>
+<pre><code class="language-plaintext">search → model → search → model → search</code></pre>
+<p>应增加最大步骤数、重复调用检测、结果去重和费用预算。</p>
+<h3>15.4 引用了其他租户文档</h3>
+<pre><code class="language-plaintext">RAG 检索 → tenant_filter 缺失 → 命中其他租户文档</code></pre>
+<p>Trace 可以证明问题发生在权限过滤，而不是简单归因于模型幻觉。</p>
+<h2>16. Trace 与评测的关系</h2>
+<p>失败 Trace 可以沉淀为评测样本，包括输入、期望工具、实际工具、参数、工具结果、最终答案和错误位置。</p>
+<pre><code class="language-plaintext">生产失败 Trace
+    ↓ 提取样本
+回归评测集
+    ↓ 修改模型、Prompt、工具或工作流
+重新运行
+    ↓
+比较轨迹与最终结果</code></pre>
+<ul><li><strong>Trace：</strong>回答这一次发生了什么。</li><li><strong>Evaluation：</strong>回答多次运行整体表现如何。</li><li><strong>Monitoring：</strong>回答生产系统是否正在恶化。</li></ul>
+<h2>17. Agent 平台推荐的 Span 结构</h2>
+<pre><code class="language-plaintext">Trace: agent.run
+├── authenticate
+├── load_tenant_config
+├── load_checkpoint
+├── agent.turn
+│   └── llm.generate
+├── rag.retrieve
+├── tool.execute
+│   ├── authorize
+│   └── rpc.call
+├── save_checkpoint
+├── guardrail
+├── human_approval
+└── final_response</code></pre>
+<p>每个用户任务生成 run_id 和 trace_id；模型、工具、RAG、RPC 与队列创建独立 Span；工作流和 Prompt 都记录版本；写操作额外记录幂等键与审批状态。</p>
+<h2>18. 生产落地检查清单</h2>
+<p class="todo">☐ 一个用户任务是否对应清晰的 trace_id 和 run_id？</p>
+<p class="todo">☐ 模型、RAG、工具、RPC、数据库和审批是否有独立 Span？</p>
+<p class="todo">☐ Trace Context 是否跨 HTTP、RPC 和消息队列传播？</p>
+<p class="todo">☐ 是否记录模型、Prompt、工具和工作流版本？</p>
+<p class="todo">☐ 是否记录 Token、费用、步骤数、重试和 Deadline？</p>
+<p class="todo">☐ 写操作是否记录幂等键和审批状态？</p>
+<p class="todo">☐ 是否对 Prompt、参数、结果和个人信息脱敏？</p>
+<p class="todo">☐ 是否设置采样率、保留时间和租户访问隔离？</p>
+<p class="todo">☐ Trace 是否能够转化为回归评测样本？</p>
+<p class="todo">☐ 是否建立延迟、成功率、成本和安全指标看板？</p>
+<h2>19. 面试回答模板</h2>
+<p>Agent Trace 是对一次 Agent 任务端到端执行过程的链路追踪。一个 Trace 表示完整任务，内部由多个具有父子关系的 Span 组成，分别记录模型调用、RAG 检索、工具执行、RPC、Handoff、Guardrail、人工审批和状态持久化等步骤。它可以帮助定位延迟、错误、重复副作用和工具调用循环，并统计 Token、费用及任务成功率。生产环境需要通过 Trace Context 跨 HTTP、RPC 和消息队列传播，同时对 Prompt、工具参数、Token 和用户数据进行脱敏与采样。</p>
+<h2>20. 官方参考</h2>
+<h2>21. 一句话总结</h2>
+<p><strong>Log 记录事件，Metric 观察整体，Trace 还原一次 Agent 任务完整走过的路径。</strong></p>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

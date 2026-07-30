@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Loop：智能体如何持续决策并完成任务 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.07.30</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">Agent Loop：智能体如何持续决策并完成任务</h1>
+    <div class="article-body">
+<p><strong>核心结论：</strong>Agent Loop 是智能体的执行主干。运行时把目标和当前状态交给模型，模型决定调用工具、请求人工介入、移交其他 Agent 或生成最终答案；工具结果随后回到上下文中，驱动下一轮决策。</p>
+<h2>1. Agent Loop 是什么</h2>
+<p>普通聊天模型通常完成一次“输入—生成—结束”。Agent 面对复杂目标时，往往无法一次得到最终答案，需要根据真实执行结果持续调整下一步行动。这个反复进行“决策—执行—观察—更新状态”的过程，就是 Agent Loop。</p>
+<pre><code class="language-plaintext">用户目标
+  ↓
+读取上下文与当前状态
+  ↓
+模型判断下一步行动
+  ├─ 生成最终答案 → 结束
+  ├─ 请求用户输入 → 暂停
+  ├─ 请求人工审批 → 暂停
+  ├─ 移交其他 Agent → 切换执行者
+  └─ 调用工具 → 执行工具 → 观察结果 → 更新状态 → 下一轮</code></pre>
+<p>因此，Agent 并不只是一个更强的语言模型。一个完整 Agent 系统通常由模型、工具、上下文、状态、循环控制器、安全策略和可观测性共同组成。</p>
+<h2>2. 一个完整例子：天气与日历提醒</h2>
+<p>假设用户提出：“查询北京明天的天气，如果下雨，就在日历中创建一个带伞提醒。”这不是单次文本生成任务，因为模型必须先知道天气，才能决定是否创建日程。</p>
+<p><strong>第一轮：</strong>模型识别出缺少天气信息，产生 <code>get_weather(city=&quot;北京&quot;, date=&quot;明天&quot;)</code> 工具调用。</p>
+<p><strong>执行与观察：</strong>运行时校验参数、执行天气工具，获得“北京明天有小雨”。工具结果被追加到当前运行上下文。</p>
+<p><strong>第二轮：</strong>模型根据“小雨”判断条件成立，产生 <code>create_calendar_event(title=&quot;出门记得带伞&quot;, time=&quot;明天 08:00&quot;)</code>。</p>
+<p><strong>再次执行与观察：</strong>日历工具返回创建成功及事件 ID。运行时把结果交回模型。</p>
+<p><strong>第三轮：</strong>模型确认用户目标已经完成，输出最终答复：“北京明天有小雨，我已经创建了明早 8 点的带伞提醒。”</p>
+<p>同一次用户请求触发了多次模型调用和多次状态更新，但它们共同属于一次逻辑上的 Agent Run。</p>
+<h2>3. Agent Loop 的六个核心部分</h2>
+<h3>3.1 Goal：目标</h3>
+<p>目标描述最终要达到的结果，例如“分析订单服务最近变慢的原因并生成报告”。它通常不是一个固定函数能直接解决的问题，因此模型需要决定查询哪些指标、是否查看日志和 Trace、何时信息已经足够，以及最终输出应采用什么形式。</p>
+<h3>3.2 Context：上下文</h3>
+<p>上下文是模型在当前一轮能够看到的信息，一般包括系统指令、用户目标、对话历史、已经完成的步骤、工具调用与返回结果、当前任务状态、可用工具、权限、预算和安全约束。上下文不等于数据库中的全部信息，而是运行时为本轮模型调用选择并组装的输入。</p>
+<p>上下文过少会造成决策缺乏依据；上下文过多则会增加成本、延迟和干扰。因此生产系统还需要裁剪、摘要、检索和优先级控制。</p>
+<h3>3.3 Decision：决策</h3>
+<p>每一轮模型通常需要在几种行为中选择：调用工具、生成最终答案、请求用户补充信息、请求人工审批、移交其他 Agent，或者因安全与权限原因停止。模型只产生结构化的行动请求，并不直接操作数据库、云服务器或日历。</p>
+<pre><code class="language-json">{
+  &quot;name&quot;: &quot;query_database&quot;,
+  &quot;arguments&quot;: {
+    &quot;sql&quot;: &quot;SELECT status, COUNT(*) FROM orders GROUP BY status&quot;
+  }
+}</code></pre>
+<h3>3.4 Action：执行</h3>
+<p>Agent Runtime 根据工具名称找到对应 Python 函数，并在真正执行之前完成参数校验、身份鉴别、权限判断、租户隔离、限流、超时控制和必要的人工审批。模型提出调用不代表系统必须无条件执行。</p>
+<h3>3.5 Observation：观察</h3>
+<p>工具返回值就是 Observation。它应使用稳定、结构化、可区分成功与失败的格式。模型根据观察结果判断任务是否完成、是否需要继续查询、是否需要换一种方法或者是否应向用户说明失败。</p>
+<pre><code class="language-json">{
+  &quot;success&quot;: true,
+  &quot;data&quot;: {
+    &quot;pending_orders&quot;: 428,
+    &quot;failed_orders&quot;: 17
+  },
+  &quot;error&quot;: null
+}</code></pre>
+<h3>3.6 Termination：结束</h3>
+<p>循环必须具备明确结束条件。正常结束是模型生成了满足输出约束的最终答案；异常结束则可能来自最大轮数、整体超时、费用上限、连续工具失败、安全规则、用户取消或需要人工介入。没有这些边界，Agent 可能陷入重复查询或无限重试。</p>
+<h2>4. Python：实现一个最小 Agent Loop</h2>
+<p>下面的代码省略了具体模型 SDK，但保留了最重要的控制逻辑。关键点是：工具结果必须以对应的 <code>tool_call_id</code> 重新加入消息上下文，再进入下一轮模型调用。</p>
+<pre><code class="language-php">MAX_TURNS = 8
+
+
+def run_agent(user_input: str) -&gt; str:
+    messages = [
+        {
+            &quot;role&quot;: &quot;system&quot;,
+            &quot;content&quot;: &quot;你是一个可以使用受控工具完成任务的助手。&quot;,
+        },
+        {&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: user_input},
+    ]
+
+    for turn in range(MAX_TURNS):
+        response = call_llm(
+            messages=messages,
+            tools=TOOL_SCHEMAS,
+        )
+
+        messages.append(response.message)
+
+        if response.final_answer is not None:
+            return response.final_answer
+
+        for tool_call in response.tool_calls:
+            try:
+                arguments = validate_arguments(
+                    tool_call.name,
+                    tool_call.arguments,
+                )
+                authorize_tool_call(
+                    tool_name=tool_call.name,
+                    arguments=arguments,
+                )
+                result = execute_tool(
+                    name=tool_call.name,
+                    arguments=arguments,
+                )
+                tool_output = {
+                    &quot;success&quot;: True,
+                    &quot;data&quot;: result,
+                }
+            except Exception as error:
+                tool_output = {
+                    &quot;success&quot;: False,
+                    &quot;error&quot;: classify_error(error),
+                }
+
+            messages.append({
+                &quot;role&quot;: &quot;tool&quot;,
+                &quot;tool_call_id&quot;: tool_call.id,
+                &quot;content&quot;: serialize(tool_output),
+            })
+
+    raise RuntimeError(&quot;Agent 超过最大执行轮数&quot;)</code></pre>
+<p>只有 Function Calling 而没有后续循环时，模型只是提出了一次函数调用。运行时执行工具、把结果反馈给模型并继续决策之后，才形成完整 Agent Loop。</p>
+<h2>5. Agent Loop 是一个状态机</h2>
+<p>代码上它经常表现为 <code>for</code> 或 <code>while</code>，但更准确的理解是有限状态机。每次事件都会推动任务从一个状态迁移到另一个状态。</p>
+<p>当前状态</p>
+<p>事件</p>
+<p>下一状态</p>
+<p>说明</p>
+<p>RUNNING</p>
+<p>产生工具调用</p>
+<p>RUNNING</p>
+<p>执行工具并继续循环</p>
+<p>RUNNING</p>
+<p>产生最终输出</p>
+<p>COMPLETED</p>
+<p>任务正常完成</p>
+<p>RUNNING</p>
+<p>需要审批</p>
+<p>PAUSED</p>
+<p>保存状态并等待审批</p>
+<p>RUNNING</p>
+<p>缺少用户信息</p>
+<p>WAITING</p>
+<p>向用户提问并暂停</p>
+<p>RUNNING</p>
+<p>可恢复错误</p>
+<p>RUNNING</p>
+<p>按策略重试或更换方案</p>
+<p>RUNNING</p>
+<p>不可恢复错误</p>
+<p>FAILED</p>
+<p>记录原因并停止</p>
+<p>RUNNING</p>
+<p>超过限制</p>
+<p>FAILED</p>
+<p>防止无限循环和成本失控</p>
+<p>状态至少应包含运行 ID、用户和租户、消息历史、轮数、工具错误次数、任务状态、最终输出、预算以及待审批动作。长任务还需要将状态持久化，使进程重启后能够恢复。</p>
+<h2>6. 工具失败、重试与幂等</h2>
+<p>工具失败不能统一处理。网络超时、临时限流等通常可以退避重试；参数错误、权限不足和资源不存在通常不应原样重试，而应修正参数、请求授权或向用户说明。模型可以参与选择替代方案，但重试次数、时间和高风险操作规则应由确定性代码控制。</p>
+<p>付款、创建订单、发送消息、删除资源等带副作用的工具不能因超时而盲目重试。超时只说明客户端没有拿到结果，并不能证明服务端没有执行。此时应先使用业务请求 ID 查询真实状态，并为写操作设置幂等键。</p>
+<pre><code class="language-php">result = create_order(
+    user_id=&quot;user_123&quot;,
+    product_id=&quot;product_456&quot;,
+    idempotency_key=&quot;run_789-create-order&quot;,
+)</code></pre>
+<p>同一个逻辑动作重复提交相同幂等键时，服务端应返回第一次执行结果，而不是再次创建资源。</p>
+<h2>7. 人工审批与暂停恢复</h2>
+<p>Agent 自主执行不等于无限权限。只读查询通常可以自动进行；可恢复的普通写操作可以在授权范围内执行并记录 Trace；支付、删除、生产环境变更和对外发送等高风险动作应进入人工审批。</p>
+<pre><code class="language-php">if tool_call.name in HIGH_RISK_TOOLS:
+    state.status = &quot;PAUSED&quot;
+    state.pending_action = tool_call
+    save_state(state)
+    return ApprovalRequest(tool_call)</code></pre>
+<p>审批通过后应从已保存状态继续，而不是从头重跑整个任务。恢复时还要重新检查权限、资源版本和参数时效，避免用户批准的是旧状态下的操作。</p>
+<h2>8. Agent Loop、Workflow 与 Chatbot</h2>
+<p>类型</p>
+<p>运行方式</p>
+<p>下一步由谁决定</p>
+<p>适用场景</p>
+<p>Chatbot</p>
+<p>一问一答</p>
+<p>用户</p>
+<p>解释、问答、简单生成</p>
+<p>Workflow</p>
+<p>预先定义固定步骤与分支</p>
+<p>程序</p>
+<p>审批、退款、数据流水线</p>
+<p>Agent Loop</p>
+<p>根据执行结果动态行动</p>
+<p>模型与运行时共同决定</p>
+<p>研究、排障、开放式任务</p>
+<p>固定退款流程更适合 Workflow，因为每一步都有明确业务规则；分析服务性能问题可能需要动态选择监控、日志、Trace、数据库或部署记录，更适合 Agent Loop。生产系统通常采用混合架构：确定性 Workflow 管住关键流程，只在需要判断的节点调用 Agent。</p>
+<h2>9. Agent Loop 与 Tool Calling、State、Trace 的关系</h2>
+<p><strong>Tool Calling</strong> 是循环中的动作接口，解决“模型如何请求外部能力”；<strong>State</strong> 保存循环已经进行到哪里；<strong>Agent Loop</strong> 负责推动任务继续运行；<strong>Trace</strong> 则记录每一轮模型调用、工具执行、错误和状态变化。</p>
+<pre><code class="language-plaintext">Trace：分析订单服务故障
+├─ Span：模型决定查询监控指标
+├─ Span：执行 get_metrics
+├─ Span：模型决定查询错误日志
+├─ Span：执行 search_logs
+├─ Span：模型判断数据库连接池不足
+└─ Span：生成最终报告</code></pre>
+<p>Trace 用于回答“发生了什么、在哪一步失败、耗时和成本是多少”，不应保存或展示模型的私有思维链。生产记录应对完整提示词、凭证、Authorization Header、个人信息和原始工具结果进行脱敏或限制采集。</p>
+<h2>10. 并行工具调用</h2>
+<p>如果多个工具彼此独立，例如同时查询 CPU、内存和数据库连接池，可以并行执行以降低总延迟。但如果第二个工具依赖第一个结果，则必须串行。运行时还需要限制并发数，避免模型一次产生大量调用压垮下游服务。</p>
+<pre><code class="language-php">results = await asyncio.gather(
+    get_cpu_metrics(service_id),
+    get_memory_metrics(service_id),
+    get_db_pool_metrics(service_id),
+)</code></pre>
+<p>并行执行完成后，应按 <code>tool_call_id</code> 将每个结果与原调用准确关联，再一起反馈给模型。</p>
+<h2>11. 生产级控制清单</h2>
+<p class="todo">☐ 设置最大循环轮数 max_turns</p>
+<p class="todo">☐ 设置单工具超时与整次运行超时</p>
+<p class="todo">☐ 按错误类型配置退避、重试与熔断</p>
+<p class="todo">☐ 为副作用写操作设计幂等键</p>
+<p class="todo">☐ 校验工具参数和结构化返回值</p>
+<p class="todo">☐ 实施用户、角色和租户权限检查</p>
+<p class="todo">☐ 高风险动作支持人工审批与暂停恢复</p>
+<p class="todo">☐ 持久化 Run State，支持崩溃后恢复</p>
+<p class="todo">☐ 限制 Token、费用、轮数和工具并发</p>
+<p class="todo">☐ 支持用户取消与资源清理</p>
+<p class="todo">☐ 记录 Trace、指标和分类错误</p>
+<p class="todo">☐ 对提示词、凭证、个人信息和工具结果脱敏</p>
+<h2>12. 常见错误认识</h2>
+<p><strong>误区一：Agent Loop 就是一个 while 循环。</strong>while 只是代码形式，真正难点是状态、边界、权限、错误恢复和可观测性。</p>
+<p><strong>误区二：模型可以直接执行工具。</strong>模型只提出调用意图，真实执行必须由受控运行时完成。</p>
+<p><strong>误区三：工具失败就让模型无限重试。</strong>重试策略应由确定性代码限制，并区分副作用操作。</p>
+<p><strong>误区四：步骤越多越智能。</strong>更多轮次意味着更高的延迟、成本和出错概率；能用确定性 Workflow 解决的问题不必强行 Agent 化。</p>
+<p><strong>误区五：把所有历史消息都塞进模型。</strong>上下文窗口有限，生产系统需要摘要、检索、裁剪和重要性排序。</p>
+<h2>13. 面试回答模板</h2>
+<p>Agent Loop 是智能体完成复杂任务的核心执行机制。运行时把用户目标和当前上下文传给模型，模型决定生成最终答案、调用工具、请求人工介入或移交其他 Agent。如果模型调用工具，运行时负责参数校验、权限检查和真实执行，再把工具结果追加到上下文中重新调用模型，直到任务完成。生产环境还需要最大轮数、超时、分类重试、幂等、状态持久化、人工审批和 Trace，以防止无限循环、重复执行和越权操作。</p>
+<h2>14. 官方参考</h2>
+<h2>15. 一句话总结</h2>
+<p><strong>Agent Loop 就是让模型在“决定行动—执行工具—观察结果—更新状态”的受控循环中，逐步完成无法一次回答的复杂任务。</strong></p>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

@@ -1,7 +1,15 @@
 {
-  "generated_at": "2026-07-29T23:38:30.062538+00:00",
-  "count": 41,
+  "generated_at": "2026-07-30T20:54:26.369240+00:00",
+  "count": 42,
   "articles": [
+    {
+      "title": "Agent Loop：智能体如何持续决策并完成任务",
+      "date": "2026.07.30",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "核心结论：Agent Loop 是智能体的执行主干。运行时把目标和当前状态交给模型，模型决定调用工具、请求人工介入、移交其他 Agent 或生成最终答案；工具结果随后回到上下文中，驱动下一轮决策。",
+      "url": "/articles/Agent-Loop-eee64826.html"
+    },
     {
       "title": "Agent Trace：从执行链路到可观测性",
       "date": "2026.07.28",

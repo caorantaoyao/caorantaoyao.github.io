@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent State 与 Memory：智能体如何保存进度、会话与长期记忆 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.07.31</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">Agent State 与 Memory：智能体如何保存进度、会话与长期记忆</h1>
+    <div class="article-body">
+<p><strong>核心结论：</strong>State 让 Agent 知道“当前任务做到哪里”，Session 让它知道“这次会话聊过什么”，Long-term Memory 让它知道“过去有哪些信息值得未来继续使用”，Context 决定“这一轮模型实际能够看到什么”。</p>
+<h2>1. 为什么 Agent 需要状态与记忆</h2>
+<p>Agent Loop 解决的是如何持续决定下一步，但循环要可靠运行，还必须知道已经完成了哪些步骤、当前是否在等待审批、工具是否执行成功、用户之前说过什么，以及哪些历史信息值得在未来任务中复用。如果这些信息只保存在 Python 进程内存中，服务重启、任务暂停或用户开启新会话后就会丢失。</p>
+<p>一个成熟的 Agent 平台需要同时管理执行状态、会话历史、长期记忆和模型上下文。它们都可能被保存，但生命周期、查询方式和用途不同，不能混成一个概念。</p>
+<h2>2. 四个核心概念</h2>
+<pre><code class="language-plaintext">持久化存储
+├─ Run State：当前任务进行到哪里
+├─ Session Memory：当前会话之前聊了什么
+└─ Long-term Memory：跨会话仍有价值的信息
+                  ↓ 检索与筛选
+LLM Context：这一轮真正发送给模型的内容</code></pre>
+<h3>2.1 Run State：运行状态</h3>
+<p>Run State 是一次任务的执行快照，通常包含运行 ID、用户与租户、当前步骤、循环轮数、已经完成的工具调用、错误次数、待审批动作、预算和最终输出。它服务于 Agent Loop 推进、暂停恢复、故障重试与并发控制。</p>
+<h3>2.2 Session Memory：会话记忆</h3>
+<p>Session Memory 保存同一会话中的消息历史。例如用户先说“我的主要开发语言是 Python”，下一轮再问“我主要使用什么语言”，运行时会取出相同 Session 的历史并放进模型上下文，模型才能回答 Python。</p>
+<h3>2.3 Long-term Memory：长期记忆</h3>
+<p>长期记忆保存跨会话仍然有价值的信息，例如用户偏好、项目技术栈、长期目标、历史任务结果和从失败中总结的经验。用户即使新建会话，Agent 仍可以根据身份与当前问题检索这些记忆。</p>
+<h3>2.4 LLM Context：模型上下文</h3>
+<p>Context 是当前一轮真正发送给模型的信息。数据库里保存了信息，并不代表模型自动知道；运行时必须完成存储、检索、筛选和上下文组装。还要区分本地 Context 与 LLM Context：用户 ID、数据库连接和权限对象可以只供 Python 代码使用，不应默认发送给模型。</p>
+<h2>3. State 与 Memory 的区别</h2>
+<p>对比项</p>
+<p>State</p>
+<p>Memory</p>
+<p>关注问题</p>
+<p>当前任务进行到哪里</p>
+<p>过去有哪些信息值得复用</p>
+<p>生命周期</p>
+<p>一次 Run 或 Workflow</p>
+<p>多轮会话甚至跨会话</p>
+<p>典型内容</p>
+<p>步骤、轮数、审批、工具结果</p>
+<p>用户偏好、事实、历史经验</p>
+<p>更新频率</p>
+<p>每个执行步骤都可能更新</p>
+<p>发现有价值信息时更新</p>
+<p>读取方式</p>
+<p>通常按 run_id 精确读取</p>
+<p>按用户、主题、时间和相关性检索</p>
+<p>主要用途</p>
+<p>任务推进、暂停恢复、故障重试</p>
+<p>个性化、连续服务、经验复用</p>
+<p>可以用三个问题快速判断：“现在执行到第几步”属于 State；“用户习惯使用什么语言”属于 Memory；“这一轮给模型看哪些内容”属于 Context。</p>
+<h2>4. Python：定义 Run State</h2>
+<pre><code class="language-php">from datetime import datetime
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field
+
+
+class PendingAction(BaseModel):
+    tool_call_id: str
+    tool_name: str
+    arguments: dict[str, Any]
+    idempotency_key: str
+
+
+class AgentRunState(BaseModel):
+    run_id: str
+    tenant_id: str
+    user_id: str
+    session_id: str
+
+    status: Literal[
+        &quot;running&quot;,
+        &quot;waiting_user&quot;,
+        &quot;waiting_approval&quot;,
+        &quot;completed&quot;,
+        &quot;failed&quot;,
+        &quot;cancelled&quot;,
+    ] = &quot;running&quot;
+
+    current_step: str | None = None
+    turn_count: int = 0
+    tool_error_count: int = 0
+    completed_tool_calls: list[str] = Field(default_factory=list)
+    pending_action: PendingAction | None = None
+    final_output: str | None = None
+    version: int = 1
+    updated_at: datetime</code></pre>
+<p><code>version</code> 可以用于乐观锁，防止两个 Worker 同时恢复和修改同一个任务。State 中不要直接保存数据库连接、客户端对象或密钥；恢复时应通过依赖注入重新构造这些运行资源。</p>
+<h2>5. Checkpoint：为什么任务可以暂停后继续</h2>
+<p>假设退款 Agent 的流程是“查询订单—检查规则—等待人工批准—执行退款—通知用户”。进入人工审批后，原来的 HTTP 请求早已结束，服务甚至可能在第二天重启。因此系统必须把关键步骤保存成 Checkpoint。</p>
+<pre><code class="language-json">{
+  &quot;run_id&quot;: &quot;run_001&quot;,
+  &quot;status&quot;: &quot;waiting_approval&quot;,
+  &quot;current_step&quot;: &quot;refund_order&quot;,
+  &quot;order_id&quot;: &quot;order_123&quot;,
+  &quot;pending_tool_call_id&quot;: &quot;call_456&quot;,
+  &quot;approval_status&quot;: &quot;pending&quot;,
+  &quot;version&quot;: 7
+}</code></pre>
+<p>审批通过后，运行时读取 Checkpoint，校验版本，重新检查权限与订单当前状态，然后继续执行。恢复任务不能简单地从头重跑，否则可能重复发送消息、创建订单或扣款。</p>
+<h2>6. Session Memory：保存多轮会话</h2>
+<p>最直接的方案是以 <code>tenant_id + user_id + session_id</code> 为范围保存消息。用户可能同时拥有多个会话，因此不能把 user_id 直接当作 session_id。</p>
+<pre><code class="language-rust">CREATE TABLE conversation_messages (
+    id          BIGSERIAL PRIMARY KEY,
+    tenant_id   TEXT NOT NULL,
+    user_id     TEXT NOT NULL,
+    session_id  TEXT NOT NULL,
+    role        TEXT NOT NULL,
+    content     JSONB NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_messages_session
+ON conversation_messages (
+    tenant_id,
+    user_id,
+    session_id,
+    created_at
+);</code></pre>
+<p>读取时通常只取最近若干条消息，再结合较早历史的摘要，避免把全部历史无限塞进模型。</p>
+<h2>7. Python：使用 Session 保存会话</h2>
+<pre><code class="language-php">from agents import Agent, Runner, SQLiteSession
+
+
+agent = Agent(
+    name=&quot;Recruitment Assistant&quot;,
+    instructions=&quot;帮助用户准备计算机秋招。&quot;,
+)
+
+session = SQLiteSession(
+    &quot;tenant_a:user_123:session_001&quot;,
+    &quot;agent_sessions.db&quot;,
+)
+
+await Runner.run(
+    agent,
+    &quot;我的主要开发语言是 Python。&quot;,
+    session=session,
+)
+
+result = await Runner.run(
+    agent,
+    &quot;我的主要开发语言是什么？&quot;,
+    session=session,
+)
+
+print(result.final_output)</code></pre>
+<p>SQLite 适合本地开发。单服务器 Agent 平台如果已经使用 PostgreSQL，可以直接通过 SQLAlchemy Session 保存会话，不必为了记忆额外引入很多中间件。</p>
+<h2>8. 为什么不能发送全部历史消息</h2>
+<p>随着消息不断增加，每轮都发送全部历史会导致 Token 成本和延迟上升、上下文超过限制、旧信息干扰当前任务以及敏感数据暴露范围扩大。生产系统通常使用分层上下文：</p>
+<pre><code class="language-plaintext">系统指令
++ 当前用户请求
++ 最近 10～30 条原始消息
++ 较早对话的结构化摘要
++ 与当前请求相关的长期记忆
++ RAG 检索出的知识
++ 当前任务状态摘要
++ 必要的工具结果</code></pre>
+<p>上下文管理的核心不是保存得越多，而是每一轮选择得越准确。</p>
+<h2>9. 长期记忆的三种类型</h2>
+<p><strong>Semantic Memory（事实记忆）。</strong>保存相对稳定的事实，例如“用户主要使用 Python”“用户正在准备计算机秋招”。</p>
+<p><strong>Episodic Memory（经历记忆）。</strong>保存过去发生的事件，例如“用户已经学习 Agent Trace”“上次部署因连接池配置错误失败”。</p>
+<p><strong>Procedural Memory（方法记忆）。</strong>保存以后应该如何行动的经验，例如“秋招知识文档应包含 Python 示例与面试回答”“发送外部邮件前必须审批”。</p>
+<h2>10. 什么信息值得写入长期记忆</h2>
+<p>不是用户说的每句话都应该永久保存。“今天有点困”通常没有长期价值；“我的所有项目都使用 Python 3.12”可能值得保存。写入前应判断未来是否会复用、是否足够稳定、来源是否可信、是否敏感、是否已存在冲突记忆，以及是否需要过期时间。</p>
+<pre><code class="language-php">class MemoryCandidate(BaseModel):
+    memory_type: str
+    content: str
+    confidence: float
+    sensitivity: str
+    expires_at: datetime | None
+
+
+candidate = await extract_memory(message)
+
+if candidate.confidence &lt; 0.8:
+    return
+
+if candidate.sensitivity == &quot;secret&quot;:
+    return
+
+await memory_store.upsert(candidate)</code></pre>
+<p>模型可以负责提取候选记忆，但最终是否写入、保存多久和写入哪个命名空间，应由确定性规则控制。</p>
+<h2>11. 长期记忆如何召回</h2>
+<p>记忆较少时可以按字段精确读取；记忆较多时可以使用混合召回，将租户和用户过滤、关键词检索、向量相似度、时间新鲜度、重要性、可信度和使用频率结合起来。</p>
+<pre><code class="language-php">memories = await memory_store.search(
+    tenant_id=tenant_id,
+    user_id=user_id,
+    query=current_request,
+    memory_types=[&quot;preference&quot;, &quot;fact&quot;, &quot;experience&quot;],
+    limit=5,
+)</code></pre>
+<p>向量相似度只能解决“语义是否接近”，不能代替权限过滤、时间有效性和事实可信度。检索时必须先限制租户和用户范围。</p>
+<h2>12. 长期 Memory 与 RAG 的区别</h2>
+<p>对比项</p>
+<p>Memory</p>
+<p>RAG</p>
+<p>信息来源</p>
+<p>用户交互和 Agent 经历</p>
+<p>文档、网页和知识库</p>
+<p>主要内容</p>
+<p>偏好、历史任务、经验</p>
+<p>外部领域知识</p>
+<p>个性化</p>
+<p>通常与用户或租户相关</p>
+<p>不一定个性化</p>
+<p>更新方式</p>
+<p>交互中持续提取与修正</p>
+<p>随知识源同步或重新索引</p>
+<p>典型问题</p>
+<p>这个用户过去做过什么</p>
+<p>Casbin 的元模型是什么</p>
+<p>“用户使用 Python”属于 Memory；“Python GIL 的工作原理”属于 RAG 知识；“用户上次询问过 GIL”属于经历记忆。不要把消息、偏好和知识文档不加区分地塞进同一个向量库。</p>
+<h2>13. 记忆冲突、更新与遗忘</h2>
+<p>如果旧记忆是“用户使用 Python 3.11”，后来用户明确表示已升级到 3.12，系统不应同时把两者作为当前事实召回。可以用版本化记录新事实，并通过 <code>supersedes</code> 指向旧记忆。旧记录可以留作历史，但必须标记失效。</p>
+<p>长期记忆应支持更新、删除、过期、用户纠正、来源追踪、可信度和审计记录。遗忘并不是缺陷：过期和删除能够减少错误召回、降低存储成本，并满足隐私要求。</p>
+<h2>14. 单服务器 Agent 平台的存储方案</h2>
+<p>第一阶段可以只使用 PostgreSQL 作为唯一事实来源，并在需要语义检索时增加 pgvector。无需为了“记忆”同时部署多个数据库。</p>
+<pre><code class="language-plaintext">PostgreSQL
+├─ agent_runs：一次完整 Agent 任务
+├─ run_checkpoints：关键步骤状态快照
+├─ conversation_sessions：会话元数据
+├─ conversation_messages：原始消息
+├─ agent_memories：跨会话长期记忆
+├─ tool_executions：工具调用与幂等状态
+└─ approval_requests：等待人工审批的动作</code></pre>
+<p>Redis 是可选组件，适合热 Session 缓存、短期状态、任务队列和分布式锁。当并发 Worker、队列或热点读取需求明显增加后再引入；它不应成为唯一持久化来源。</p>
+<h2>15. 多租户隔离</h2>
+<p>所有 Run、Session、Message、Memory、Checkpoint 和 Tool Execution 都应包含 <code>tenant_id</code> 与 <code>user_id</code>。数据库查询、缓存键、向量检索和对象存储路径都必须携带租户边界。</p>
+<pre><code class="language-rust">SELECT *
+FROM agent_memories
+WHERE tenant_id = :tenant_id
+  AND user_id = :user_id
+ORDER BY created_at DESC;</code></pre>
+<p>建议在应用层过滤之外使用 PostgreSQL Row Level Security 作为第二层保护。不能依赖模型判断哪些数据属于当前租户。</p>
+<h2>16. Memory 的安全风险</h2>
+<p>密码、API Key、Access Token、Authorization Header、完整银行卡信息、无必要的证件数据、原始工具返回中的敏感信息和模型隐藏思维链，通常不应进入长期记忆。系统应提供最小化采集、字段级加密、保存期限、用户查看与删除、来源记录、审计日志和敏感信息检测。</p>
+<p>如果 Run State 会被序列化或跨服务传输，也要把它视为持久化数据，避免将密钥和内部连接对象写入其中。</p>
+<h2>17. 常见错误认识</h2>
+<p><strong>数据库保存了历史，模型就记得。</strong>错误。模型只能看到本轮 Context，存储和模型之间仍需要检索与组装。</p>
+<p><strong>把全部聊天记录发送给模型就是 Memory。</strong>错误。这只是未经管理的上下文堆积。</p>
+<p><strong>向量数据库就是长期记忆。</strong>错误。向量库只是检索工具，记忆还需要写入策略、命名空间、冲突更新、过期与删除。</p>
+<p><strong>State 和 Trace 是一回事。</strong>错误。State 用来继续执行，Trace 用来观察和排查；State 丢失可能导致任务无法恢复。</p>
+<p><strong>Session ID 可以直接等于 User ID。</strong>错误。一个用户可以同时拥有多个独立会话和多个任务运行。</p>
+<h2>18. 生产落地检查清单</h2>
+<p class="todo">☐ 区分 tenant_id、user_id、session_id 与 run_id</p>
+<p class="todo">☐ 关键步骤写入可恢复 Checkpoint</p>
+<p class="todo">☐ 使用版本号或锁防止同一任务并发恢复</p>
+<p class="todo">☐ 限制每轮加载的消息数量并生成历史摘要</p>
+<p class="todo">☐ 为长期记忆定义类型、来源、可信度与过期时间</p>
+<p class="todo">☐ 记忆检索先做租户与用户过滤</p>
+<p class="todo">☐ 为记忆冲突设计更新和失效规则</p>
+<p class="todo">☐ 允许用户查看、更正和删除长期记忆</p>
+<p class="todo">☐ 不在状态和记忆中保存密钥与隐藏思维链</p>
+<p class="todo">☐ 使用 Trace 观察记忆写入、召回和上下文组装</p>
+<h2>19. 面试回答模板</h2>
+<p>Agent State 保存一次任务的当前执行状态，例如当前步骤、轮数、工具结果、待审批动作和错误信息，主要用于 Agent Loop 推进、故障恢复与暂停续跑。Session Memory 保存同一会话的多轮历史，Long-term Memory 保存跨会话仍有价值的用户事实、偏好和历史经验。数据库中的信息不会自动进入模型，运行时还要根据当前请求进行检索、筛选和上下文组装。生产环境可以使用 PostgreSQL 保存状态、消息和长期记忆，通过 Checkpoint 实现恢复，并为长期记忆设计租户命名空间、可信度、过期、冲突更新与删除机制。</p>
+<h2>20. 官方参考</h2>
+<h2>21. 一句话总结</h2>
+<p><strong>State 保存任务进度，Session 保存当前会话，Long-term Memory 保存跨会话的有价值信息，而 Context 负责在每一轮把最相关、最安全的信息交给模型。</strong></p>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

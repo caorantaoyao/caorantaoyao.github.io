@@ -1,7 +1,15 @@
 {
-  "generated_at": "2026-08-04T21:01:15.162533+00:00",
-  "count": 43,
+  "generated_at": "2026-08-05T20:55:34.067021+00:00",
+  "count": 44,
   "articles": [
+    {
+      "title": "WebSocket 长连接：从握手、心跳到 Agent 实时通信",
+      "date": "2026.08.05",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "WebSocket 是一种在单个 TCP 连接上进行双向、全双工通信的应用层协议。连接建立后，客户端和服务端都可以主动发送消息，不必像普通 HTTP 那样始终由客户端先发起一次请求。",
+      "url": "/articles/WebSocket----Agent-83e40e80.html"
+    },
     {
       "title": "Agent State 与 Memory：智能体如何保存进度、会话与长期记忆",
       "date": "2026.07.31",

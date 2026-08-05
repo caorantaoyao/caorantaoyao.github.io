@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebSocket 长连接：从握手、心跳到 Agent 实时通信 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.08.05</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">WebSocket 长连接：从握手、心跳到 Agent 实时通信</h1>
+    <div class="article-body">
+<h2>1. WebSocket 长连接是什么</h2>
+<p>WebSocket 是一种在单个 TCP 连接上进行双向、全双工通信的应用层协议。连接建立后，客户端和服务端都可以主动发送消息，不必像普通 HTTP 那样始终由客户端先发起一次请求。</p>
+<p>它适合聊天、实时通知、协同编辑、在线游戏，以及 AI Agent 的流式输出、工具进度、审批请求和运行状态推送。地址通常是 <code>ws://</code>；生产环境应使用经过 TLS 加密的 <code>wss://</code>。</p>
+<p>长连接不是“连接永远不关闭”，而是连接建立后被持续复用，直到一方主动关闭、网络中断或中间设备超时。</p>
+<h2>2. 什么叫长连接</h2>
+<p>短连接通常完成一次或少量请求后就断开；长连接会在一段较长时间内保持可用。保持连接能省去频繁建立 TCP、TLS 和应用层会话的成本，也能让服务端及时向客户端推送事件。</p>
+<p>但长连接会长期占用文件描述符、内存和连接状态，因此服务器必须管理连接上限、空闲超时、心跳、背压和异常清理。</p>
+<h2>3. HTTP Upgrade 握手</h2>
+<p>WebSocket 并不是一开始就直接发送 WebSocket 帧。客户端先发起 HTTP/1.1 请求，并声明希望升级协议：</p>
+<pre><code class="language-java">GET /ws/runs/run_123 HTTP/1.1
+Host: agent.example.com
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==
+Sec-WebSocket-Version: 13</code></pre>
+<p>服务端接受后返回 <code>101 Switching Protocols</code>。从这一刻开始，同一条底层连接不再传输普通 HTTP 请求和响应，而是传输 WebSocket Frame。</p>
+<pre><code class="language-java">HTTP/1.1 101 Switching Protocols
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=</code></pre>
+<p>因此，“WebSocket 完全不是 HTTP”并不严谨：它使用 HTTP 完成初始握手，升级成功后才进入独立的 WebSocket 通信阶段。</p>
+<h2>4. 全双工与 Frame</h2>
+<p>全双工意味着同一时刻客户端和服务端都可以发送数据。协议以 Frame 为基本传输单位，常见类型包括 Text、Binary、Ping、Pong 和 Close。</p>
+<ul><li><strong>Text：</strong>通常承载 JSON 事件。</li><li><strong>Binary：</strong>适合二进制数据，但不应无节制传输大文件。</li><li><strong>Ping/Pong：</strong>检测连接活性，并帮助维持链路。</li><li><strong>Close：</strong>有序结束连接，可携带关闭码与原因。</li></ul>
+<p>一次应用消息可能由多个 Frame 组成，所以应用层不要假设一次底层读取就一定得到一条完整业务消息。</p>
+<h2>5. 连接生命周期</h2>
+<p>浏览器 WebSocket 通常经历四个状态：<code>CONNECTING</code>、<code>OPEN</code>、<code>CLOSING</code>、<code>CLOSED</code>。服务端还要处理认证失败、客户端刷新页面、网络切换、进程重启和代理主动断开等情况。</p>
+<ol><li>建立连接并完成 Upgrade。</li><li>认证用户，校验租户和资源权限。</li><li>登记连接与订阅关系。</li><li>双向收发事件，并持续做活性检测。</li><li>主动或异常断开，清理连接、订阅和临时状态。</li></ol>
+<h2>6. 心跳与 Ping/Pong</h2>
+<p>TCP 连接存在不代表对端应用仍然健康。RFC 6455 定义了 Ping 和 Pong 控制帧：收到 Ping 的一方应尽快返回 Pong。心跳可用于检测失联，并防止负载均衡器或代理因连接长期无流量而触发空闲超时。</p>
+<p>工程上需要统一三个时间参数：心跳间隔、Pong 等待时间和中间设备空闲超时。例如每 20～30 秒发一次心跳，连续若干次未收到响应则断开并重连；具体数值应以基础设施配置和业务容忍度为准。</p>
+<p>不要仅在应用层发送字符串 <code>&quot;ping&quot;</code> 就宣称实现了协议级 Ping。浏览器 JavaScript 通常不能直接构造 Ping 控制帧，因此也可设计业务层心跳消息，但客户端与服务端必须明确约定。</p>
+<h2>7. WebSocket、轮询与 SSE</h2>
+<p>方案</p>
+<p>通信方向</p>
+<p>实时性与开销</p>
+<p>适用场景</p>
+<p>普通轮询</p>
+<p>客户端周期性请求</p>
+<p>实现简单，但空请求多、延迟取决于间隔</p>
+<p>低频状态查询</p>
+<p>长轮询</p>
+<p>主要是服务端响应</p>
+<p>比普通轮询及时，但仍频繁重建请求</p>
+<p>兼容性要求高的通知</p>
+<p>SSE</p>
+<p>服务端到客户端单向</p>
+<p>基于 HTTP，支持自动重连和文本事件</p>
+<p>日志、通知、LLM 单向流式输出</p>
+<p>WebSocket</p>
+<p>双向全双工</p>
+<p>握手后开销低，但连接治理更复杂</p>
+<p>聊天、协同、Agent 双向控制</p>
+<p>如果前端只接收模型输出，SSE 往往更简单；如果用户还要实时取消任务、批准工具、修改参数或参与多方协作，WebSocket 更合适。</p>
+<h2>8. Python FastAPI 示例</h2>
+<p>下面示例展示连接建立后的关键顺序：先解析身份，再检查租户与运行权限，最后接受连接并处理消息。真实项目不应仅依赖 URL 中的 <code>run_id</code> 判断权限。</p>
+<pre><code class="language-php">from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+
+app = FastAPI()
+
+async def authenticate(websocket: WebSocket):
+    token = websocket.cookies.get(&quot;access_token&quot;)
+    if not token:
+        await websocket.close(code=4401)
+        return None
+    return await verify_token(token)
+
+@app.websocket(&quot;/ws/runs/{run_id}&quot;)
+async def run_socket(websocket: WebSocket, run_id: str):
+    user = await authenticate(websocket)
+    if user is None:
+        return
+
+    if not await can_access_run(user.id, user.tenant_id, run_id):
+        await websocket.close(code=4403)
+        return
+
+    await websocket.accept()
+    await connection_manager.connect(run_id, user.id, websocket)
+
+    try:
+        while True:
+            message = await websocket.receive_json()
+            message_type = message.get(&quot;type&quot;)
+
+            if message_type == &quot;run.cancel&quot;:
+                await cancel_run(run_id, user.id)
+            elif message_type == &quot;approval.respond&quot;:
+                await handle_approval(run_id, user.id, message)
+            else:
+                await websocket.send_json({
+                    &quot;type&quot;: &quot;error&quot;,
+                    &quot;code&quot;: &quot;unsupported_message&quot;
+                })
+    except WebSocketDisconnect:
+        await connection_manager.disconnect(run_id, user.id, websocket)</code></pre>
+<p>示例中的 <code>4401</code>、<code>4403</code> 是应用自定义关闭码，用于表达未认证和无权限；团队需要统一约定并在客户端解释。</p>
+<h2>9. Agent 平台事件协议</h2>
+<p>不要只发送随意拼接的字符串。建议定义稳定的事件信封，让前端、网关和执行器围绕同一协议协作：</p>
+<pre><code class="language-json">{
+  &quot;event_id&quot;: &quot;evt_01J...&quot;,
+  &quot;sequence&quot;: 128,
+  &quot;type&quot;: &quot;tool.completed&quot;,
+  &quot;run_id&quot;: &quot;run_123&quot;,
+  &quot;tenant_id&quot;: &quot;tenant_7&quot;,
+  &quot;timestamp&quot;: &quot;2026-08-05T10:30:00Z&quot;,
+  &quot;payload&quot;: {
+    &quot;tool_call_id&quot;: &quot;call_9&quot;,
+    &quot;tool_name&quot;: &quot;search&quot;,
+    &quot;status&quot;: &quot;succeeded&quot;
+  }
+}</code></pre>
+<p>常见事件包括 <code>run.started</code>、<code>token.delta</code>、<code>tool.started</code>、<code>tool.completed</code>、<code>approval.requested</code> 和 <code>run.completed</code>。事件名描述已经发生的事实；客户端命令则可使用 <code>run.cancel</code>、<code>approval.respond</code> 这样的祈使语义。</p>
+<h2>10. WebSocket 不等于消息队列</h2>
+<p>WebSocket 解决的是客户端与服务端之间的实时双向传输；消息队列解决的是服务之间的异步解耦、缓冲、持久化、消费确认和重试。WebSocket 默认不会替你持久化事件，也不能保证客户端离线后仍能收到历史消息。</p>
+<p>在 Agent 平台中，执行器可以把事件写入 Redis Streams、NATS、Kafka 或 RabbitMQ；WebSocket 网关消费事件，再推送给当前在线的浏览器。二者是互补关系。</p>
+<h2>11. 断线重连与事件补发</h2>
+<p>移动网络切换、电脑休眠、服务器发布都会让连接断开。客户端应使用指数退避加随机抖动重连，避免大量客户端同时重连形成惊群。</p>
+<pre><code class="language-plaintext">第 1 次：约 1 秒后重连
+第 2 次：约 2 秒后重连
+第 3 次：约 4 秒后重连
+……设置最大等待时间，并加入随机抖动</code></pre>
+<p>若业务不能丢事件，客户端重连时携带 <code>last_sequence</code>。服务端从持久化事件流中补发 <code>sequence &gt; last_sequence</code> 的事件，再切换到实时推送。若历史已过期，则返回快照并从新的序号继续。</p>
+<h2>12. 可靠性、顺序与幂等</h2>
+<p>单条 WebSocket 连接上的帧具有顺序，但业务事件可能来自多个执行器、跨多个实例转发，重连补发也可能产生重复。因此可靠性必须由应用层协议补齐。</p>
+<ul><li>使用单调递增的 <code>sequence</code> 检测乱序和缺口。</li><li>使用全局唯一 <code>event_id</code> 去重。</li><li>客户端命令携带 <code>request_id</code>，服务端按幂等键避免重复取消、重复审批或重复创建任务。</li><li>关键状态最终以数据库快照为准，实时事件负责快速更新界面。</li></ul>
+<h2>13. 多实例扩容</h2>
+<p>一个 WebSocket 连接只存在于某个网关进程中。Agent 执行器若在另一台机器完成工具调用，不能直接访问该进程内存。因此需要把“执行事件”和“在线连接”分开管理。</p>
+<pre><code class="language-plaintext">Agent Worker → 消息总线 → WebSocket Gateway A → 浏览器 A
+                         ↘ WebSocket Gateway B → 浏览器 B</code></pre>
+<p>网关维护 <code>user_id/run_id → connection</code> 的本地映射，并在共享系统中登记连接所在实例或订阅相同主题。消息总线将事件送达正确网关，网关再推送到浏览器。负载均衡器可以使用粘性会话降低迁移复杂度，但不能代替共享事件系统。</p>
+<h2>14. 背压</h2>
+<p>如果 Agent 产生事件的速度超过客户端消费速度，发送缓冲会不断增长，最终耗尽内存。可以采取以下策略：</p>
+<ul><li>为每个连接设置有界队列，超限时关闭或降级。</li><li>合并高频的 <code>token.delta</code>，按时间窗口批量发送。</li><li>对可丢弃的进度事件做采样；完成、错误、审批等关键事件不得静默丢弃。</li><li>限制单消息大小、每秒消息数和并发订阅数。</li><li>让客户端报告处理进度，必要时暂停或降低生产速率。</li></ul>
+<h2>15. 认证与安全</h2>
+<ul><li>生产环境使用 <code>wss://</code>，避免令牌和业务数据明文传输。</li><li>握手阶段验证登录态；连接建立后仍要对每条命令做资源级、租户级授权。</li><li>验证浏览器的 <code>Origin</code>，防止跨站 WebSocket 劫持。</li><li>尽量使用安全 Cookie、短期一次性票据或子协议传递凭证，避免把长期 Token 放进 URL 和日志。</li><li>校验 JSON Schema、消息类型、长度和频率，不信任客户端输入。</li><li>连接断开、权限撤销或租户切换时立即清理订阅。</li></ul>
+<h2>16. 常见错误认识</h2>
+<ul><li><strong>“WebSocket 一定比 HTTP 好”：</strong>错误。低频查询和普通 CRUD 使用 HTTP 更简单。</li><li><strong>“有 WebSocket 就不会丢消息”：</strong>错误。离线补发、持久化和确认需要应用层设计。</li><li><strong>“TCP 保证顺序，所以业务必然有序”：</strong>错误。多生产者、多实例和重放会改变业务事件顺序。</li><li><strong>“连接成功就完成鉴权”：</strong>错误。每个命令仍需校验用户、tenant_id、run_id 和操作权限。</li><li><strong>“WebSocket 可以替代消息队列”：</strong>错误。二者解决的问题不同。</li></ul>
+<h2>17. 面试回答模板</h2>
+<p>WebSocket 是建立在 TCP 之上的全双工通信协议。它先通过 HTTP Upgrade 握手，服务端返回 101 后，双方在同一长连接上传输 Text、Binary、Ping、Pong 和 Close 帧。相比轮询，它减少了重复请求，并允许服务端主动推送；相比 SSE，它支持双向通信。</p>
+<p>在生产系统中，重点不是“连上就行”，而是连接治理：认证授权、心跳和空闲超时、指数退避重连、sequence 补发、event_id 去重、request_id 幂等、背压、限流和多实例消息分发。对于 Agent 平台，我会让 Worker 把运行事件写入消息总线，由 WebSocket Gateway 推送给在线客户端；持久化存储负责断线后的历史补发。</p>
+<h2>18. 官方参考与一句话总结</h2>
+<ul><li><a href="https://datatracker.ietf.org/doc/html/rfc6455" target="_blank" rel="noopener">RFC 6455：The WebSocket Protocol</a></li><li><a href="https://fastapi.tiangolo.com/advanced/websockets/" target="_blank" rel="noopener">FastAPI：WebSockets</a></li><li><a href="https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API/Writing_WebSocket_client_applications" target="_blank" rel="noopener">MDN：Writing WebSocket client applications</a></li></ul>
+<p><strong>一句话总结：</strong>WebSocket 提供的是一条可双向实时传输的长连接；真正可用的 Agent 实时通信系统，还必须补齐心跳、权限、事件协议、断线补发、幂等、背压和多实例分发。</p>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

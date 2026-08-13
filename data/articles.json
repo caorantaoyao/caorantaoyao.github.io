@@ -1,7 +1,15 @@
 {
-  "generated_at": "2026-08-12T20:31:51.269808+00:00",
-  "count": 44,
+  "generated_at": "2026-08-13T20:29:08.906312+00:00",
+  "count": 45,
   "articles": [
+    {
+      "title": "同机进程网络通信：从 Socket、Loopback 到 Unix Domain Socket",
+      "date": "2026.08.13",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "同一台计算机上的不同进程，可以通过 Socket 与回环网络（Loopback）按照 TCP/IP 协议通信。例如浏览器访问 http://127.0.0.1:8000，浏览器进程是客户端，FastAPI 进程是服务端。",
+      "url": "/articles/Socket-Loopback--Unix-Domain-Socket-1af375c6.html"
+    },
     {
       "title": "WebSocket 长连接：从握手、心跳到 Agent 实时通信",
       "date": "2026.08.05",

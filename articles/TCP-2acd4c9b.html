@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TCP 连接管理：三次握手、四次挥手与连接状态机 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.08.14</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">TCP 连接管理：三次握手、四次挥手与连接状态机</h1>
+    <div class="article-body">
+<h2>1. TCP 连接管理解决什么问题</h2>
+<p>TCP 连接管理负责建立双向通信状态、同步双方初始序列号、协商参数，并在通信结束后安全释放两个发送方向。一条连接由源 IP、源端口、目标 IP、目标端口组成的四元组标识，内核还会维护序列号、窗口、缓冲区、重传计时器和拥塞状态。</p>
+<h2>2. 建立连接前的状态</h2>
+<p>服务端执行 <code>socket → bind → listen</code> 后进入 <code>LISTEN</code>；客户端执行 <code>connect</code> 后发起握手并进入 <code>SYN_SENT</code>。</p>
+<h2>3. 第一次握手：客户端发送 SYN</h2>
+<p>客户端选择初始序列号 x，发送 <code>SYN=1, seq=x</code>，表示希望建立连接，并声明自己的初始序列号。客户端进入 <code>SYN_SENT</code>。</p>
+<h2>4. 第二次握手：服务端返回 SYN+ACK</h2>
+<p>服务端收到 SYN 后选择初始序列号 y，返回 <code>SYN=1, ACK=1, seq=y, ack=x+1</code>，随后进入 <code>SYN_RECEIVED</code>。SYN 会占用一个序列号。</p>
+<h2>5. 第三次握手：客户端返回 ACK</h2>
+<p>客户端收到 SYN+ACK 后返回 <code>ACK=1, seq=x+1, ack=y+1</code> 并进入 <code>ESTABLISHED</code>。服务端收到最终 ACK 后也进入 <code>ESTABLISHED</code>。</p>
+<pre><code class="language-plaintext">客户端                           服务端
+CLOSED                           LISTEN
+  ├─ SYN，seq=x ───────────────→ SYN_RECEIVED
+  ←──── SYN+ACK，seq=y，ack=x+1 ┤
+  ├─ ACK，ack=y+1 ─────────────→
+ESTABLISHED                      ESTABLISHED</code></pre>
+<h2>6. 三次握手确认了什么</h2>
+<ul><li>客户端能发送、服务端能接收。</li><li>服务端能发送、客户端能接收。</li><li>服务端知道客户端收到了自己的初始序列号。</li><li>同步双方初始序列号。</li><li>协商 MSS、窗口扩大、SACK、时间戳等 TCP 选项。</li></ul>
+<h2>7. 为什么不是两次或四次</h2>
+<p>两次握手无法让服务端确认客户端已经收到服务端的初始序列号，也更容易受到历史重复 SYN 的影响。三次已经能够同步双方序列号和确认双向收发能力。建立连接时，服务端可以把对客户端 SYN 的 ACK 与自己的 SYN 合并，因此不需要固定四次。</p>
+<h2>8. listen、connect 与 accept</h2>
+<p>调用</p>
+<p>作用</p>
+<p><code>listen()</code></p>
+<p>把 Socket 变为监听 Socket并初始化连接队列</p>
+<p><code>connect()</code></p>
+<p>客户端发起握手；阻塞模式下通常握手完成后返回</p>
+<p><code>accept()</code></p>
+<p>从内核的已完成连接队列取出连接，返回新的已连接 Socket</p>
+<p>三次握手主要由内核完成。应用尚未调用 <code>accept()</code> 时，握手也可能已经完成；监听 Socket 继续接收新连接，而 <code>accept()</code> 返回的连接 Socket 专门服务某个客户端。</p>
+<h2>9. 半连接队列与全连接队列</h2>
+<p>概念上，处于 <code>SYN_RECEIVED</code>、尚未完成握手的连接位于半连接相关结构；握手完成但尚未被应用接受的连接进入全连接队列。队列容量耗尽时，新连接可能被丢弃、拒绝或等待重传。具体实现和 <code>backlog</code> 语义依操作系统而异。</p>
+<h2>10. SYN Flood 与 SYN Cookie</h2>
+<p>SYN Flood 通过大量发送 SYN 而不完成第三次握手，消耗服务端连接资源。常见防护包括限速、调整队列与超时、DDoS 清洗和 SYN Cookie。SYN Cookie 会先把部分连接信息编码进 SYN+ACK 序列号，收到合法 ACK 后再恢复连接状态。</p>
+<h2>11. 建立连接后的序列号与 ACK</h2>
+<p>TCP 按字节编号。若发送 <code>seq=1000</code>、长度 500 字节的数据，接收方连续收到后返回 <code>ack=1500</code>。ACK 表示下一次期望的字节序号，帮助实现可靠传输、累计确认和重传。</p>
+<h2>12. 第一次挥手：主动方发送 FIN</h2>
+<p>主动关闭方调用 <code>close()</code>，发送 <code>FIN=1, seq=u</code>，进入 <code>FIN_WAIT_1</code>。FIN 表示本方不会再发送新数据，但仍可以接收另一方向的数据。FIN 会占用一个序列号。</p>
+<h2>13. 第二次挥手：被动方确认 FIN</h2>
+<p>被动方返回 <code>ACK, ack=u+1</code> 并进入 <code>CLOSE_WAIT</code>；主动方收到 ACK 后进入 <code>FIN_WAIT_2</code>。此时只关闭了主动方到被动方的发送方向。</p>
+<h2>14. 第三、四次挥手</h2>
+<p>被动方应用完成剩余发送并调用 <code>close()</code> 后，发送 FIN，进入 <code>LAST_ACK</code>。主动方返回最终 ACK 并进入 <code>TIME_WAIT</code>；被动方收到 ACK 后进入 <code>CLOSED</code>。</p>
+<pre><code class="language-plaintext">主动关闭方                         被动关闭方
+ESTABLISHED                        ESTABLISHED
+  ├─ FIN，seq=u ─────────────────→ CLOSE_WAIT
+FIN_WAIT_1 ←──────── ACK，ack=u+1 ┤
+FIN_WAIT_2                         │
+  ←──────────────────── FIN，seq=v ┤ LAST_ACK
+  ├─ ACK，ack=v+1 ───────────────→ CLOSED
+TIME_WAIT
+  ↓ 等待 2MSL
+CLOSED</code></pre>
+<h2>15. 为什么通常是四次挥手</h2>
+<p>TCP 是全双工的，两个发送方向需要分别关闭。收到 FIN 的一方可能仍有数据未发送，因此先返回 ACK，等应用完成后再发送自己的 FIN。如果收到 FIN 时恰好也已发送完，ACK 和 FIN 可以合并，所以抓包中也可能只有三个报文。</p>
+<h2>16. 半关闭与 shutdown</h2>
+<p><code>shutdown(SHUT_WR)</code> 表示关闭本机发送方向，但仍可接收对方数据；<code>shutdown(SHUT_RD)</code> 表示不再接收；<code>shutdown(SHUT_RDWR)</code> 关闭两个方向。<code>close()</code> 则释放当前文件描述符，底层连接何时真正结束还与引用计数和缓冲数据有关。</p>
+<h2>17. TIME_WAIT 与 2MSL</h2>
+<p>主动完成关闭的一方通常进入 <code>TIME_WAIT</code>。它有两个主要目的：若最后 ACK 丢失，可以接收对方重传的 FIN 并再次确认；同时等待旧连接报文在网络中消失，避免干扰相同四元组的新连接。</p>
+<p>MSL 是报文段最大生存时间。等待 2MSL 用于覆盖最后 ACK 到达与重传 FIN 返回的最长路径。具体等待时间由操作系统实现决定。</p>
+<h2>18. TIME_WAIT 与 CLOSE_WAIT 排查</h2>
+<p>状态</p>
+<p>常见含义</p>
+<p>主要排查方向</p>
+<p><code>TIME_WAIT</code></p>
+<p>本机频繁主动关闭连接</p>
+<p>连接池、Keep-Alive、短连接频率、临时端口</p>
+<p><code>CLOSE_WAIT</code></p>
+<p>对端已发送 FIN，但本机应用尚未关闭 Socket</p>
+<p>异常路径、资源泄漏、线程阻塞、finally 清理</p>
+<p>TIME_WAIT 不一定是错误；CLOSE_WAIT 长期堆积通常更直接指向应用没有正确释放连接。</p>
+<h2>19. FIN、RST 与异常断开</h2>
+<p>FIN 表示有序关闭，此前数据仍应可靠处理；RST 表示立即重置连接，常见于目标端口未监听、连接状态不存在或应用强制终止。网线断开或对端断电时，如果双方都不发送数据，本机可能无法立即发现，需要依靠重传超时、TCP Keepalive 或应用层心跳。</p>
+<h2>20. TCP Keepalive 与应用层心跳</h2>
+<p>机制</p>
+<p>能力</p>
+<p>TCP Keepalive</p>
+<p>由内核探测长时间空闲连接的对端是否仍可达</p>
+<p>应用层心跳</p>
+<p>由业务协议定义，可更快发现应用无响应并携带业务状态</p>
+<p>TCP 连接仍然存在，不代表远端业务线程或 Agent Runtime 一定健康。</p>
+<h2>21. Python 操作与 TCP 状态对应</h2>
+<pre><code class="language-php"># 服务端
+server.bind((&quot;127.0.0.1&quot;, 8000))
+server.listen(128)                 # LISTEN
+connection, address = server.accept()
+
+# 客户端
+client.connect((&quot;127.0.0.1&quot;, 8000))  # 发起三次握手
+client.sendall(b&quot;hello&quot;)
+client.shutdown(socket.SHUT_WR)       # 关闭发送方向
+client.close()</code></pre>
+<p><code>recv()</code> 返回空字节串 <code>b&quot;&quot;</code>，通常表示对端已经有序关闭发送方向，当前字节流到达 EOF。</p>
+<h2>22. 常见错误现象</h2>
+<p>现象</p>
+<p>常见原因</p>
+<p><code>Connection refused</code></p>
+<p>目标端口没有监听或被主动拒绝</p>
+<p><code>Connection reset by peer</code></p>
+<p>对端发送 RST</p>
+<p><code>Broken pipe</code></p>
+<p>继续向已经关闭的连接写数据</p>
+<p><code>Connection timed out</code></p>
+<p>握手报文被丢弃或长期无响应</p>
+<h2>23. 面试回答</h2>
+<p>TCP 通过三次握手同步双方初始序列号、确认双向收发能力并协商参数。客户端发送 SYN，服务端返回 SYN+ACK，客户端再返回 ACK。阻塞模式下 <code>connect()</code> 通常在握手完成后返回，而 <code>accept()</code> 是从内核已完成连接队列中取出连接。</p>
+<p>TCP 关闭通常需要四次挥手，因为两个发送方向要分别关闭。主动方发送 FIN，被动方先 ACK，完成剩余数据发送后再发送 FIN，主动方回复最终 ACK 并进入 TIME_WAIT。TIME_WAIT 用于处理最后 ACK 丢失后的 FIN 重传，并让旧报文消失。大量 TIME_WAIT 常见于频繁主动关闭；大量 CLOSE_WAIT 通常意味着应用未正确关闭 Socket。</p>
+<h2>24. 一句话总结</h2>
+<p><strong>三次握手建立双向可信的连接状态，四次挥手分别关闭两个发送方向，TCP 状态机则保证连接在丢包、重传和延迟报文存在时仍能安全建立与释放。</strong></p>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

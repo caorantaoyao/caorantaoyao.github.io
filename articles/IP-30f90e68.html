@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IP 与路由：数据知道目标端口后，怎样找到目标计算机 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.08.14</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">IP 与路由：数据知道目标端口后，怎样找到目标计算机</h1>
+    <div class="article-body">
+<p>只知道目标端口还不足以完成网络通信。<strong>IP 地址负责找到目标计算机，端口负责在目标计算机上找到对应进程。</strong>例如 <code>203.0.113.10:443</code> 表示：先把数据送到 IP 地址为 <code>203.0.113.10</code> 的计算机，再交给监听 443 端口的进程。</p>
+<h2>1. IP 地址和端口各自负责什么</h2>
+<p>一次网络通信通常可以用源 IP、源端口、目标 IP 和目标端口描述。例如 <code>192.168.1.10:52000 → 203.0.113.10:443</code>。IP 地址解决跨网络的主机定位，端口解决主机内部的进程定位，路由器负责在多个网络之间选择下一步路径。</p>
+<p>网络概念</p>
+<p>类比</p>
+<p>作用</p>
+<p>IP 地址</p>
+<p>建筑地址</p>
+<p>找到目标计算机</p>
+<p>端口</p>
+<p>房间号</p>
+<p>找到目标进程</p>
+<p>路由器</p>
+<p>中转站</p>
+<p>把数据转发到下一个网络</p>
+<p>路由表</p>
+<p>导航表</p>
+<p>根据目标 IP 决定下一跳</p>
+<p>MAC 地址</p>
+<p>当前路段的收件标识</p>
+<p>完成同一链路上的一跳传输</p>
+<h2>2. 数据发送的整体流程</h2>
+<ol><li>应用通过 TCP 或 UDP Socket 提供目标 IP、目标端口和数据。</li><li>传输层加入源端口、目标端口等信息。</li><li>IP 层加入源 IP 和目标 IP，形成 IP 数据包。</li><li>操作系统查询本机路由表，决定网络接口和下一跳。</li><li>本机在当前局域网内找到下一跳的 MAC 地址并发送数据帧。</li><li>一个或多个路由器根据目标 IP 逐跳转发。</li><li>数据到达目标计算机后，操作系统根据协议和目标端口交给对应 Socket。</li></ol>
+<pre><code class="language-plaintext">应用数据
+→ TCP 或 UDP：加入端口
+→ IP：加入源 IP 和目标 IP
+→ 查询路由表
+→ 交给下一跳
+→ 路由器逐跳转发
+→ 目标计算机
+→ 根据端口交给目标进程</code></pre>
+<h2>3. 第一步：判断目标是否在同一局域网</h2>
+<p>操作系统会结合本机 IP、子网掩码和目标 IP，判断目标是否属于本地网络。假设本机 IP 为 <code>192.168.1.10</code>，子网掩码为 <code>255.255.255.0</code>，默认网关为 <code>192.168.1.1</code>。</p>
+<p><strong>目标位于同一局域网。</strong>如果目标是 <code>192.168.1.20</code>，双方都属于 <code>192.168.1.0/24</code>。本机可以在局域网内直接把数据发给目标计算机。</p>
+<p><strong>目标位于其他网络。</strong>如果目标是 <code>203.0.113.10</code>，本机无法在局域网内直接送达，于是先把数据交给默认网关，再由路由器继续转发。</p>
+<h2>4. 第二步：查询路由表</h2>
+<p>每台计算机和路由器都有路由表。路由表记录不同目标网络应该从哪个接口发送、交给哪个下一跳。它不是为每台互联网计算机保存一条路线，而是通常按目标网段组织规则。</p>
+<p>目标网络</p>
+<p>处理方式</p>
+<p><code>192.168.1.0/24</code></p>
+<p>本地网络，直接发送</p>
+<p><code>10.0.0.0/8</code></p>
+<p>交给指定的内部路由器</p>
+<p><code>0.0.0.0/0</code></p>
+<p>其他目标交给默认网关</p>
+<p>如果多条路由都能匹配目标 IP，通常选择范围最具体的一条，这叫<strong>最长前缀匹配</strong>。例如目标 <code>10.10.20.8</code> 同时匹配 <code>10.0.0.0/8</code>、<code>10.10.0.0/16</code> 和 <code>10.10.20.0/24</code> 时，会选择最具体的 <code>10.10.20.0/24</code>。如果没有具体规则匹配，就使用默认路由。</p>
+<h2>5. 默认网关是什么</h2>
+<p>默认网关是本机通往其他网络的默认出口，家庭网络中通常就是家用路由器。你的计算机不需要提前知道数据在互联网上经过的完整路线，只要知道第一步应该交给哪个网关即可。</p>
+<p>本机只决定自己的下一跳；后续每台路由器再分别决定下一跳。</p>
+<h2>6. 第三步：找到下一跳的 MAC 地址</h2>
+<p>IP 地址用于跨网络定位，但以太网或 Wi-Fi 在当前局域网内发送数据时还需要 MAC 地址。IPv4 通常通过 ARP 查询下一跳的 MAC 地址。</p>
+<pre><code class="language-plaintext">谁拥有 192.168.1.1？
+请把你的 MAC 地址告诉我。
+
+192.168.1.1：
+我的 MAC 是 AA:BB:CC:DD:EE:FF</code></pre>
+<p>如果目标就在同一局域网，本机寻找目标计算机的 MAC；如果目标在外网，本机寻找的是默认网关的 MAC，而不是远程服务器的 MAC。MAC 地址只服务于当前一跳，每经过一个路由器，链路层的源 MAC 和目标 MAC 通常都会变化。</p>
+<h2>7. 第四步：路由器逐跳转发</h2>
+<p>路由器收到 IP 数据包后，会读取目标 IP、查询自己的路由表、选择下一跳和出口接口，然后继续发送。数据可能依次经过家用路由器、运营商网络、互联网骨干网和目标机房路由器，最终到达服务器所在网络。</p>
+<pre><code class="language-plaintext">你的计算机
+→ 家用路由器
+→ 运营商路由器
+→ 骨干网路由器
+→ 目标机房路由器
+→ 目标服务器</code></pre>
+<p>这叫逐跳转发。中间路由器主要依据目标 IP 进行普通路由，并不负责最终把数据交给具体应用程序。</p>
+<h2>8. 第五步：目标计算机根据端口找到进程</h2>
+<p>数据到达目标计算机后，IP 层确认目标 IP 属于本机，再把数据交给 TCP 或 UDP。传输层读取目标端口，并在操作系统维护的 Socket 信息中找到对应程序。例如目标端口为 443 时，数据会交给监听该端口的 Web 服务进程。</p>
+<pre><code class="language-plaintext">目标 IP → 找到目标计算机
+目标端口 → 找到目标 Socket
+目标 Socket → 找到目标进程</code></pre>
+<h2>9. 如果应用只知道域名</h2>
+<p>应用如果只有 <code>www.example.com</code>，通常需要先通过 DNS 得到服务器 IP。DNS 解决“域名对应哪个 IP”，路由解决“数据怎样到达这个 IP”。得到 IP 后，才进入路由表查询和逐跳转发流程。</p>
+<pre><code class="language-plaintext">域名
+→ DNS 解析
+→ 得到目标 IP
+→ 查询路由表
+→ 逐跳转发
+→ 到达目标计算机
+→ 根据端口交给进程</code></pre>
+<h2>10. NAT 在哪里出现</h2>
+<p>家庭和企业内部经常使用 <code>192.168.x.x</code>、<code>10.x.x.x</code> 等私有 IP。私有 IP 不能直接作为公网中的全局地址使用，因此出口路由器通常会执行 NAT，把内部源 IP 和端口转换成公网 IP 和新的端口。</p>
+<pre><code class="language-plaintext">192.168.1.10:52000
+        ↓ NAT
+公网 IP:61000</code></pre>
+<p>路由器保存映射关系。服务器响应到达公网 IP 和对应端口后，路由器再根据映射把数据转回内部计算机。因此 NAT 不只是修改 IP，常见的端口地址转换还会同时处理端口。</p>
+<h2>11. TTL 为什么存在</h2>
+<p>IP 数据包包含 TTL 字段。每经过一个路由器，TTL 通常减 1；当 TTL 变为 0 时，路由器丢弃该数据包。它可以防止路由配置错误时，数据包在网络中无限循环。<code>traceroute</code> 等工具也会利用 TTL 观察数据经过的路由器。</p>
+<h2>12. IP 是否保证数据一定到达</h2>
+<p>IP 提供的是尽力而为的投递，不保证数据一定到达，也不保证顺序、唯一性和固定路线。TCP 可以在 IP 之上提供确认、重传和排序；UDP 本身不提供这些保证，应用或 QUIC 等上层协议可以根据需要补充。</p>
+<h2>13. 容易混淆的概念</h2>
+<ul><li><strong>只知道端口就能通信：</strong>错误，还需要目标 IP；端口只在目标计算机内部定位进程。</li><li><strong>默认网关知道完整路径：</strong>错误，每台设备通常只根据当前路由表决定下一跳。</li><li><strong>访问外网服务器时需要服务器 MAC：</strong>错误，本机只需要当前下一跳，也就是默认网关的 MAC。</li><li><strong>MAC 地址会像目标 IP 一样端到端不变：</strong>错误，MAC 地址通常逐跳变化，目标 IP 通常保持不变。</li><li><strong>IP 能保证数据送达：</strong>错误，可靠性需要由 TCP 或上层协议补充。</li><li><strong>路由器根据端口找到服务器进程：</strong>错误，普通 IP 路由主要根据目标 IP；端口由终点的传输层处理。</li></ul>
+<h2>14. 面试回答</h2>
+<p>应用先通过 TCP 或 UDP Socket 指定目标 IP、目标端口和数据。传输层加入端口信息，IP 层加入源 IP 和目标 IP。操作系统查询路由表，判断目标是否在本地网络：如果在同一局域网，就直接发送；如果不在，就交给默认网关。发送当前一跳之前，还需要通过 ARP 等机制获得下一跳的 MAC 地址。路由器收到数据包后，根据目标 IP 和自己的路由表逐跳转发。数据到达目标计算机后，目标操作系统再根据协议和目标端口，将数据交给对应的 Socket 和应用进程。</p>
+<h2>15. 一句话总结</h2>
+<p><strong>IP 地址和路由负责把数据送到目标计算机，端口负责在目标计算机上找到对应进程；每台计算机或路由器通过查询自己的路由表，让数据逐跳接近目标网络。</strong></p>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

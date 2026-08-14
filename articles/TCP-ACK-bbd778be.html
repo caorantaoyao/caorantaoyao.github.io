@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TCP ACK：确认号、累计确认与快速重传 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.08.14</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">TCP ACK：确认号、累计确认与快速重传</h1>
+    <div class="article-body">
+<h2>1. ACK 是什么</h2>
+<p>ACK 是 Acknowledgment 的缩写，是 TCP 的确认机制。它告诉发送方：接收方已经连续收到哪些字节，下一次希望从哪个序列号继续发送。</p>
+<p><code>ack=N</code> 的准确含义不是“收到第 N 个字节”，而是“序号小于 N 的字节已经连续收到，下一次期望收到序号 N”。</p>
+<h2>2. ACK 标志位与确认号</h2>
+<p>TCP 首部中有 ACK 标志位和 Acknowledgment Number。<code>ACK=1</code> 表示确认号字段有效；连接建立后，大多数 TCP 报文的 ACK 标志位都会为 1。</p>
+<h2>3. 按字节确认</h2>
+<p>若发送方发送 <code>seq=100</code>、长度 50 字节的数据，这段数据占用序号 100～149。接收方正确收到后返回 <code>ack=150</code>，表示下一次希望收到 150。</p>
+<pre><code class="language-plaintext">发送方 → seq=100，len=50 → 接收方
+发送方 ← ACK，ack=150    ← 接收方</code></pre>
+<h2>4. ACK 为什么能实现可靠传输</h2>
+<p>发送方发送数据后，会把尚未确认的数据暂存在发送缓冲区。收到 ACK 后才能清理相应数据并移动发送窗口；若长期收不到 ACK，就可能触发超时重传。</p>
+<ul><li>确认已到达数据</li><li>释放发送缓冲区</li><li>推进滑动窗口</li><li>帮助发现丢包</li><li>触发超时重传或快速重传</li></ul>
+<h2>5. 累计确认</h2>
+<p>TCP 通常采用累计确认。若连续收到序号 100～399 的字节，只需返回 <code>ack=400</code>，就能确认此前所有连续字节。</p>
+<h2>6. 中间丢包与重复 ACK</h2>
+<p>若 100～199 到达、200～299 丢失、300～399 到达，接收方仍然返回 <code>ack=200</code>。因为确认号不能越过连续字节流中的缺口。后续乱序报文到达时，接收方可能再次发送相同确认号，这就是重复 ACK。</p>
+<pre><code class="language-plaintext">seq=100，len=100 → 到达 → ack=200
+seq=200，len=100 → 丢失
+seq=300，len=100 → 到达 → 重复 ack=200
+seq=400，len=100 → 到达 → 重复 ack=200</code></pre>
+<h2>7. 快速重传</h2>
+<p>发送方收到多个重复 ACK 时，可以推断某个序号开始的数据可能丢失，而后续数据仍在到达。于是可以在重传计时器超时前重传缺失数据，这就是快速重传。具体触发与拥塞控制算法、SACK 等机制有关。</p>
+<h2>8. 三次握手中的 ACK</h2>
+<pre><code class="language-plaintext">客户端 → SYN，seq=x
+服务端 → SYN+ACK，seq=y，ack=x+1
+客户端 → ACK，ack=y+1</code></pre>
+<p>SYN 会占用一个序列号，所以确认 SYN 时需要加 1。三次握手借助 ACK 确认双方初始序列号和双向收发能力。</p>
+<h2>9. 四次挥手中的 ACK</h2>
+<pre><code class="language-plaintext">主动方 → FIN，seq=u
+被动方 → ACK，ack=u+1</code></pre>
+<p>FIN 也占用一个序列号。收到 FIN 后回复 ACK，只表示“已经收到你关闭发送方向的请求”，不表示本方也已经发送完数据。</p>
+<h2>10. ACK 不等于业务成功</h2>
+<p>TCP ACK 只证明数据已经到达对方 TCP 接收缓冲区，不保证对方应用已经调用 <code>recv()</code>、解析请求、写入数据库或提交业务事务。</p>
+<p>确认层次</p>
+<p>含义</p>
+<p>TCP ACK</p>
+<p>数据到达对方 TCP 协议栈</p>
+<p>HTTP/RPC 响应</p>
+<p>应用完成了一定程度的处理</p>
+<p>业务状态确认</p>
+<p>事务按照业务规则完成</p>
+<h2>11. 纯 ACK 是否占用序列号</h2>
+<p>纯 ACK 通常不消耗新的序列号；SYN 和 FIN 各占用一个序列号，应用数据按照字节数量占用序列号。若 ACK 报文同时携带数据，数据部分仍然推进发送序列号。</p>
+<h2>12. 捎带确认与延迟 ACK</h2>
+<p>TCP 是全双工的。接收方可以把确认信息与反向业务数据放在同一个报文中，这叫捎带确认。接收方也可能短暂延迟 ACK，以便一次确认多段数据或等待与响应数据合并，但不能无限等待。</p>
+<h2>13. 常见误区</h2>
+<ul><li><strong>ack=100 表示收到字节 100：</strong>错误，它表示下一次期望 100。</li><li><strong>一个数据段对应一个 ACK：</strong>错误，TCP 可以累计确认和延迟确认。</li><li><strong>收到 ACK 就表示订单创建成功：</strong>错误，只表示到达 TCP 协议栈。</li><li><strong>ACK 永远单独发送：</strong>错误，它可以与反向数据一起发送。</li></ul>
+<h2>14. 面试回答</h2>
+<p>ACK 是 TCP 的确认机制。ACK 标志位表示确认号有效，确认号表示接收方下一次期望收到的字节序号。例如发送方发送 <code>seq=100</code>、长度 50 字节的数据，接收方返回 <code>ack=150</code>，表示 100～149 已连续收到。TCP 使用累计确认；若中间出现缺口，即使后续数据到达，接收方仍会重复确认缺口位置，发送方可据此进行快速重传。TCP ACK 只说明数据到达对方协议栈，不等于应用或业务处理成功。</p>
+<h2>15. 一句话总结</h2>
+<p><strong>ACK 告诉发送方：“这个序号之前的字节我已经连续收到，下一次请从这个序号继续发送。”</strong></p>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

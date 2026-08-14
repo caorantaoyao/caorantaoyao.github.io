@@ -1,7 +1,47 @@
 {
-  "generated_at": "2026-08-13T20:29:08.906312+00:00",
-  "count": 45,
+  "generated_at": "2026-08-14T20:20:32.447722+00:00",
+  "count": 50,
   "articles": [
+    {
+      "title": "DNS：输入域名后，怎样得到目标 IP",
+      "date": "2026.08.14",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "DNS 的核心作用是把人容易记住的域名转换成计算机网络使用的 IP 地址。例如 www.example.com → 203.0.113.10。获得目标 IP 后，计算机才能查询路由表，通过网关和路由器把数据送到目标服务器。",
+      "url": "/articles/DNS---IP-aa190e90.html"
+    },
+    {
+      "title": "IP 与路由：数据知道目标端口后，怎样找到目标计算机",
+      "date": "2026.08.14",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "只知道目标端口还不足以完成网络通信。IP 地址负责找到目标计算机，端口负责在目标计算机上找到对应进程。例如 203.0.113.10:443 表示：先把数据送到 IP 地址为 203.0.113.10 的计算机，再交给监听 443 端口的进…",
+      "url": "/articles/IP-30f90e68.html"
+    },
+    {
+      "title": "UDP：不建立连接也能发送数据",
+      "date": "2026.08.14",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "UDP 是传输层协议，主要解决一台计算机上的进程如何向另一台计算机上的指定进程发送一条数据。它的全称是 User Datagram Protocol，即用户数据报协议。",
+      "url": "/articles/UDP-d1fd0bf6.html"
+    },
+    {
+      "title": "TCP 连接管理：三次握手、四次挥手与连接状态机",
+      "date": "2026.08.14",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "TCP 连接管理负责建立双向通信状态、同步双方初始序列号、协商参数，并在通信结束后安全释放两个发送方向。一条连接由源 IP、源端口、目标 IP、目标端口组成的四元组标识，内核还会维护序列号、窗口、缓冲区、重传计时器和拥塞状态。",
+      "url": "/articles/TCP-2acd4c9b.html"
+    },
+    {
+      "title": "TCP ACK：确认号、累计确认与快速重传",
+      "date": "2026.08.14",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "ACK 是 Acknowledgment 的缩写，是 TCP 的确认机制。它告诉发送方：接收方已经连续收到哪些字节，下一次希望从哪个序列号继续发送。",
+      "url": "/articles/TCP-ACK-bbd778be.html"
+    },
     {
       "title": "同机进程网络通信：从 Socket、Loopback 到 Unix Domain Socket",
       "date": "2026.08.13",

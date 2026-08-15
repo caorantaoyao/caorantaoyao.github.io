@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TLS：HTTPS 如何建立可信、加密且防篡改的通信通道 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.08.15</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">TLS：HTTPS 如何建立可信、加密且防篡改的通信通道</h1>
+    <div class="article-body">
+<p>TLS 的核心作用是在不可信的网络中，为客户端和服务器建立一条加密、防篡改，并且能够验证服务器身份的通信通道。HTTPS 可以总体理解为受 TLS 保护的 HTTP：HTTP 规定请求与响应的语义，TLS 负责保护通信过程。</p>
+<h2>1. 普通 HTTP 存在什么问题</h2>
+<p>如果使用明文 HTTP，中间网络设备可能读取账号、Cookie和请求正文，也可能修改请求或响应、插入恶意内容，甚至冒充目标服务器。TLS主要解决三个问题。</p>
+<p>安全目标</p>
+<p>解决的问题</p>
+<p>机密性</p>
+<p>防止中间人直接读取通信正文</p>
+<p>完整性</p>
+<p>防止数据被静默篡改</p>
+<p>身份认证</p>
+<p>确认对方确实是目标服务器</p>
+<h2>2. TLS 位于网络分层中的哪里</h2>
+<pre><code class="language-plaintext">应用层：HTTP
+安全层：TLS
+传输层：TCP
+网络层：IP
+链路层：以太网、Wi-Fi</code></pre>
+<p>对于 HTTP/1.1 和 HTTP/2，通常先建立 TCP 连接，再进行 TLS 握手；对于 HTTP/3，TLS 1.3 的安全能力集成在 QUIC 握手中。TLS 不负责 DNS 解析和 IP 路由。</p>
+<h2>3. TLS 使用的密码学能力</h2>
+<p><strong>对称加密。</strong>双方使用协商出的会话密钥加密大量 HTTP 数据，性能较高。握手完成后的业务数据主要使用对称加密。</p>
+<p><strong>非对称密码学。</strong>使用公钥和私钥证明服务器拥有证书对应的私钥、验证数字签名，并配合临时密钥交换建立共享秘密。现代 TLS 通常不是用服务器公钥直接加密全部 HTTP 数据。</p>
+<p><strong>哈希函数。</strong>用于握手完整性验证、密钥派生和数字签名等过程。</p>
+<p><strong>数字签名。</strong>服务器使用私钥对握手相关信息签名，客户端用证书中的公钥验证，从而确认私钥持有者身份以及内容未被替换。签名主要提供身份和完整性证明，不等于加密。</p>
+<h2>4. 数字证书是什么</h2>
+<p>数字证书可以理解为由可信机构签发的服务器电子身份证，通常包含证书绑定的域名、服务器公钥、有效期、颁发者、签名算法及 CA 签名。证书可以公开，必须严格保护的是服务器私钥。</p>
+<pre><code class="language-plaintext">域名：www.example.com
+公钥：服务器公钥
+有效期：2026-01-01 至 2026-12-31
+签发者：某个 CA
+CA 签名：……</code></pre>
+<h2>5. CA 是什么</h2>
+<p>CA 即证书颁发机构。它验证申请者对域名等标识的控制权，签发包含域名和公钥的证书，并使用 CA 私钥签名。浏览器和操作系统预置受信任的根 CA 证书，因此可以判断服务器证书是否来自可信链路，而不是因为服务器自己宣称可信就相信它。</p>
+<h2>6. 证书链</h2>
+<pre><code class="language-plaintext">服务器证书
+→ 中间 CA 证书
+→ 根 CA 证书</code></pre>
+<p>服务器证书通常由中间 CA 签发，中间 CA 再由更上层 CA 或根 CA 签发。服务器一般发送自己的证书和必要的中间证书；根证书通常已存在于客户端信任库。分层签发可以减少根私钥直接参与日常工作的风险。</p>
+<h2>7. 客户端怎样验证证书</h2>
+<ul><li><strong>域名匹配：</strong>证书必须覆盖当前访问的域名。</li><li><strong>有效期正确：</strong>证书不能尚未生效或已经过期。</li><li><strong>证书链可信：</strong>逐级验证签名，最终连接到本机信任的根 CA。</li><li><strong>用途正确：</strong>证书应允许用于服务器身份认证。</li><li><strong>撤销状态：</strong>在相应机制可用时检查证书是否被撤销。</li><li><strong>私钥持有证明：</strong>服务器对握手信息签名，客户端用证书公钥验证。</li></ul>
+<h2>8. TLS 1.3 握手的整体流程</h2>
+<ol><li>客户端发送 ClientHello，声明支持的版本、算法和密钥交换参数。</li><li>服务器返回 ServerHello，选择版本、算法和自己的密钥参数。</li><li>服务器发送证书链和 CertificateVerify 签名证明。</li><li>客户端验证域名、证书链、有效期、签名和握手内容。</li><li>双方根据密钥交换结果派生会话密钥。</li><li>双方通过 Finished 消息确认握手未被篡改。</li><li>随后使用对称加密传输 HTTP 请求与响应。</li></ol>
+<pre><code class="language-plaintext">ClientHello
+→ ServerHello
+→ 服务器证书与私钥签名证明
+→ 客户端验证证书
+→ 双方派生会话密钥
+→ Finished
+→ 加密 HTTP 通信</code></pre>
+<h2>9. ClientHello 做什么</h2>
+<p>ClientHello 告诉服务器客户端支持的 TLS 版本、密码套件、签名算法、密钥交换组、客户端临时公钥以及扩展能力。</p>
+<p><strong>SNI。</strong>告诉服务器客户端想访问哪个域名。因为一个 IP 可以承载多个 HTTPS 网站，服务器需要据此选择证书和站点配置。</p>
+<p><strong>ALPN。</strong>协商应用层协议，例如 <code>http/1.1</code>、<code>h2</code> 等。</p>
+<h2>10. ServerHello 做什么</h2>
+<p>服务器从客户端提供的选项中选择 TLS 版本、密码套件和密钥交换参数，并返回服务器临时公钥。双方利用临时密钥交换参数独立计算出相同共享秘密，再通过密钥派生函数生成客户端到服务器、服务器到客户端以及握手和应用数据阶段使用的不同密钥。</p>
+<h2>11. 中间人为什么难以冒充服务器</h2>
+<p>攻击者即使能拦截通信，也需要证明自己拥有目标域名证书对应的私钥。攻击者通常无法生成通过 CertificateVerify 验证的签名；自行伪造的证书则会因为证书链不受信任、域名不匹配或签名错误而被客户端拒绝。TLS 的安全既依赖加密，也依赖证书信任体系和严格验证。</p>
+<h2>12. 为什么握手后使用对称加密</h2>
+<p>非对称密码学计算成本较高，不适合持续加密大量业务数据。TLS 先使用证书、签名和密钥交换完成身份认证及共享秘密建立，再使用高效的对称加密保护 HTTP 数据。</p>
+<pre><code class="language-plaintext">身份认证与密钥交换
+→ 建立共享秘密
+→ 派生对称会话密钥
+→ 加密业务数据</code></pre>
+<p>现代 TLS 常使用 AES-GCM 或 ChaCha20-Poly1305 等 AEAD 算法，同时提供加密和完整性认证。</p>
+<h2>13. TLS 怎样发现数据被篡改</h2>
+<p>TLS 不只把明文变成密文，还为记录提供认证信息。接收方会验证数据是否来自持有正确会话密钥的一方，以及传输过程中是否发生变化。如果密文被修改，验证通常失败，TLS 会终止连接，而不会把篡改后的数据交给 HTTP 层。</p>
+<p>加密解决“看不懂”，完整性认证解决“改不了而不被发现”。</p>
+<h2>14. 前向保密</h2>
+<p>现代 TLS 通常使用 ECDHE 等临时密钥交换机制，每次连接生成新的临时密钥。连接结束后临时私钥应被销毁。因此，即使服务器长期私钥以后泄露，攻击者通常也不能仅凭长期私钥解密过去录制的会话，这称为前向保密。服务器长期私钥主要用于证明身份，而不是直接生成每次连接的全部业务密钥。</p>
+<h2>15. TLS 会话恢复</h2>
+<p>完整握手需要网络往返和密码学计算。客户端再次访问同一服务时，可以使用会话票据等恢复机制，基于已有安全信息更快地建立新会话密钥。会话恢复并不是简单地永久重复使用上一条连接的全部密钥。</p>
+<h2>16. TLS 1.3 的 0-RTT</h2>
+<p>在满足条件的会话恢复中，客户端可以在握手完全结束前发送早期数据，从而降低延迟。但早期数据可能被重放，因此不适合直接用于创建订单、扣款、转账、删除数据等非幂等操作。即使请求可重复，服务端仍应实现相应的防重放策略。</p>
+<h2>17. TLS 1.2 与 TLS 1.3</h2>
+<p>对比项</p>
+<p>TLS 1.2</p>
+<p>TLS 1.3</p>
+<p>完整握手往返</p>
+<p>通常更多</p>
+<p>通常更少</p>
+<p>密钥交换</p>
+<p>支持多种旧方案</p>
+<p>移除了许多旧方案</p>
+<p>前向保密</p>
+<p>取决于密码套件</p>
+<p>正常握手默认使用临时密钥交换</p>
+<p>算法选择</p>
+<p>组合较复杂</p>
+<p>更精简</p>
+<p>0-RTT</p>
+<p>通常不支持</p>
+<p>会话恢复时可以支持</p>
+<p>握手内容加密</p>
+<p>较少</p>
+<p>ServerHello 后更多内容被加密</p>
+<h2>18. TLS 能保护哪些内容</h2>
+<p>握手完成后，TLS通常保护HTTP方法、URL路径和查询参数、Cookie、Authorization、请求体、响应头与响应体。但IP地址、连接时间、数据量、数据包时序以及某些环境中的域名相关信息仍可能暴露。HTTPS保护通信内容，不代表完全隐藏所有网络行为。</p>
+<h2>19. HTTPS 不能解决什么</h2>
+<p>HTTPS不能自动解决服务器被入侵、SQL注入、越权访问、弱密码、恶意网站欺骗、用户设备感染、敏感信息写入日志、前端脚本窃取Token等问题。浏览器锁标志主要表示通信经过加密且证书验证通过，不表示网站业务绝对安全。</p>
+<h2>20. 双向 TLS</h2>
+<p>普通 HTTPS 通常只由客户端验证服务器证书；服务器对用户的认证仍通过密码、Session、Token、OAuth 或 API Key。双向 TLS（mTLS）还要求客户端提供证书，常见于企业内部服务、微服务通信、零信任网络、高安全 API 和设备认证。</p>
+<pre><code class="language-plaintext">普通 TLS：客户端验证服务器
+mTLS：客户端验证服务器 + 服务器验证客户端</code></pre>
+<p>mTLS证明客户端证书所代表的服务、设备或主体身份，但服务端通常仍需执行业务授权。</p>
+<h2>21. 证书为什么会报警</h2>
+<ul><li>证书过期或尚未生效；</li><li>证书域名不匹配；</li><li>证书链不完整；</li><li>签发 CA 不受信任；</li><li>使用自签名证书；</li><li>设备系统时间错误；</li><li>中间代理替换证书；</li><li>证书可能已经被撤销。</li></ul>
+<p>开发环境可以使用自签名证书，但正确做法是把受控的开发 CA 加入测试设备信任库，而不是在生产代码中关闭验证。</p>
+<h2>22. Python 客户端如何验证 HTTPS</h2>
+<pre><code class="language-php">import requests
+
+response = requests.get(
+    &quot;https://example.com&quot;,
+    timeout=5,
+)
+
+print(response.status_code)</code></pre>
+<p><code>requests</code> 默认验证服务器证书链是否受信任以及域名是否匹配。生产环境不要使用 <code>verify=False</code> 绕过错误，因为这会破坏服务器身份认证。企业使用私有 CA 时，应显式指定可信 CA 文件：</p>
+<pre><code class="language-php">response = requests.get(
+    &quot;https://internal.example.com&quot;,
+    verify=&quot;/path/to/company-ca.pem&quot;,
+    timeout=5,
+)</code></pre>
+<h2>23. 从输入 HTTPS 地址到收到响应</h2>
+<ol><li>浏览器解析 URL，DNS 把域名解析为 IP。</li><li>系统查询路由表，数据通过网关和路由器到达服务器。</li><li>HTTP/1.1或HTTP/2先建立 TCP 连接。</li><li>客户端发送 ClientHello，服务器返回所选参数和证书。</li><li>客户端验证证书链、域名、有效期和服务器签名。</li><li>双方通过密钥交换建立共享秘密并派生会话密钥。</li><li>客户端发送加密的 HTTP 请求。</li><li>服务器解密后交给 Web 应用处理。</li><li>服务器生成响应，TLS加密后返回。</li><li>客户端验证并解密响应，再交给浏览器处理。</li></ol>
+<pre><code class="language-plaintext">URL
+→ DNS
+→ IP 与路由
+→ TCP
+→ TLS 握手
+→ 验证证书
+→ 协商会话密钥
+→ 加密 HTTP 请求
+→ 加密 HTTP 响应</code></pre>
+<h2>24. 常见误区</h2>
+<ul><li><strong>HTTPS用服务器公钥加密所有网页数据：</strong>错误。业务数据主要使用握手后派生的对称密钥。</li><li><strong>证书负责加密所有数据：</strong>错误。证书主要绑定域名、公钥和身份信息。</li><li><strong>有HTTPS就说明网站绝对安全：</strong>错误。HTTPS只保护通信链路。</li><li><strong>TLS只提供加密：</strong>错误。它还提供完整性保护和身份认证。</li><li><strong>拿到证书就可以直接相信：</strong>错误。客户端还要验证域名、有效期、证书链、签名和用途。</li><li><strong>关闭证书验证只是少一个警告：</strong>错误。这会使中间人攻击更容易成功。</li></ul>
+<h2>25. 面试回答</h2>
+<p>TLS位于HTTP与传输层之间，主要提供机密性、完整性和身份认证。握手时，客户端通过ClientHello提供支持的版本、密码套件和临时密钥交换参数；服务器选择参数并发送证书链和私钥签名证明。客户端验证证书域名、有效期、证书链和数字签名，再通过ECDHE等机制与服务器建立共享秘密。双方从共享秘密派生对称会话密钥，之后使用高效的对称加密和完整性认证保护HTTP请求与响应。TLS 1.3简化了握手、移除了旧算法，并默认使用支持前向保密的临时密钥交换。</p>
+<h2>26. 一句话总结</h2>
+<p><strong>TLS通过证书和数字签名确认服务器身份，通过密钥交换建立共享秘密，再使用对称加密与完整性认证保护HTTP通信。</strong></p>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

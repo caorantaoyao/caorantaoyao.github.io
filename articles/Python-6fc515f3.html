@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>用户态、内核态与系统调用：Python 程序怎样请求操作系统工作 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.08.16</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">用户态、内核态与系统调用：Python 程序怎样请求操作系统工作</h1>
+    <div class="article-body">
+<p>这一篇回答一个贯穿操作系统、网络编程与后端性能的问题：Python 程序没有权限直接操作磁盘、网卡和进程调度，那么它究竟怎样让计算机完成这些工作？核心答案是：应用通常在用户态运行，需要通过系统调用进入内核，请求操作系统代为执行受保护的操作。</p>
+<p><strong>前置关联：</strong><a href="https://my.feishu.cn/wiki/SsuUwCoyNigCkXk6ol2cBKNenKe" target="_blank" rel="noopener">进程、线程与协程：一个后端服务怎样同时处理多个请求</a>。理解本篇后，就能进一步看清线程阻塞、协程挂起和 I/O 多路复用背后真正发生了什么。</p>
+<p><strong>先记住一句话：</strong>用户态负责运行应用逻辑，内核态负责管理受保护的系统资源；系统调用是应用向内核提交请求的正式入口。</p>
+<h2>1. 两种运行状态不是两个操作系统</h2>
+<p>用户态和内核态是 CPU 执行代码时的两种权限级别。它们共享同一台计算机，也都使用 CPU 和内存，但能够执行的指令、访问的地址范围和可操作的资源不同。</p>
+<p>对比项</p>
+<p>用户态</p>
+<p>内核态</p>
+<p>典型代码</p>
+<p>Python 服务、浏览器、数据库应用层</p>
+<p>操作系统内核、驱动、调度与协议栈</p>
+<p>权限</p>
+<p>受限，只能访问被分配的资源</p>
+<p>高权限，可以管理硬件和所有进程的资源</p>
+<p>故障影响</p>
+<p>通常只让当前进程崩溃</p>
+<p>严重错误可能让整个系统异常</p>
+<p>资源访问</p>
+<p>不能随意直接操作磁盘、网卡和其他进程内存</p>
+<p>可以通过统一规则管理这些资源</p>
+<p>“态”描述的是 CPU 当前采用哪种权限执行指令，不是说计算机里同时运行了两个独立系统，也不意味着用户态一定慢、内核态一定快。</p>
+<h2>2. 为什么必须进行权限隔离</h2>
+<p>如果每个程序都能直接控制硬件或访问任意内存，一段错误代码就可能覆盖别的进程数据、破坏文件系统，甚至让整台机器崩溃。恶意程序也可以直接读取密码、劫持网卡或绕过权限检查。</p>
+<p>因此，操作系统把危险能力集中到内核，并让普通应用运行在较低权限的用户态。进程之间再通过虚拟内存、文件权限、用户身份和资源配额等机制进行隔离。这样即使某个 Python 服务出现异常，影响通常也被限制在该进程的边界内。</p>
+<h2>3. 内核究竟管理什么</h2>
+<p>内核是操作系统的核心管理者。它负责决定哪个线程何时使用 CPU，给进程映射内存页，管理文件系统，驱动磁盘和网卡，维护 TCP/IP 协议栈，并实施权限与隔离规则。</p>
+<p>对后端开发最常见的内核资源包括：进程与线程、虚拟内存、文件描述符、文件与目录、Socket、定时器、管道、信号，以及用于等待事件的 epoll、kqueue 等机制。应用使用这些资源时，通常都要经过系统调用。</p>
+<h2>4. 什么是系统调用</h2>
+<p>系统调用（system call，简称 syscall）是用户程序请求内核服务的标准接口。它不是让应用获得永久的内核权限，而是让应用按规定提交一次请求：内核检查参数和权限，完成操作后再把结果返回。</p>
+<p>Linux 中常见的系统调用有 <code>openat</code>、<code>read</code>、<code>write</code>、<code>close</code>、<code>socket</code>、<code>connect</code>、<code>accept</code>、<code>recvfrom</code>、<code>sendto</code>、<code>epoll_wait</code>、<code>mmap</code>、<code>fork</code> 和 <code>execve</code>。macOS 同样是类 Unix 系统，但具体接口与实现细节并不完全相同；Windows 则采用另一套内核接口。</p>
+<h2>5. 一次系统调用的完整路径</h2>
+<pre><code class="language-plaintext">Python 业务代码
+    ↓ 调用 Python 标准库或第三方库
+运行时 / C 扩展 / C 库封装
+    ↓ 准备系统调用号与参数
+CPU 执行受控入口指令
+    ↓ 从用户态切换到内核态
+内核检查参数、权限与资源状态
+    ↓ 执行文件、网络、内存等操作
+返回结果或错误码
+    ↓ 从内核态返回用户态
+Python 将结果变成对象，或抛出异常</code></pre>
+<p>应用不能自己把 CPU 权限“改成内核态”。它只能执行操作系统规定的受控入口指令。进入内核后，内核根据系统调用号找到对应处理逻辑，并验证用户传入的地址、长度、文件描述符和权限，避免应用借机访问非法资源。</p>
+<h2>6. Python 的 open 和 read 最终发生了什么</h2>
+<pre><code class="language-php">with open(&quot;config.json&quot;, &quot;rb&quot;) as file:
+    data = file.read()</code></pre>
+<p><code>open()</code> 是 Python 函数，不等于 CPU 直接执行一个同名系统调用。它会经过 Python 运行时和底层 C 库，在 Linux 上通常进一步使用 <code>openat</code> 等系统调用，让内核查找路径、检查权限并返回一个文件描述符。</p>
+<p><code>file.read()</code> 也可能经过 Python 自己的缓冲层。当缓冲区数据不足时，底层才请求内核读取。内核先查看页缓存；命中时可直接从内存取得数据，未命中时才需要等待存储设备。最后，数据被交给用户空间，Python 再将其包装为 <code>bytes</code> 对象。</p>
+<h2>7. 文件描述符是用户态与内核态之间的句柄</h2>
+<p>Linux 和其他类 Unix 系统常用文件描述符（file descriptor，FD）表示已打开的内核对象。它只是当前进程中的一个小整数，例如 3、4、5；真正的文件状态、Socket 缓冲区和读写位置由内核维护。</p>
+<p>文件、Socket、管道以及 epoll 实例都可以通过文件描述符被引用。进程把 FD 传给 <code>read</code>、<code>write</code> 或 <code>close</code>，内核再根据当前进程的描述符表找到真实对象。因此，同一个数字 3 在不同进程中通常指向不同资源。</p>
+<h2>8. 普通函数调用与系统调用有什么区别</h2>
+<p>普通函数调用通常仍在用户态内完成，例如调用一个纯 Python 函数或执行字符串拼接。它主要改变栈和指令位置，不必跨越权限边界。</p>
+<p>系统调用则需要进入内核态，由内核验证和执行受保护操作，随后再返回用户态。许多库函数会在内部发起系统调用，但两者不是同一个概念。例如 Python 的 <code>print()</code> 会做格式转换和缓冲，只有真正向终端或文件输出时，底层才可能调用 <code>write</code>。</p>
+<h2>9. 模式切换不等于上下文切换</h2>
+<p><strong>模式切换</strong>是同一个线程从用户态进入内核态，再返回用户态。执行系统调用必然涉及这种权限级别切换，但当前运行者仍可能是同一个线程。</p>
+<p><strong>上下文切换</strong>是 CPU 从一个线程或进程切换到另一个线程或进程，需要保存和恢复寄存器、调度状态等上下文。系统调用不一定触发上下文切换。例如读取页缓存中的小文件，内核可能很快返回；但若系统调用需要等待磁盘或网络，当前线程可能被阻塞，调度器就会让其他线程运行，此时才发生上下文切换。</p>
+<h2>10. 参数、返回值与错误</h2>
+<p>系统调用常接收文件描述符、用户空间地址、缓冲区长度和标志位等参数。内核必须验证这些参数，尤其要确认用户地址合法、目标内存可写，以及当前进程确实拥有操作资源的权限。</p>
+<p>底层接口通常通过返回值和错误码表示成功或失败；语言运行时再把它们转换成更易用的形式。比如文件不存在可能在 Python 中表现为 <code>FileNotFoundError</code>，权限不足表现为 <code>PermissionError</code>，非阻塞 Socket 暂时无数据则可能表现为 <code>BlockingIOError</code>。异常不是凭空产生的，它通常是对内核错误结果的语言级封装。</p>
+<h2>11. 文件 I/O 中的缓存与数据复制</h2>
+<p>读取文件不一定每次都访问物理磁盘。内核会使用页缓存保存近期文件数据；Python 及其库还可能再维护用户态缓冲区。因此，“调用了 read”只说明程序向内核请求数据，并不能直接推断发生了磁盘 I/O。</p>
+<p>传统读取路径通常要把数据从内核管理的缓存复制到用户空间缓冲区。数据量很大时，复制和多次系统调用都会消耗 CPU。后端系统会通过合理缓冲、批量读写、内存映射或零拷贝相关接口减少这些成本，但首先要根据实际性能数据判断瓶颈。</p>
+<h2>12. 网络 I/O 中的用户态与内核态</h2>
+<p>Python 创建 Socket 时，底层请求内核建立一个 Socket 对象并返回 FD。发起连接时，内核负责路由选择、端口状态以及 TCP 握手。调用 <code>send</code> 时，数据通常先从用户空间交给内核发送缓冲区，再由内核协议栈封装成 TCP 段和 IP 包，最后通过网卡发出。</p>
+<p>数据到达网卡后，驱动和内核网络协议栈先处理数据包，并把有效载荷放入 Socket 接收缓冲区。Python 调用 <code>recv</code> 时，内核才把可读数据交给用户空间。应用看见的是字节流，而校验、重传、排序、拥塞控制等 TCP 工作主要由内核完成。</p>
+<h2>13. 阻塞调用为什么会让线程等待</h2>
+<p>当线程对一个暂时没有数据的阻塞 Socket 执行 <code>recv</code>，内核不能立即返回有效数据。它会把该线程标记为等待状态，并让调度器运行其他可执行线程。等网络数据到达后，内核再唤醒这个线程。</p>
+<p>等待期间线程通常不持续占用 CPU，但仍保留线程栈、内核调度对象和其他状态。少量并发时这种模型简单可靠；连接数量非常大时，为每个等待连接保留一个线程的成本就会逐渐变高。</p>
+<h2>14. epoll 与系统调用是什么关系</h2>
+<p><code>epoll</code> 是 Linux 提供的一组内核机制，也通过系统调用使用。应用先把多个非阻塞 FD 注册给内核，再调用 <code>epoll_wait</code> 等待事件。内核知道哪些 Socket 已经可读或可写，可以一次返回一批就绪 FD。</p>
+<p>它的价值不是“一次读取所有 Socket 的数据”，而是让一个线程高效询问内核：哪些连接现在值得处理？事件循环拿到就绪列表后，仍要对具体 FD 调用 <code>recv</code>、<code>send</code> 等操作。macOS 常用 <code>kqueue</code>，Windows 常见 IOCP，思想相近但模型和接口有所差异。</p>
+<h2>15. async 和 await 背后的内核链路</h2>
+<pre><code class="language-php">async def fetch(reader):
+    data = await reader.read(1024)
+    return data</code></pre>
+<p><code>await</code> 本身不是系统调用，也不会直接让 CPU 进入内核态。异步框架会让当前协程保存进度并把控制权交还事件循环。事件循环通常借助 epoll、kqueue 或 IOCP 等内核能力等待大量 I/O 事件；某个 FD 就绪后，再恢复对应协程继续执行。</p>
+<p>因此完整链路是：Python 协程 → 事件循环 → I/O 多路复用接口 → 内核等待事件 → 返回就绪 FD → 事件循环恢复协程。协程是用户态的并发组织方式，事件真正何时就绪仍由内核判断。</p>
+<h2>16. 中断、异常与系统调用的区别</h2>
+<p>机制</p>
+<p>由谁触发</p>
+<p>典型场景</p>
+<p>系统调用</p>
+<p>正在运行的应用主动触发</p>
+<p>读文件、发网络数据、创建进程</p>
+<p>异常</p>
+<p>CPU 执行当前指令时发现问题或特殊条件</p>
+<p>缺页、除零、非法访问</p>
+<p>中断</p>
+<p>通常由外部硬件异步触发</p>
+<p>网卡收到数据、定时器到期、磁盘完成操作</p>
+<p>三者都可能让 CPU 转入内核的处理逻辑，但触发来源和目的不同。例如线程调用 <code>recv</code> 是系统调用；之后网卡收到数据可能引发硬件通知，内核处理数据并唤醒等待者。</p>
+<h2>17. 系统调用为什么有成本</h2>
+<p>系统调用需要跨越用户态和内核态边界，还涉及参数检查、权限验证以及可能的数据复制。它通常比普通函数调用昂贵，但不应被简单描述为“非常慢”；真实耗时常常来自磁盘、网络等待、锁竞争或调度，而不只是模式切换本身。</p>
+<p>常见优化思路是减少不必要的调用次数并增加每次处理的数据量，例如使用缓冲 I/O、批量读取、批量发送、连接复用和批量事件获取。但把许多小操作盲目合并，也可能增加延迟和内存占用，需要根据吞吐量与延迟目标取舍。</p>
+<h2>18. 什么是零拷贝</h2>
+<p>“零拷贝”不是绝对没有任何数据移动，而是尽量避免数据在用户空间与内核空间之间反复复制。例如静态文件服务可以使用 <code>sendfile</code> 等接口，让内核把文件页缓存中的数据更直接地交给网络发送路径，应用不必先把整份文件读入 Python 内存再发送。</p>
+<p>这类优化特别适合大文件传输、代理和消息系统，但会受到操作系统、协议、加密方式和框架支持的影响。业务逻辑若必须解析或修改每个字节，就无法完全绕开用户空间处理。</p>
+<h2>19. 权限检查与进程隔离在哪里发生</h2>
+<p>应用请求打开文件、绑定端口、向其他进程发送信号或创建网络连接时，内核会结合用户身份、文件权限、能力集合、安全策略和资源限制进行检查。用户态代码不能只靠修改一个变量就绕过这些规则。</p>
+<p>虚拟内存也由内核维护。每个进程看到自己的地址空间，普通代码不能直接读取另一个进程的私有内存。访问未映射地址时，CPU 和内核会共同处理异常，最终可能向进程发送错误信号，使程序崩溃，而不是允许它继续破坏系统。</p>
+<h2>20. 容器有没有自己的内核</h2>
+<p>普通容器通常没有独立内核，而是与宿主机共享同一个内核。容器中的 Python 程序照样通过系统调用请求宿主机内核工作；命名空间让不同容器看到隔离的进程、网络和挂载视图，cgroups 则限制 CPU、内存等资源。</p>
+<p>这也是容器与完整虚拟机的重要区别之一。容器镜像可以带自己的用户态文件、Python 解释器和依赖，却必须兼容宿主机内核提供的系统调用接口。容器逃逸之所以危险，也正因为容器共享宿主机的内核安全边界。</p>
+<h2>21. 如何从性能指标看用户态与内核态</h2>
+<p>性能工具常把 CPU 时间区分为 user time 和 system time。user time 高，说明 CPU 主要在执行应用层逻辑；system time 高，通常说明大量时间花在内核工作中，例如频繁系统调用、网络包处理、文件操作、内存管理或调度。</p>
+<p>但 system time 高只是一条线索，不是结论。定位问题还要结合系统调用频率、上下文切换、I/O 等待、缺页、网络吞吐和锁竞争等数据。优化前应先找出究竟是调用过于频繁、数据复制太多，还是资源本身已经成为瓶颈。</p>
+<h2>22. 一个后端请求的完整跨界过程</h2>
+<ol><li>客户端数据包到达网卡，内核驱动与网络协议栈处理它。</li><li>数据进入监听 Socket 或已连接 Socket 的内核缓冲区。</li><li>事件循环通过 epoll、kqueue 或其他机制获得“可读”通知。</li><li>Python 框架读取数据，解析 HTTP 请求，并在用户态运行路由和业务逻辑。</li><li>业务代码访问文件、数据库或其他服务时，再通过相应库触发网络或文件系统调用。</li><li>Python 生成响应，底层通过 Socket 把响应字节交给内核。</li><li>内核 TCP/IP 协议栈负责分段、重传与发送，网卡最终把数据发出。</li></ol>
+<p>一次看似简单的 HTTP 请求会多次跨越用户态和内核态。框架负责组织业务和并发，操作系统内核负责安全地管理硬件、连接和调度，两者缺一不可。</p>
+<h2>23. 常见误区</h2>
+<p><strong>误区一：调用库函数就是系统调用。</strong>库函数可能只做用户态计算，也可能封装一个或多个系统调用；必须看具体实现。</p>
+<p><strong>误区二：系统调用一定会切换进程。</strong>它一定涉及权限模式切换，但只有发生阻塞或调度等情况时，才可能进一步发生线程或进程上下文切换。</p>
+<p><strong>误区三：内核态代码一定比用户态代码快。</strong>内核态代表权限更高，不代表执行天然更快；内核还要承担验证、调度和资源管理成本。</p>
+<p><strong>误区四：async/await 不需要操作系统。</strong>协程调度主要在用户态完成，但网络事件、Socket 缓冲和 I/O 等待仍由内核提供基础能力。</p>
+<p><strong>误区五：容器里有一套完整独立内核。</strong>普通容器共享宿主机内核；完整虚拟机通常才运行自己的客户机内核。</p>
+<h2>24. 面试回答模板</h2>
+<p>用户态和内核态是 CPU 的两种权限级别。普通应用运行在用户态，不能直接操作硬件或访问任意内存；内核态由操作系统内核使用，负责进程调度、内存、文件系统、网络协议栈和设备管理。应用需要这些能力时，通过系统调用进入内核，内核完成参数与权限检查并执行操作，然后把结果返回用户态。系统调用会发生用户态与内核态的模式切换，但不一定发生进程或线程的上下文切换；只有线程阻塞或调度器更换运行者时，才会发生上下文切换。Python 的文件、Socket 和异步 I/O 最终都建立在这些内核接口之上。</p>
+<h2>25. 学完后应该能够回答什么</h2>
+<ul><li>为什么应用不能直接操作磁盘、网卡和其他进程内存？</li><li>Python 的 <code>open</code>、<code>recv</code> 和 <code>await</code> 分别在哪一层工作？</li><li>系统调用、模式切换与上下文切换有什么区别？</li><li>阻塞线程为什么不占 CPU，却仍然有资源成本？</li><li>epoll 如何把用户态事件循环与内核中的 Socket 状态连接起来？</li><li>为什么容器隔离了进程视图，却仍然共享宿主机内核？</li></ul>
+<p><strong>下一步建议：</strong>学习“虚拟内存、分页与缺页异常：每个进程为什么都觉得自己独占内存”。它会把本篇的用户态/内核态边界与进程隔离、缓存和内存性能继续串起来。</p>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

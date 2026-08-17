@@ -1,7 +1,15 @@
 {
-  "generated_at": "2026-08-16T20:09:39.193107+00:00",
-  "count": 56,
+  "generated_at": "2026-08-17T20:13:49.366701+00:00",
+  "count": 57,
   "articles": [
+    {
+      "title": "Webhook：事件发生后如何通过 HTTP 主动通知另一套系统",
+      "date": "2026.08.17",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "Webhook 是一种基于 HTTP 的事件回调机制：接收方预先提供一个 URL，当指定事件发生后，事件生产者主动向该 URL 发送请求。它解决的核心问题是：一个系统怎样及时把“刚刚发生了什么”通知给另一套系统，而不要求接收方持续轮询。",
+      "url": "/articles/Webhook--HTTP-98ae46fe.html"
+    },
     {
       "title": "用户态、内核态与系统调用：Python 程序怎样请求操作系统工作",
       "date": "2026.08.16",

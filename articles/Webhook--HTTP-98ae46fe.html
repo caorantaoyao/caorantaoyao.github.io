@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Webhook：事件发生后如何通过 HTTP 主动通知另一套系统 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.08.17</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">Webhook：事件发生后如何通过 HTTP 主动通知另一套系统</h1>
+    <div class="article-body">
+<p>Webhook 是一种基于 HTTP 的事件回调机制：接收方预先提供一个 URL，当指定事件发生后，事件生产者主动向该 URL 发送请求。它解决的核心问题是：一个系统怎样及时把“刚刚发生了什么”通知给另一套系统，而不要求接收方持续轮询。</p>
+<p><strong>关联阅读：</strong><a href="https://my.feishu.cn/wiki/RSZiwoqDViqShFk3KHrcMkM6nHd" target="_blank" rel="noopener">RPC：不同服务之间如何进行同步调用</a>、<a href="https://my.feishu.cn/wiki/BFfLw0CakiM0kkkrFuocJ2AhnCc" target="_blank" rel="noopener">消息队列：从异步解耦到 Agent 任务调度</a>。RPC 关注“现在请你完成一件事并返回结果”，Webhook 关注“某件事发生后我再通知你”，消息队列则常用于承接 Webhook 后的可靠异步处理。</p>
+<p><strong>一句话理解：</strong>API 通常是你主动问对方，Webhook 是事件发生后对方主动调用你。</p>
+<h2>1. 从轮询开始理解 Webhook</h2>
+<p>假设业务系统向模型平台提交了一个需要十分钟的批量推理任务。没有 Webhook 时，业务系统只能每隔几秒询问一次“任务完成了吗”。绝大多数请求得到的都是“还没有”，既浪费网络与计算资源，也可能因为轮询间隔而延迟发现结果。</p>
+<p>使用 Webhook 后，业务系统在创建任务时登记回调地址。模型平台完成任务后，主动向这个地址发送 HTTP 请求。业务系统不需要一直询问，只在真正有事件时接收通知。</p>
+<pre><code class="language-plaintext">轮询：接收方 → 发送方：完成了吗？完成了吗？完成了吗？
+
+Webhook：事件发生 → 发送方 → 接收方：任务已经完成</code></pre>
+<h2>2. Webhook 的四个参与要素</h2>
+<p><strong>事件生产者。</strong>产生事件并发送通知的系统，例如 GitHub、支付平台、飞书、模型推理服务或 Agent Runtime。</p>
+<p><strong>事件。</strong>系统中值得通知的状态变化，例如代码被推送、支付成功、任务完成、审批通过或工具执行失败。</p>
+<p><strong>订阅关系。</strong>接收方告诉生产者自己关心哪些事件，并登记 Webhook URL、密钥或其他配置。</p>
+<p><strong>Webhook 接收端点。</strong>接收方暴露的 HTTP 地址，例如 <code>POST /webhooks/agent</code>。它负责验证请求、记录事件并触发后续处理。</p>
+<h2>3. 一次 Webhook 的完整生命周期</h2>
+<ol><li>接收方在事件生产者处登记 URL、订阅事件类型并配置共享密钥。</li><li>生产者内部发生事件，例如 Agent 任务从 running 变成 completed。</li><li>生产者生成唯一事件 ID，并把事件序列化为 JSON。</li><li>生产者计算签名，通过 HTTPS 向 Webhook URL 发送 POST 请求。</li><li>接收方读取原始请求体，验证签名、时间戳和事件 ID。</li><li>接收方持久化事件或写入消息队列，并尽快返回 2xx。</li><li>后台消费者执行业务逻辑，例如更新任务、发送通知或恢复 Agent Loop。</li><li>如果没有收到可接受的响应，生产者按照重试策略再次投递。</li></ol>
+<h2>4. Webhook 请求通常长什么样</h2>
+<p>生产者一般使用 HTTP POST，并在请求头中携带事件类型、事件 ID、时间戳和签名。请求体使用 JSON 描述事件。</p>
+<pre><code class="language-java">POST /webhooks/agent HTTP/1.1
+Host: agent.example.com
+Content-Type: application/json
+X-Webhook-Event: agent.completed
+X-Webhook-Id: evt_123
+X-Webhook-Timestamp: 1786922400
+X-Webhook-Signature: sha256=...
+
+{
+  &quot;event_id&quot;: &quot;evt_123&quot;,
+  &quot;event_type&quot;: &quot;agent.completed&quot;,
+  &quot;task_id&quot;: &quot;task_456&quot;,
+  &quot;status&quot;: &quot;success&quot;,
+  &quot;occurred_at&quot;: &quot;2026-08-17T10:00:00+08:00&quot;
+}</code></pre>
+<p>不同平台的字段名和签名算法并不统一，接入时必须以该平台协议为准。不要假设所有 Webhook 都使用同一种请求头或重试规则。</p>
+<h2>5. API 与 Webhook 的关系</h2>
+<p>对比项</p>
+<p>普通 API 调用</p>
+<p>Webhook</p>
+<p>发起者</p>
+<p>需要数据或能力的一方</p>
+<p>产生事件的一方</p>
+<p>触发时机</p>
+<p>调用方主动决定</p>
+<p>事件发生时触发</p>
+<p>主要目的</p>
+<p>查询数据或执行命令</p>
+<p>通知状态变化</p>
+<p>典型方向</p>
+<p>业务系统 → 第三方平台</p>
+<p>第三方平台 → 业务系统</p>
+<p>结果</p>
+<p>通常直接得到业务响应</p>
+<p>2xx 只表示通知被接收，不一定表示业务已经完成</p>
+<p>二者经常组合使用：业务系统先通过 API 创建异步任务，任务完成后平台再通过 Webhook 通知结果。收到事件后，接收方还可能再次调用平台 API，获取资源的最新完整状态。</p>
+<h2>6. 用 FastAPI 接收 Webhook</h2>
+<pre><code class="language-php">from fastapi import FastAPI, Request, Response, HTTPException
+
+app = FastAPI()
+
+
+@app.post(&quot;/webhooks/agent&quot;)
+async def receive_agent_webhook(request: Request):
+    raw_body = await request.body()
+    signature = request.headers.get(&quot;X-Webhook-Signature&quot;, &quot;&quot;)
+    timestamp = request.headers.get(&quot;X-Webhook-Timestamp&quot;, &quot;&quot;)
+
+    if not verify_signature(raw_body, timestamp, signature):
+        raise HTTPException(status_code=401, detail=&quot;invalid signature&quot;)
+
+    event = await request.json()
+    event_id = event[&quot;event_id&quot;]
+
+    if await event_store.exists(event_id):
+        return Response(status_code=204)
+
+    await event_store.save(event_id, event)
+    await event_queue.publish(event)
+
+    return Response(status_code=204)</code></pre>
+<p>示例中的接口只做三件关键事情：验证、去重、可靠接收。真正耗时的业务逻辑交给消息队列消费者执行，避免生产者因为等待超时而重复投递。</p>
+<h2>7. 为什么应该先验证原始请求体</h2>
+<p>签名通常是生产者根据“原始请求字节 + 时间戳 + 共享密钥”计算出来的。如果接收方先把 JSON 解析成对象再重新序列化，空格、字段顺序或编码可能发生变化，重新计算出的签名就会不同。</p>
+<p>因此应先使用原始字节验证签名，验证通过后再解析 JSON。还要使用恒定时间比较函数，例如 Python 的 <code>hmac.compare_digest</code>，降低通过比较耗时推测签名内容的风险。</p>
+<pre><code class="language-php">import hashlib
+import hmac
+import time
+
+
+def verify_signature(body: bytes, timestamp: str, signature: str) -&gt; bool:
+    if abs(time.time() - int(timestamp)) &gt; 300:
+        return False
+
+    signed = timestamp.encode() + b&quot;.&quot; + body
+    expected = hmac.new(
+        WEBHOOK_SECRET.encode(),
+        signed,
+        hashlib.sha256,
+    ).hexdigest()
+
+    return hmac.compare_digest(expected, signature)</code></pre>
+<h2>8. 为什么 Webhook 不能相信“请求格式正确”</h2>
+<p>Webhook URL 通常可以被公网访问。攻击者只要知道地址，就可能伪造“支付成功”“审批通过”或“Agent 已完成”等请求。JSON 字段看起来正确，并不能证明请求来自真实平台。</p>
+<p>生产环境至少应使用 HTTPS、验证签名和时间戳、限制请求体大小、设置速率限制，并妥善保管 Webhook Secret。IP 白名单可以作为附加防线，但第三方出口 IP 可能变化，也不应替代密码学签名。</p>
+<h2>9. 什么是重放攻击</h2>
+<p>攻击者不一定能伪造签名，也可能截获一条合法请求后反复发送。由于请求本身签名正确，只校验签名仍然可能让同一业务重复执行。</p>
+<p>接收方应校验时间戳是否在允许窗口内，并记录唯一事件 ID。超出时间窗口的请求被拒绝，已经接收过的事件则直接返回成功而不重复执行业务。</p>
+<h2>10. 为什么必须支持幂等</h2>
+<p>Webhook 通常采用“至少投递一次”的思路。生产者发送事件后，如果接收方已经处理，但返回响应时网络中断，生产者看不到成功结果，只能再次发送同一事件。</p>
+<p>因此，同一个事件可能出现多次。接收方应该为 <code>event_id</code> 建立唯一约束：第一次到达时写入事件并执行业务，之后的重复事件只返回成功。这样，同一事件处理一次或多次，最终业务状态保持一致。</p>
+<pre><code class="language-rust">CREATE TABLE webhook_inbox (
+    event_id VARCHAR(128) PRIMARY KEY,
+    event_type VARCHAR(128) NOT NULL,
+    payload JSON NOT NULL,
+    received_at TIMESTAMP NOT NULL,
+    processing_status VARCHAR(32) NOT NULL
+);</code></pre>
+<p>仅在内存或 Redis 中短暂记录事件可能因重启或过期而失效。支付、计费、审批等关键场景通常需要数据库唯一约束和事务来保证去重记录可靠存在。</p>
+<h2>11. 为什么要尽快返回 2xx</h2>
+<p>生产者一般会为 Webhook 请求设置较短超时。如果接收端在请求内完成模型调用、发送邮件、更新多个数据库或执行复杂 Agent，响应很容易超时。生产者会把它视为失败并重试，进一步增加系统压力。</p>
+<p>推荐流程是：验证请求 → 原子地保存事件 → 写入队列 → 返回 200、202 或 204 → 后台异步处理。具体哪些状态码被生产者视为成功，要按照平台协议确认。</p>
+<h2>12. 重试、退避与死信</h2>
+<p>网络抖动、服务重启和临时限流都可能导致投递失败。生产者通常会采用指数退避，例如等待 1 秒、2 秒、4 秒、8 秒后重试，并设置最大次数或最长保留时间。实际间隔最好增加随机抖动，避免大量失败事件同时重试。</p>
+<p>超过重试上限的事件不能悄悄丢弃。发送方可以进入死信队列或失败表，触发告警并支持人工重放。接收方也应记录接收、入队、处理和失败状态，便于回答“某个事件到底走到了哪一步”。</p>
+<h2>13. Webhook 能保证顺序吗</h2>
+<p>通常不能默认保证。事件 A 先发生，并不意味着接收方一定先看到 A。网络延迟、并发投递和失败重试都可能让事件乱序，例如 <code>task.completed</code> 比早先发送的 <code>task.running</code> 更早到达。</p>
+<p>处理顺序敏感的业务时，可以在事件中加入资源版本号或递增序列号，只接受比当前版本更新的事件；也可以在收到通知后调用资源 API 查询最新状态。不要仅根据“Webhook 到达顺序”覆盖数据库状态。</p>
+<h2>14. Webhook 的交付语义</h2>
+<p>语义</p>
+<p>含义</p>
+<p>问题</p>
+<p>最多一次</p>
+<p>事件可能丢失，但不会重试</p>
+<p>不适合关键业务</p>
+<p>至少一次</p>
+<p>尽量确保送达，失败会重试</p>
+<p>可能重复，需要幂等</p>
+<p>恰好一次</p>
+<p>业务效果只发生一次</p>
+<p>跨网络很难直接保证，通常依靠幂等实现“效果上的一次”</p>
+<p>可靠 Webhook 最常见的工程选择是“至少一次投递 + 接收方幂等”。这比寄希望于网络永不失败更符合分布式系统现实。</p>
+<h2>15. 发送方为什么需要 Outbox</h2>
+<p>发送方也有一致性问题：业务事务已经把任务改成 completed，但进程在发送 Webhook 前崩溃，事件就会丢失；如果先发 Webhook 再提交事务，接收方又可能看到一个最终没有成功落库的状态。</p>
+<p>Transactional Outbox 的做法是在同一个数据库事务中，同时更新业务状态并写入待发送事件。独立投递器读取 Outbox 表、发送 Webhook，并记录发送结果。这样可以把“业务变化”和“产生待投递事件”绑定在一起。</p>
+<pre><code class="language-plaintext">发送方业务事务
+  ├─ 更新 task 状态
+  └─ 写入 outbox_event
+          ↓
+      异步投递器
+          ↓ HTTPS Webhook
+      接收方 inbox 去重
+          ↓
+        消息队列
+          ↓
+      后台业务消费者</code></pre>
+<h2>16. Webhook 为什么经常与消息队列配合</h2>
+<p>Webhook 适合跨组织、跨产品地通过 HTTP 传递事件，但它不适合直接承载复杂业务处理。消息队列可以在接收方内部提供削峰、重试、消费者扩展和故障隔离。</p>
+<p>典型架构是：公网网关接收 Webhook → 验签与幂等 → 写入队列 → 立即响应 → 消费者处理。即使下游模型服务、数据库或通知系统短暂故障，已经可靠入队的事件仍可以稍后继续处理。</p>
+<h2>17. Webhook、WebSocket 与消息队列</h2>
+<p>技术</p>
+<p>连接方式</p>
+<p>主要用途</p>
+<p>典型场景</p>
+<p>Webhook</p>
+<p>一次性 HTTP 请求</p>
+<p>事件发生后跨系统通知</p>
+<p>支付结果、GitHub 事件</p>
+<p>WebSocket</p>
+<p>长期双向连接</p>
+<p>持续实时交互</p>
+<p>聊天、实时状态、流式输出</p>
+<p>消息队列</p>
+<p>通过 Broker 投递与消费</p>
+<p>内部可靠异步解耦</p>
+<p>任务调度、削峰、事件流</p>
+<p>RPC</p>
+<p>面向服务的请求响应</p>
+<p>同步调用远程能力</p>
+<p>查询库存、创建订单</p>
+<p>Webhook 不是长连接，也不是消息队列本身。它只是把事件通过普通 HTTP 请求推到一个端点；可靠性、排队和消费能力需要双方协议或内部基础设施补足。</p>
+<h2>18. OAuth 回调是不是 Webhook</h2>
+<p>二者都使用“回调 URL”，但不要完全等同。OAuth 授权回调通常由浏览器携带授权码跳转到应用地址，是一次用户参与的协议流程；Webhook 一般是服务端到服务端的异步事件通知，不依赖用户浏览器。</p>
+<p>支付完成后的服务端通知是典型 Webhook，用户支付完成后浏览器跳回商家页面则更像前端重定向。关键业务状态不应只依赖浏览器跳转，因为用户可能直接关闭页面。</p>
+<h2>19. Webhook 在 AI Agent 平台中的用途</h2>
+<p>Agent 平台经常包含长时间运行和外部等待，Webhook 可以把外部世界的状态变化带回 Agent Runtime。例如模型批量推理完成、沙箱工具执行结束、GitHub Issue 更新、人工审批通过、支付套餐变化或知识源文件更新。</p>
+<pre><code class="language-plaintext">Agent 执行高风险步骤
+        ↓
+状态变为 WAITING_APPROVAL
+        ↓
+用户在飞书完成审批
+        ↓ Webhook
+Agent Runtime 验签、去重并保存事件
+        ↓
+恢复对应 Agent Loop
+        ↓
+继续执行或安全终止</code></pre>
+<p>Webhook 事件应携带稳定的 <code>tenant_id</code>、<code>agent_run_id</code>、<code>event_id</code> 和关联资源 ID。接收端从可信数据库恢复任务上下文，不要直接相信请求体中的租户权限或下一步工具参数。</p>
+<h2>20. 监控与可观测性</h2>
+<p>至少应记录事件 ID、事件类型、发送方、接收时间、签名验证结果、HTTP 状态、处理状态、重试次数和业务关联 ID。密钥、完整鉴权头和敏感业务数据不应直接写入日志。</p>
+<p>常见指标包括接收速率、验签失败数、重复率、2xx 比例、接收延迟、队列堆积、消费失败率和最老未处理事件年龄。Trace 中可以把 Webhook 请求、入队和后台消费用同一个事件 ID 串联起来。</p>
+<h2>21. 版本演进与密钥轮换</h2>
+<p>Webhook Payload 会随产品演进。生产者可以在 URL、请求头或事件体中提供版本信息；接收方应忽略暂时不认识的附加字段，并对必需字段做明确校验。破坏性变更应发布新版本，而不是悄悄改变旧字段语义。</p>
+<p>密钥轮换时可以短期同时接受新旧两个密钥，确认所有发送实例已切换后再撤销旧密钥。订阅配置、URL 变更和重放操作都应进入审计日志。</p>
+<h2>22. 可靠接入检查清单</h2>
+<ul><li>使用 HTTPS，并严格按照平台文档验证原始请求体签名。</li><li>验证时间戳与唯一事件 ID，防止重放。</li><li>为事件 ID 建立持久化唯一约束，实现幂等。</li><li>先可靠保存或入队，再尽快返回平台认可的 2xx。</li><li>接受重复、延迟和乱序，不依赖到达顺序覆盖状态。</li><li>对临时失败使用退避重试，对永久失败告警并进入死信。</li><li>限制请求体大小、请求速率和支持的 Content-Type。</li><li>记录投递链路，但不在日志中保存 Secret 和敏感鉴权信息。</li><li>提供重放、对账或主动查询机制，修复极端情况下的事件缺口。</li></ul>
+<h2>23. 常见误区</h2>
+<p><strong>误区一：返回 200 代表全部业务已经执行完成。</strong>在推荐架构中，2xx 通常只表示事件已经可靠接收，真正业务可能仍在队列中处理。</p>
+<p><strong>误区二：平台说会重试，所以事件不会丢。</strong>重试次数和保留时间都有限，接收方仍需要告警、对账和补偿机制。</p>
+<p><strong>误区三：签名正确就不需要幂等。</strong>合法请求也会因为超时和网络故障被重复发送，签名验证与幂等解决的是不同问题。</p>
+<p><strong>误区四：Webhook 就是 WebSocket。</strong>Webhook 是一次性 HTTP 回调；WebSocket 是持续存在的双向连接。</p>
+<p><strong>误区五：收到事件后直接执行所有业务最简单。</strong>轻量场景可以同步处理，但重要或耗时业务应先持久化并异步执行，否则超时重试会放大故障。</p>
+<h2>24. 面试回答模板</h2>
+<p>Webhook 是一种基于 HTTP 的事件回调机制。接收方预先向事件生产者登记 URL，当指定事件发生时，生产者主动向该 URL 发送请求，从而避免接收方持续轮询。生产环境不能只实现一个 POST 接口，还要验证 HTTPS、原始请求体签名和时间戳，通过事件 ID 与数据库唯一约束保证幂等，并接受重复、延迟和乱序。接收端通常先可靠保存事件或写入消息队列，再快速返回 2xx，由后台消费者完成业务。发送方则可通过 Outbox、退避重试、死信和对账机制提高可靠性。</p>
+<h2>25. 学完后应该能够回答什么</h2>
+<ul><li>Webhook 与普通 API、轮询、WebSocket、RPC 和消息队列分别解决什么问题？</li><li>为什么必须验证原始请求体的签名，而不是只检查 JSON 字段？</li><li>为什么同一个合法事件会重复到达，怎样实现幂等？</li><li>为什么接收方应该快速返回 2xx，并把业务交给后台消费者？</li><li>乱序事件为什么会覆盖新状态，版本号怎样解决这个问题？</li><li>Agent Runtime 怎样通过 Webhook 恢复一个正在等待审批的 Agent Loop？</li></ul>
+<p><strong>下一步建议：</strong>学习“服务发现与配置中心：服务实例不断变化时，调用方怎样找到正确地址”。它会把 RPC、负载均衡和动态服务治理继续串起来。</p>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

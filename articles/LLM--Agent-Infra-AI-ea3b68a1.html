@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM 应用 / Agent Infra / AI 平台秋招八股清单（简历反推版） — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.08.25</span>
+      <span class="article-tag cloud">项目与面试资产</span>
+    </div>
+    <h1 class="article-title">LLM 应用 / Agent Infra / AI 平台秋招八股清单（简历反推版）</h1>
+    <div class="article-body">
+<p>本文根据《曹然-LLM-Agent-AI平台-秋招简历(4)》逐项反推面试知识点。它不是一份平均用力的通用八股目录，而是一张“简历写了什么，就必须能讲到什么深度”的准备地图。</p>
+<p>每个写进“我的职责”的关键词，至少要能连续回答五层：它是什么、项目里怎样实现、为什么这样设计、失败时怎样处理、用什么证据验证。</p>
+<h2>1. 核心判断：这份简历会把面试引向哪里</h2>
+<p>这份简历的优势是工程密度高：它写了架构拆分、隔离、安全、状态机、云原生迁移和可量化结果。相应的风险是，面试官不会满足于“我用过某个框架”，而会沿着机制、边界和故障场景连续追问。</p>
+<p>最主要的四条追问主线是：Agent 如何执行和保存状态；后端服务如何处理并发与分布式失败；沙箱、鉴权和多租户怎样建立真正的安全边界；大模型应用如何做检索、约束生成、评测和推理服务。</p>
+<p>因此，准备策略不是平均背完整套语言语法，而是先把简历承诺的机制讲透，再补大厂通用基础和 AI Infra 加分项。每个模块都应能画出真实架构或时序图，并给出至少一个实际故障案例。</p>
+<h2>2. P0、P1、P2 优先级总览</h2>
+<p>优先级</p>
+<p>范围</p>
+<p>掌握标准</p>
+<p><strong>P0：简历承诺</strong></p>
+<p>Agent、MCP、Context/Memory、Python 并发、网络流式通信、数据库、分布式可靠性、鉴权、沙箱、Kubernetes、RAG</p>
+<p>能承受连续 3～5 层项目追问，并能说明真实实现和失败处理</p>
+<p><strong>P1：秋招基本盘</strong></p>
+<p>操作系统、网络、数据库、数据结构与算法、Python 原理、系统设计</p>
+<p>能准确解释核心机制，能完成常见编码题和设计题</p>
+<p><strong>P2：岗位加分项</strong></p>
+<p>推理生命周期、KV Cache、动态批处理、GPU 显存、vLLM、多卡通信</p>
+<p>能把原理连接到 AI 平台的吞吐、延迟、成本和故障</p>
+<p>P0 的优先级最高，因为它直接决定简历可信度；P1 决定能否通过通用技术面；P2 决定能否从“Agent 应用开发”进一步匹配 Agent Infra 和 AI 平台岗位。</p>
+<h2>3. Agent Loop、LangGraph 与 Multi-Agent</h2>
+<h3>必须掌握的主干</h3>
+<p>Agent Loop 至少包含输入与状态读取、模型决策、工具执行、结果观察、状态更新和终止判断。循环不是越长越智能，必须有最大步数、Token、时间和费用预算，并能在证据不足、越权或连续失败时安全停止。</p>
+<p>LangGraph 需要讲清 Graph State、Node、Conditional Edge、Reducer、Checkpoint、Interrupt/Resume 和持久化之间的关系。尤其要知道：节点重试可能再次执行带副作用的工具，因此 Checkpoint 只能恢复状态，不能天然保证外部操作恰好执行一次。</p>
+<h3>Multi-Agent 追问</h3>
+<p>Leader、Diagnostician、Fixer 和 Verifier 的价值不在于拥有四段不同 Prompt，而在于职责、上下文和运行时权限真正隔离。需要说明任务如何委派、结果如何汇总、共享状态由谁提交，以及 Sub-Agent 的工具、递归深度、Token 和时间怎样受限。</p>
+<p><strong>高频追问：</strong>同一个模型既修复又验证是否存在自证偏差？Verifier 凭什么可信？两个 Agent 同时更新状态如何避免覆盖？工具已经成功但节点超时重试怎么办？</p>
+<h2>4. MCP、工具调用与 Skill System</h2>
+<h3>四个概念的边界</h3>
+<p>概念</p>
+<p>核心职责</p>
+<p>安全边界</p>
+<p>Tool</p>
+<p>可被模型调用的原子能力与参数契约</p>
+<p>运行时必须校验参数、身份和权限</p>
+<p>MCP Server</p>
+<p>通过协议暴露工具、资源或 Prompt</p>
+<p>负责认证、会话与具体能力授权</p>
+<p>Skill</p>
+<p>一组渐进披露的任务说明、脚本和资源</p>
+<p>不能仅靠文字声明限制真实工具权限</p>
+<p>System Prompt</p>
+<p>规定角色、原则和全局约束</p>
+<p>是模型指令，不等于不可绕过的访问控制</p>
+<h3>MCP 必会内容</h3>
+<p>需要能指出项目中的 Host、Client 和 Server，解释初始化、能力协商、工具发现和工具调用过程，以及 stdio 与 Streamable HTTP 的适用边界。还要掌握 JSON-RPC、会话 ID、流式响应、认证、超时、取消和错误传播。</p>
+<p>重试 <code>tools/call</code> 可能重复创建计算任务，因此有副作用的工具需要调用 ID、幂等键、状态查询或补偿机制。<code>allowed-tools</code> 应在执行器或网关强制校验，而不是只写进 Prompt。</p>
+<h3>Skill 渐进披露</h3>
+<p>只向上下文注入 <code>name/description/path</code> 能降低固定 Token 成本，模型需要时再读取 <code>SKILL.md</code>。需要进一步说明显式 Slash 激活与自动激活的优先级、缓存键是否包含用户和 Skill 版本、更新后如何失效，以及自定义 Skill 如何防止符号链接和间接工具调用越权。</p>
+<h2>5. Context、Memory、Trace 与评测</h2>
+<h3>五类状态不要混为一谈</h3>
+<p>类型</p>
+<p>保存内容</p>
+<p>主要用途</p>
+<p>Dynamic Context</p>
+<p>当前请求临时组装的信息</p>
+<p>控制本次模型调用输入</p>
+<p>Durable Context</p>
+<p>需要跨请求保存的会话或任务状态</p>
+<p>恢复工作进度</p>
+<p>Checkpoint</p>
+<p>图执行到某节点时的状态快照</p>
+<p>中断、恢复和重放</p>
+<p>Summary</p>
+<p>对长历史的压缩表达</p>
+<p>降低上下文长度</p>
+<p>Long-term Memory</p>
+<p>跨会话复用的稳定事实与偏好</p>
+<p>个性化与长期协作</p>
+<p>Token Budget 需要在系统指令、当前问题、历史消息、Skill、检索结果和工具输出之间分配。保持 Prompt 前缀稳定有利于复用前缀缓存，但不能为了缓存而保留已经失效的信息。</p>
+<p>异步 Memory 写入必须处理重复抽取、并发覆盖、旧事实更新、删除请求和跨用户污染。“原子持久化”需要落实为数据库事务、唯一键、版本号或 CAS，而不是一个抽象形容词。</p>
+<h3>Trace 与评测</h3>
+<p>Trace 应记录模型调用、工具调用、状态变化、耗时、Token、错误和关联 ID；日志用于事件细节，指标用于聚合趋势，Trace 用于跨组件还原链路。Agent 评测至少区分任务成功率、工具成功率、步骤数、成本、延迟、越权率和人工接受率。</p>
+<p>简历中的 QPR 需要定义分子、分母、候选筛选规则和样本范围。创建 PR 不等于修复成功；还应说明测试通过、维护者接受或最终合并等更严格指标。</p>
+<h2>6. Python 并发、FastAPI 与 ContextVar</h2>
+<h3>Python 并发模型</h3>
+<p>必须能区分进程、线程和协程，解释 GIL 限制的是同一 CPython 进程内多个线程并行执行 Python 字节码，而不是“Python 不能并发”。I/O 型任务适合协程或线程，CPU 型 Python 计算通常需要多进程、原生扩展或外部计算服务。</p>
+<p><code>async def</code> 不会自动让代码非阻塞。协程内部调用阻塞数据库驱动、文件操作或 CPU 密集函数，仍会阻塞事件循环。需要掌握事件循环、I/O 多路复用、任务取消、超时、背压和协程泄漏。</p>
+<h3>FastAPI 服务模型</h3>
+<p>需要区分 WSGI 与 ASGI，理解 Uvicorn、Gunicorn 和多 Worker 的关系。多 Worker 是多个进程，内存状态不会自动共享；可靠后台任务不能只依赖进程内 BackgroundTask。</p>
+<p>还要掌握同步路由与异步路由如何执行、依赖注入、Middleware、生命周期钩子、流式响应、客户端断开、连接池和优雅关闭。</p>
+<h3>ContextVar 的边界</h3>
+<p><code>ContextVar</code> 适合在同一异步调用链中传递请求上下文，但它不负责验证身份，也不会自动跨线程池、子进程或 gRPC 调用传播。可信 <code>user_id</code> 必须由认证层建立，跨服务传播还需要签名凭证或受信任的元数据与服务间认证。</p>
+<h2>7. 网络、WSS、SSE 与 gRPC</h2>
+<h3>一次请求的完整链路</h3>
+<p>需要能从 DNS、TCP、TLS、HTTP、Nginx、FastAPI、gRPC、数据库一直讲到响应返回，并解释 Keep-Alive、连接池、超时、重试、四层与七层负载均衡。</p>
+<h3>SSE、WebSocket 与 WSS</h3>
+<p>方式</p>
+<p>通信特点</p>
+<p>典型场景</p>
+<p>SSE</p>
+<p>基于 HTTP 的服务端单向事件流，文本友好并支持浏览器自动重连</p>
+<p>模型 Token 和进度推送</p>
+<p>WebSocket</p>
+<p>升级为全双工长连接</p>
+<p>双向实时交互</p>
+<p>WSS</p>
+<p>运行在 TLS 上的 WebSocket</p>
+<p>需要加密和身份校验的长连接</p>
+<p>“出站 WSS 零公网入口”意味着连接由内部客户端主动发起，公网无需回调端口，但仍要处理心跳、代理空闲超时、指数退避、连接恢复、凭证轮换和多实例连接归属。</p>
+<p>WebSocket 只提供字节流或消息传输能力，不天然保证 exactly-once。per-topic cursor 需要与事件 ID、去重记录、顺序规则和历史补偿结合；慢消费者还需要缓冲上限、合并更新或丢弃策略。</p>
+<h3>gRPC</h3>
+<p>需要掌握 Protobuf、HTTP/2、Unary/Streaming、deadline、cancel、status code、拦截器和连接复用。任何自动重试都必须结合幂等性；鉴权服务不可用时还要明确 fail-open 还是 fail-closed。</p>
+<h2>8. PostgreSQL、SQLAlchemy 与 Redis</h2>
+<h3>PostgreSQL 基础</h3>
+<p>需要掌握 SQL 从解析、优化、执行到存储的路径，B+ 树、联合索引、最左前缀、覆盖索引、执行计划、连接池、事务、隔离级别、锁、死锁和 WAL。</p>
+<h3>PostgreSQL MVCC 与 InnoDB 的差异</h3>
+<p>维度</p>
+<p>PostgreSQL</p>
+<p>InnoDB</p>
+<p>旧版本主要位置</p>
+<p>表堆中保留多个行元组，通过事务可见性字段判断</p>
+<p>当前记录配合 Undo 信息形成逻辑版本链</p>
+<p>关键概念</p>
+<p><code>xmin/xmax</code>、Snapshot、VACUUM</p>
+<p><code>DB_TRX_ID</code>、<code>DB_ROLL_PTR</code>、Read View、Purge</p>
+<p>清理压力</p>
+<p>长事务阻碍 VACUUM 回收死元组，可能产生膨胀</p>
+<p>长 Read View 使更新 Undo 更久不能清理</p>
+<p>简历明确写了 PostgreSQL，因此不能只会 InnoDB 版本链。还应掌握 PostgreSQL Read Committed、Repeatable Read 的快照行为、<code>SELECT ... FOR UPDATE</code>、行级锁和死锁诊断。</p>
+<h3>SQLAlchemy</h3>
+<p>需要区分 Engine、Connection 和 Session；解释连接池、Unit of Work、Identity Map、<code>flush</code>、<code>commit</code>、<code>rollback</code>、懒加载、预加载与 N+1。Session 和 AsyncSession 都不应被多个并发任务随意共享。</p>
+<h3>Redis</h3>
+<p>需要掌握常用数据结构、为什么快、事件循环、TTL 与淘汰、Cache-Aside、穿透/击穿/雪崩、数据库与缓存一致性、RDB/AOF，以及分布式锁的原子释放、续租和 fencing token。Redis 很适合缓存与协调，但不能替代事务型数据库。</p>
+<h2>9. 分布式任务、状态机与可靠性</h2>
+<h3>任务状态机</h3>
+<p>“任务创建→Handler 路由→Argo/Serverless 提交→状态轮询→结果回写”需要有明确状态、合法迁移、终态和错误状态。两个 Worker 同时迁移同一 Run 时，应使用版本号、条件更新或 CAS 防止覆盖。</p>
+<h3>失败与恢复</h3>
+<p>最典型的问题是：外部 Workflow 已提交成功，但数据库回写失败。解决思路包括稳定的业务任务 ID、记录外部 Workflow ID、幂等提交、定期 reconcile 和人工可审计的恢复入口。</p>
+<p>网络系统很难提供真正的 exactly-once。工程上通常接受至少一次投递，再通过幂等键、去重表、状态查询和补偿，让业务效果接近“只发生一次”。重试需要 deadline、指数退避、随机抖动和上限。</p>
+<h3>Reaper、Lease 与 Heartbeat</h3>
+<p>Reaper 不能只看“超过某个时间”就认定任务死亡，否则会回收仍在运行但心跳延迟的任务。需要 lease 到期、心跳版本、所有权校验和幂等回收，并允许后续状态对账。</p>
+<h3>事件日志与 Event Sourcing</h3>
+<p>记录状态变化事件不等于事件溯源。只有当前状态能够以事件序列为主要事实源重建，才适合称为 Event Sourcing。面试时必须准确说明项目实际采用哪一种。</p>
+<h3>跨服务一致性</h3>
+<p>还应掌握消息队列、Outbox、幂等消费、死信队列、Saga 和补偿操作。控制面与计算面拆分会带来故障隔离，也会增加网络失败、状态同步和分布式事务成本。</p>
+<h2>10. 身份认证、Casbin、多租户与 Secret</h2>
+<h3>认证与授权</h3>
+<p>Authentication 回答“你是谁”，Authorization 回答“你能做什么”。需要掌握 Session、Cookie、JWT、OAuth、Magic Link 的边界。Magic Link 必须有短有效期、一次性消费、防重放、用户绑定和 redirect 白名单。</p>
+<h3>Casbin</h3>
+<p>需要能写出项目真实的 PERM 元模型：request_definition、policy_definition、role_definition、policy_effect 和 matcher，并给出 owner/member 在多租户 Domain 下的策略例子。还要说明 <code>Enforce(sub, obj, act)</code> 位于哪一层、策略从哪里加载、如何缓存和更新。</p>
+<p>把 Casbin 独立成 Go gRPC 服务会获得语言无关和集中策略管理能力，也会引入网络延迟与单点风险。鉴权超时通常应 fail-closed；若为了可用性选择缓存，必须说明缓存过期、策略更新和撤权传播。</p>
+<p>“完成 141 个项目策略迁移与核验”不能只证明数量一致。应能说明映射规则、去重、回滚、owner/member 操作矩阵，以及是否使用新旧鉴权 shadow comparison 验证语义兼容。</p>
+<h3>可信身份与多租户</h3>
+<p>请求参数里的 <code>user_id</code> 不可信；必须由登录态、签名 Token 或可信身份提供者建立内部身份。<code>ContextVar</code> 只负责传播，不负责认证。租户隔离还要覆盖数据库查询、对象存储 Key、目录、Sandbox、Memory、缓存和审计日志。</p>
+<h3>Secret 与预签名上传</h3>
+<p>需要掌握最小权限、Secret 轮换、日志脱敏和环境变量泄漏渠道。Kubernetes Secret 默认的 Base64 表示并不等于加密。TOS 预签名 URL 还应限制方法、对象 Key、有效期、文件大小与类型，并在上传后核验对象和校验和。</p>
+<h2>11. Sandbox、Linux、Docker 与安全边界</h2>
+<h3>容器隔离的底层机制</h3>
+<p>Docker 主要组合 namespace、cgroup、文件系统、capability 和网络规则。namespace 隔离进程、挂载、网络等视图，cgroup 限制 CPU、内存和进程数量；seccomp 限制系统调用，capability drop 缩小 root 权限。</p>
+<p>执行不可信代码时还应使用非 root 用户、只读根文件系统、临时工作区、CPU/内存/PID/磁盘限制、网络出口控制、执行超时和进程组终止。不能挂载 Docker Socket，也不能把宿主机敏感目录直接写入容器。</p>
+<h3>容器复用</h3>
+<p>按 user/project/thread 复用容器可以降低冷启动，但必须定义复用键、并发模型、工作目录、残留进程、缓存、环境变量和 Secret 的清理策略。空闲回收与新请求并发发生时，需要引用计数、租约或状态机避免误删正在使用的环境。</p>
+<h3>路径安全</h3>
+<p>只拒绝 <code>../</code> 不足以防路径穿越。需要处理绝对路径、URL 编码、规范化、符号链接和检查后替换的 TOCTOU 竞态；最终访问路径必须落在允许根目录内，并尽量使用操作系统提供的安全打开方式。</p>
+<h3>必须避免的错误表述</h3>
+<ul><li>“用了 Docker，所以已经实现绝对安全隔离。”</li><li>“超时后杀掉父进程，所有子进程就一定结束。”</li><li>“把 Secret 从日志里替换掉，就不会泄露。”</li><li>“路径字符串以前缀开头，就一定在目标目录内。”</li></ul>
+<h2>12. Kubernetes、Argo 与 CI/CD</h2>
+<h3>Kubernetes 基础对象</h3>
+<p>必须掌握 Pod、Deployment、Service、Ingress、ConfigMap、Secret、Job、Namespace 的职责，以及服务发现、容器网络、资源 requests/limits 和 OOMKilled。</p>
+<h3>探针与滚动发布</h3>
+<p>探针</p>
+<p>判断问题</p>
+<p>常见风险</p>
+<p>startupProbe</p>
+<p>应用是否完成启动</p>
+<p>阈值过小会杀死正常慢启动服务</p>
+<p>readinessProbe</p>
+<p>是否可以接收流量</p>
+<p>错误结果会造成流量中断</p>
+<p>livenessProbe</p>
+<p>是否需要重启</p>
+<p>把外部依赖故障当成本进程故障会引发重启风暴</p>
+<p>滚动发布需要理解 <code>maxSurge</code>、<code>maxUnavailable</code>、readiness、优雅终止和连接排空。数据库 Schema 不向后兼容时，单纯回滚镜像无法恢复系统。</p>
+<h3>Argo Workflow 与 Serverless</h3>
+<p>需要讲清 DAG、步骤依赖、产物、重试、取消和任务状态。Argo 更适合可观察的 Kubernetes 工作流，Serverless 适合按需弹性和免运维执行；选择时要比较冷启动、最长运行时间、GPU 资源、成本和调度约束。</p>
+<h3>CI/CD 与镜像</h3>
+<p>从 commit 到发布应绑定 commit SHA、镜像 digest、配置版本和验证报告。要掌握多阶段构建、依赖锁定、ARM 构建 <code>linux/amd64</code> 镜像、多架构差异、镜像扫描、回滚和 smoke test。滚动发布成功不等于业务回归通过。</p>
+<p>简历中的“基础设施 Owner”意味着还要能画出 VPC、子网、入口、VKE、CR、TOS、RDS、Redis 的实际拓扑，并解释容量、备份、RPO/RTO、切流和回滚决策。</p>
+<h2>13. RAG、BGE-M3 与约束解码</h2>
+<h3>BGE-M3 与向量召回</h3>
+<p>需要知道 BGE-M3 支持 dense、sparse 和 multi-vector 表达，并明确项目实际使用哪一种。简历写了余弦召回，就要能写出余弦相似度公式，解释 L2 归一化后余弦与点积的关系。</p>
+<p>Chunk 大小和 overlap 是召回粒度与语义完整性的权衡。还需要掌握 Top-K、ANN、Reranker，以及 Recall@K、MRR、人工标注和困难负样本。不能只用几个演示案例证明检索效果。</p>
+<h3>约束解码</h3>
+<p>Logits Mask 通常在采样前把当前语法状态下非法 Token 的分数屏蔽，使 softmax 后无法选中。难点是 Token 并不等于单个字符，一个 Token 可能包含多个 JSON 字符，因此需要基于 Tokenizer 和合法前缀状态计算可选集合。</p>
+<p>普通有限状态机不天然表达无限层嵌套结构。项目必须说清采用的是受限 Schema、有限深度展开，还是额外维护栈或解析器状态。约束解码能提高语法或 Schema 合法率，却不能保证字段内容真实正确。</p>
+<h3>必须准备的实验口径</h3>
+<p>至少记录格式成功率、平均重试次数、每 Token 额外开销、端到端延迟，以及检索的 Recall@K 和生成忠实度。docxtpl 流水线还应说明字段缺失、表格循环、图片、单任务失败隔离和批量重试。</p>
+<h2>14. AI Infra 岗位加分项</h2>
+<p>简历当前主要证明 Agent 应用和平台工程能力。若目标岗位包含 Agent Infra 或 AI 平台，需要补齐大模型推理主线，才能回答“平台最终承载的模型请求是怎样运行的”。</p>
+<p>知识点</p>
+<p>需要回答的问题</p>
+<p>推理生命周期</p>
+<p>请求怎样经过 Tokenization、排队、Prefill、Decode、流式返回与资源释放</p>
+<p>KV Cache</p>
+<p>为什么能避免重复计算、显存怎样随序列与并发增长</p>
+<p>批处理</p>
+<p>静态批处理、动态批处理和 Continuous Batching 的区别</p>
+<p>核心指标</p>
+<p>TTFT、TPOT、Tokens/s、QPS、P50/P95/P99 分别反映什么</p>
+<p>显存</p>
+<p>模型权重、激活、临时 Buffer 和 KV Cache 分别占用什么</p>
+<p>Serving 框架</p>
+<p>vLLM、PagedAttention、请求调度和背压解决什么问题</p>
+<p>多 GPU</p>
+<p>数据并行、张量并行和流水线并行的基本区别，NCCL 的作用</p>
+<p>学习时应从一个单请求推理基线出发，先测延迟、输入输出长度、Tokens/s 和显存，再增加 HTTP、并发、有界队列、动态批处理、健康检查和故障恢复。每次优化都应保留 Baseline、Profile、Benchmark 和故障注入证据。</p>
+<h2>15. 大厂秋招通用基础</h2>
+<p>基础模块</p>
+<p>重点</p>
+<p>与简历的连接</p>
+<p>操作系统</p>
+<p>进程、线程、协程、虚拟内存、系统调用、文件描述符、I/O 多路复用、Page Cache</p>
+<p>FastAPI、WSS、并发命令、Sandbox、容器</p>
+<p>计算机网络</p>
+<p>TCP 连接管理、可靠传输、流量与拥塞控制、DNS、HTTP、TLS、负载均衡</p>
+<p>WSS、SSE、gRPC、Nginx、MCP</p>
+<p>数据库</p>
+<p>B+ 树、联合索引、执行计划、事务、MVCC、锁、WAL、复制与恢复</p>
+<p>PostgreSQL、SQLAlchemy、会话和状态机</p>
+<p>Python</p>
+<p>对象模型、引用计数、GC、迭代器、生成器、装饰器、上下文管理器</p>
+<p>FastAPI、工具与任务执行</p>
+<p>数据结构与算法</p>
+<p>哈希表、堆、树、Trie、图、二分、滑动窗口、BFS/DFS、动态规划、LRU、Top-K</p>
+<p>大厂编码面试与检索、调度场景</p>
+<p>系统设计</p>
+<p>限流、熔断、降级、缓存、消息队列、服务发现、可观测性、容量估算</p>
+<p>Agent 平台和 RepoPilot 架构题</p>
+<p>通用基础无需一开始钻到所有冷门细节，但核心概念必须准确，并能映射回项目。例如讲 I/O 多路复用时应连接到 WSS；讲 CAS 时应连接到 Run 状态迁移；讲 MVCC 时应连接到会话和任务并发更新。</p>
+<h2>16. 简历中最容易被追穿的表述</h2>
+<p>简历表述</p>
+<p>必须准备的证据</p>
+<p>“从 0 到 1”“Owner”“独立完成 5 个服务迁移”</p>
+<p>真实架构图、个人决策边界、容量与容灾方案、切流回滚、失败案例</p>
+<p>“隔离容器”“Hardened Executor”</p>
+<p>威胁模型、namespace/cgroup/seccomp、资源限制、网络和凭据边界</p>
+<p>“WSS 零公网入口”“per-topic cursor”</p>
+<p>建连方向、心跳重连、乱序去重、漏消息补偿和多实例归属</p>
+<p>“可信 user_id”“allowed-tools”</p>
+<p>身份来源、跨服务传播、运行时授权点、越权防护和审计</p>
+<p>“事实去重和原子持久化”</p>
+<p>唯一键、事务、版本号/CAS、并发冲突和删除更新策略</p>
+<p>“141 个项目权限语义兼容”</p>
+<p>迁移映射、操作矩阵、旧新结果对照、异常和回滚</p>
+<p>“QPR 46.67%，平均 193 秒”</p>
+<p>严格公式、样本选择、分母、成功标准、均值/中位数/P95 和失败分布</p>
+<p>“FSM 约束 JSON”“BGE-M3 召回”</p>
+<p>算法边界、Tokenizer 处理、真实评测集和前后对比指标</p>
+<p>如果某个词只是方向性设计、尚未真正落地，应在面试中明确区分“已实现”“已验证”“设计方案”和“未来计划”。宁可缩小表述，也不要让面试官发现项目名词与真实证据不匹配。</p>
+<p><strong>六条边界结论：</strong>Docker 不等于绝对隔离；WebSocket 不保证 exactly-once；ContextVar 不自动跨线程、进程和服务；Prompt 中的 allowed-tools 不等于授权；Kubernetes Secret 默认不等于密文存储；创建 PR 不等于修复成功。</p>
+<h2>17. 推荐学习顺序与掌握标准</h2>
+<p>下面的顺序基于当前已经建立的网络、数据库和 Agent 概念框架，优先补简历最容易被追问的实现细节。</p>
+<p>顺序</p>
+<p>学习主题</p>
+<p>可验证产出</p>
+<p>1</p>
+<p>PostgreSQL MVCC、WAL 与 SQLAlchemy 事务边界</p>
+<p>画出 PostgreSQL 与 InnoDB 版本管理差异，并写一个并发更新实验</p>
+<p>2</p>
+<p>Python asyncio、FastAPI Worker 与 ContextVar</p>
+<p>实现带超时、取消和上下文传播的并发接口</p>
+<p>3</p>
+<p>WSS/SSE/gRPC 的可靠通信</p>
+<p>设计心跳、重连、幂等和背压方案</p>
+<p>4</p>
+<p>状态机、CAS、幂等、重试与 Reaper</p>
+<p>画出 Run 状态机并演示并发更新冲突</p>
+<p>5</p>
+<p>Casbin、多租户、Magic Link 与 Secret</p>
+<p>写出真实 PERM 模型和租户权限矩阵</p>
+<p>6</p>
+<p>Sandbox 与容器安全</p>
+<p>完成威胁模型和资源/路径/网络隔离清单</p>
+<p>7</p>
+<p>Kubernetes、Argo 与发布回滚</p>
+<p>画出迁移拓扑并解释三种探针和回滚步骤</p>
+<p>8</p>
+<p>LangGraph、MCP、Skill、Memory 与 Trace</p>
+<p>用一个请求时序图串起完整 Agent 生命周期</p>
+<p>9</p>
+<p>RAG 与约束解码</p>
+<p>建立小型评测集，比较格式成功率和 Recall@K</p>
+<p>10</p>
+<p>LLM 推理与 Serving</p>
+<p>测量 TTFT、TPOT、吞吐与显存并解释瓶颈</p>
+<h3>每个主题的掌握标准</h3>
+<p class="todo">☐ 能够用 60 秒准确解释定义和核心价值</p>
+<p class="todo">☐ 能够画出项目里的真实组件图或时序图</p>
+<p class="todo">☐ 能够指出至少两个失败场景和恢复策略</p>
+<p class="todo">☐ 能够给出一段代码、SQL、配置或协议示例</p>
+<p class="todo">☐ 能够解释为什么选择该方案，而不是另一个方案</p>
+<p class="todo">☐ 能够给出指标、日志、Trace、测试或迁移核验作为证据</p>
+<h2>18. 面试前自检问题</h2>
+<ol><li>画出一条飞书消息从 WSS 接入、Agent 决策、工具执行、Sandbox 运行、流式回传到 Memory 更新的完整时序。</li><li>WSS 为什么可以不暴露公网回调入口？断线后如何避免漏消息和重复执行？</li><li>ContextVar 为什么不能自动跨线程、进程和 gRPC 传播？可信身份从哪里建立？</li><li>LangGraph 节点重试时，如何避免再次执行已经成功的有副作用工具？</li><li>Skill、Tool、MCP Server 和 System Prompt 的边界是什么？allowed-tools 在哪里强制执行？</li><li>异步 Memory 更新如何处理重复事实、并发覆盖、旧事实替换和用户删除请求？</li><li>PostgreSQL MVCC 与 InnoDB Undo 版本链有什么不同？长事务分别造成什么问题？</li><li>SQLAlchemy 的 Engine、Connection 和 Session 分别负责什么？<code>flush</code> 为什么不等于 <code>commit</code>？</li><li>外部 Argo Workflow 已提交成功但数据库回写失败，系统怎样恢复？</li><li>Reaper 如何区分真正的僵尸任务和暂时丢失心跳的正常任务？</li><li>Casbin gRPC 服务超时时为什么通常不能 fail-open？141 个项目怎样验证语义兼容？</li><li>Docker 内运行不可信代码为什么仍不安全？最关键的五层防护是什么？</li><li>如何同时防止路径穿越、符号链接绕过和 TOCTOU？</li><li>错误的 livenessProbe 为什么可能制造重启风暴？滚动发布怎样与 readiness 配合？</li><li>BGE-M3 实际用了哪种表示？Chunk、Top-K 和 Reranker 如何选择并评测？</li><li>普通 FSM 为什么难以表达无限嵌套 JSON？项目实际怎样处理这个边界？</li><li>QPR 46.67% 的分子和分母是什么？193 秒是均值、中位数还是 P95？</li><li>一次 LLM 推理请求中的 Prefill、Decode 和 KV Cache 分别是什么？吞吐与首 Token 延迟怎样权衡？</li></ol>
+<p>如果其中任何问题只能回答一句定义，就把它加入“错题与薄弱项”，继续补到能够连接项目实现、故障与证据为止。</p>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

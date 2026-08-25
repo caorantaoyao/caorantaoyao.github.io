@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一条 SQL 是怎样执行的：从连接、解析、优化，到索引、存储引擎与磁盘 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.08.25</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">一条 SQL 是怎样执行的：从连接、解析、优化，到索引、存储引擎与磁盘</h1>
+    <div class="article-body">
+<p>一条 SQL 发送给数据库后，并不会立刻去磁盘逐行查找。它会依次经过连接管理、解析与语义检查、查询优化、执行器、存储引擎、索引和缓冲区，必要时才真正访问磁盘，最后再把结果通过数据库协议返回给应用。</p>
+<p>本文以 MySQL + InnoDB 作为主要例子，因为它能清楚展示 Server 层与存储引擎的分工。PostgreSQL 等数据库的模块边界和具体实现不同，但“连接 → 解析 → 优化 → 执行 → 访问数据 → 返回结果”的整体思路相近。</p>
+<p><strong>先记住主线：</strong>SQL 描述“想要什么”，查询优化器决定“怎样获取”，执行器按计划工作，存储引擎负责真正管理索引、数据页、事务、日志与磁盘。</p>
+<h2>1. 一条 SQL 的整体流水线</h2>
+<pre><code class="language-plaintext">Python / SQLAlchemy
+        ↓
+连接池与数据库驱动
+        ↓
+TCP 或 Unix Domain Socket
+        ↓
+数据库连接与权限检查
+        ↓
+解析器与语义分析
+        ↓
+查询优化器生成执行计划
+        ↓
+执行器运行计划
+        ↓
+存储引擎访问索引和数据页
+        ↓
+Buffer Pool 命中？
+   ├─ 是：直接读取内存
+   └─ 否：从磁盘加载数据页
+        ↓
+过滤、连接、排序或聚合
+        ↓
+通过数据库协议返回应用</code></pre>
+<p>这条链路同时包含应用层、网络协议、数据库 Server 层、存储引擎、操作系统和硬件。理解每一层的职责，是判断慢 SQL 究竟慢在哪里的基础。</p>
+<h2>2. Python 和 SQLAlchemy 做了什么</h2>
+<pre><code class="language-php">result = session.execute(
+    text(&quot;SELECT id, name FROM users WHERE id = :id&quot;),
+    {&quot;id&quot;: 42},
+)
+user = result.one()</code></pre>
+<p>SQLAlchemy 可以根据 Python 表达式生成 SQL、绑定参数、管理事务和连接，并把返回行转换成 Python 对象。数据库驱动负责按照 MySQL 或 PostgreSQL 协议发送请求和读取响应。</p>
+<p>SQLAlchemy 不负责选择 B+ 树索引，也不会代替数据库生成最终执行计划。它生成并发送 SQL，真正的解析、优化和数据访问发生在数据库服务器内部。</p>
+<h2>3. 为什么先经过连接池</h2>
+<p>应用与数据库通常通过 TCP 连接通信；位于同一台机器时，也可能使用 Unix Domain Socket。建立新连接往往包括网络握手、数据库协议握手、身份认证和会话初始化。</p>
+<p>如果每条 SQL 都重新建立连接，延迟和服务器资源成本都会很高。因此后端服务通常维护连接池：请求到达时借出已有连接，执行结束后归还。连接池复用的是数据库会话，不是查询结果。</p>
+<p>连接池太小会让请求排队；连接池太大则可能耗尽数据库的线程、内存或最大连接数。因此应用连接池规模必须与数据库处理能力共同设计。</p>
+<h2>4. 数据库收到的并不是 Python 对象</h2>
+<p>数据库驱动会把 SQL、参数和协议元数据编码成数据库协议消息，通过网络连接发给数据库进程。数据库首先识别这条消息属于查询、预处理语句、事务控制还是其他命令。</p>
+<p>参数化查询会把 SQL 结构和参数值分开处理，可以避免用户输入改变 SQL 语义，从而降低 SQL 注入风险。它还可能帮助数据库复用部分准备工作，但是否复用执行计划取决于具体数据库与驱动。</p>
+<h2>5. 词法与语法解析</h2>
+<p>数据库首先要理解 SQL 文本的结构。词法分析识别 <code>SELECT</code>、字段名、表名、运算符和常量等 token；语法分析根据 SQL 语法规则构造内部语法树。</p>
+<pre><code class="language-rust">SELECT id, name
+FROM users
+WHERE id = 42;</code></pre>
+<pre><code class="language-plaintext">SELECT
+├── columns: id, name
+├── table: users
+└── condition
+    └── id = 42</code></pre>
+<p>如果写成 <code>SELEC id FROM users</code>，数据库无法构造合法语法结构，会在这一阶段返回语法错误。</p>
+<h2>6. 语义分析与权限检查</h2>
+<p>语法正确并不代表 SQL 可以执行。数据库还要解析对象名称并确认语义：表是否存在、字段是否存在、别名是否冲突、数据类型能否比较、函数参数是否合法，以及当前账号是否拥有相应权限。</p>
+<p>例如两个关联表都存在 <code>id</code> 字段，而查询只写 <code>SELECT id</code>，数据库可能因为列引用存在歧义而拒绝执行。权限检查也可能在对象解析或执行阶段进行，具体位置因数据库而异。</p>
+<h2>7. 查询重写</h2>
+<p>在进入成本优化前，数据库可能进行逻辑层面的等价改写，例如展开视图、简化常量表达式、下推过滤条件、消除无用列或改写子查询。改写后的 SQL 逻辑结果相同，但更容易形成高效计划。</p>
+<p>查询重写不是简单修改原始字符串，而是在数据库内部查询树或关系代数结构上进行转换。</p>
+<h2>8. 查询优化器决定怎样执行</h2>
+<p>SQL 只声明“需要什么结果”，通常没有指定“必须怎样获得”。对于同一条查询，数据库可能选择全表扫描、主键索引、二级索引、不同的多表连接顺序，以及不同的排序或聚合方法。</p>
+<p>优化器会枚举或搜索候选执行计划，并估算每个方案的代价。常见考虑因素包括：</p>
+<ul><li>表和索引预计需要读取多少数据页。</li><li>过滤条件能排除多少行。</li><li>索引是否能够覆盖查询所需字段。</li><li>是否需要回表、排序或临时表。</li><li>多表连接采用什么顺序和连接算法。</li><li>随机 I/O、顺序 I/O、CPU 与内存成本。</li></ul>
+<p>优化器选择的是预估成本较低的计划，不保证在所有情况下都是真正最快的计划。</p>
+<h2>9. 统计信息与基数估算</h2>
+<p>优化器无法在真正执行前知道准确结果数量，只能依据表行数、索引基数、数据分布、直方图等统计信息进行估算。估算某个条件会返回多少行，叫基数估算。</p>
+<p>如果统计信息陈旧，或者多个字段高度相关，优化器可能严重低估或高估结果行数，从而选择错误的索引、连接顺序或连接算法。很多“明明有索引却很慢”的问题，本质上是成本估算与真实数据分布不一致。</p>
+<h2>10. 为什么有索引也可能不用</h2>
+<p>索引不是无条件更快。如果查询会返回表中绝大多数记录，使用二级索引可能先读取大量索引页，再进行大量回表和随机访问；一次顺序扫描反而可能更便宜。</p>
+<p>索引区分度低、条件包含不利于索引使用的表达式、发生隐式类型转换，或者查询需要的字段过多，都可能影响索引计划。最终是否使用索引由优化器根据成本决定，而不是由“索引存在”这一事实决定。</p>
+<h2>11. 执行器怎样运行计划</h2>
+<p>优化器负责制定计划，执行器负责真正运行。执行器按照计划请求记录，并完成过滤、连接、排序、聚合和限制返回行数等操作。</p>
+<p>例如执行 <code>GROUP BY</code> 查询时，执行器可能通过索引顺序聚合，也可能使用内存哈希表或临时表。执行中间结果超过内存限制时，排序或临时数据还可能写入磁盘。</p>
+<p>部分数据库采用迭代器模型：上层算子不断向下层请求下一行；也有数据库采用向量化或批量执行，一次处理一批数据以减少函数调用和提高 CPU 利用率。</p>
+<h2>12. MySQL Server 层与 InnoDB 的分工</h2>
+<p>层次</p>
+<p>主要职责</p>
+<p>典型组件</p>
+<p>应用与驱动</p>
+<p>生成 SQL、绑定参数、管理连接与对象转换</p>
+<p>SQLAlchemy、数据库驱动</p>
+<p>MySQL Server 层</p>
+<p>连接、解析、优化、执行和协议处理</p>
+<p>解析器、优化器、执行器</p>
+<p>InnoDB 存储引擎</p>
+<p>索引、数据页、事务、锁、日志与持久化</p>
+<p>B+ 树、Buffer Pool、Redo、Undo</p>
+<p>操作系统与硬件</p>
+<p>文件、内存、I/O 调度与持久化设备</p>
+<p>页缓存、文件系统、SSD</p>
+<p>PostgreSQL 没有与 MySQL 完全相同的可插拔存储引擎边界，因此面试回答时应明确“下面以 MySQL/InnoDB 为例”，不要把 InnoDB 细节描述成所有关系型数据库的统一实现。</p>
+<h2>13. B+ 树索引怎样定位记录</h2>
+<p>InnoDB 中最常见的索引结构是 B+ 树。根节点和中间节点用于导航，叶子节点保存有序索引项。查找主键 <code>id = 42</code> 时，存储引擎从根页开始，根据键值范围逐层选择子页，最后到达包含目标键的叶子页。</p>
+<pre><code class="language-plaintext">根节点
+   ↓ 根据键值范围选择分支
+中间节点
+   ↓
+叶子节点
+   ↓
+目标记录或主键值</code></pre>
+<p>B+ 树节点可以容纳很多键，因此树高通常较低，并且叶子节点有序连接，既适合等值查找，也适合范围查询和顺序扫描。</p>
+<h2>14. 聚簇索引、二级索引与回表</h2>
+<p>在 InnoDB 中，主键索引的叶子节点通常保存完整行数据，因此被称为聚簇索引。二级索引叶子节点通常保存二级索引列和对应主键值。</p>
+<p>通过二级索引查询完整记录时，可能先从二级索引取得主键，再访问主键索引取得完整行，这个过程叫回表。如果查询需要的所有字段都能从一个索引得到，就可能形成覆盖索引，避免回表。</p>
+<p>这些是 InnoDB 的具体组织方式。其他数据库或存储引擎可能采用不同的堆表、行标识符或索引布局。</p>
+<h2>15. 数据通常先从 Buffer Pool 查找</h2>
+<p>InnoDB 按数据页管理表和索引，并维护 Buffer Pool 缓存近期使用的数据页。存储引擎需要某页时，先检查它是否已经在 Buffer Pool 中。</p>
+<pre><code class="language-plaintext">需要某个索引页或数据页
+          ↓
+检查 Buffer Pool
+   ├─ 命中：直接从内存读取
+   └─ 未命中：发起磁盘 I/O
+                 ↓
+             加载到 Buffer Pool
+                 ↓
+             返回记录</code></pre>
+<p>因此，“执行了一次 SELECT”并不等于“进行了一次物理磁盘读取”。相关页面已经在内存中时，查询可能完全不等待磁盘。</p>
+<h2>16. 什么情况下真正访问磁盘</h2>
+<p>目标页不在 Buffer Pool 时，数据库才需要请求操作系统读取数据文件。SSD 比机械硬盘快很多，但内存访问通常仍显著快于持久化设备。</p>
+<p>索引优化的核心价值并不只是抽象的时间复杂度，而是减少需要访问的数据页数量。一次查询慢，可能来自大量扫描、随机 I/O、Buffer Pool 命中率低、排序或临时表落盘，也可能来自锁等待、网络或应用端对象转换。</p>
+<p>数据库 Buffer Pool 与操作系统页缓存是不同层次的缓存。不同数据库会采用不同的直接 I/O、文件系统和缓存策略，不能把它们简单视为同一块内存。</p>
+<h2>17. 查询结果怎样返回 Python</h2>
+<p>存储引擎返回记录后，执行器继续完成剩余过滤、表达式计算、排序、分组和字段投影。数据库再把结果编码成协议消息，通过 TCP 或 Unix Domain Socket 返回数据库驱动。</p>
+<p>驱动解析协议，SQLAlchemy 将结果组织成 Row 或 ORM 对象。查询返回数据量很大时，即使数据库定位记录很快，网络传输、序列化和 Python 对象创建也可能成为主要开销。</p>
+<p>因此应尽量只查询需要的字段，避免无条件读取大表，并合理使用过滤、分页、批量处理或流式读取。</p>
+<h2>18. 没有索引时发生什么</h2>
+<p>如果过滤条件没有可用索引，执行器可能只能让存储引擎扫描表的数据页，并对每条记录判断条件。这叫全表扫描。</p>
+<p>全表扫描不一定永远错误。表很小、查询需要大部分记录，或者顺序读取成本明显更低时，它可能就是合理计划。真正的问题不是执行计划中出现“全表扫描”，而是它是否与数据规模和查询目标匹配。</p>
+<h2>19. UPDATE 比 SELECT 多了什么</h2>
+<pre><code class="language-rust">UPDATE users
+SET name = &#x27;Alice&#x27;
+WHERE id = 42;</code></pre>
+<p>这条 SQL 同样需要解析、优化，并通过索引找到目标行，但写入还涉及事务、并发控制和持久化：</p>
+<ol><li>通过执行计划定位目标记录。</li><li>检查事务可见性并获取必要的锁。</li><li>记录用于回滚和版本读取的信息。</li><li>修改 Buffer Pool 中的数据页，使其成为脏页。</li><li>记录崩溃恢复所需的日志。</li><li>事务提交后，由后台线程在合适时机刷写脏页。</li></ol>
+<h2>20. Undo Log、Redo Log 与 Binlog</h2>
+<p>日志</p>
+<p>主要作用</p>
+<p>所在层次</p>
+<p>Undo Log</p>
+<p>事务回滚，并支持 MVCC 的历史版本读取</p>
+<p>InnoDB</p>
+<p>Redo Log</p>
+<p>记录页修改，支持崩溃恢复</p>
+<p>InnoDB</p>
+<p>Binlog</p>
+<p>逻辑变更记录，常用于复制与基于日志的恢复</p>
+<p>MySQL Server 层</p>
+<p>事务提交通常不要求立刻把所有脏数据页写回数据文件，而是先按照配置保证必要日志达到持久化条件。数据库崩溃重启后，可以利用日志恢复已经提交但尚未完整刷入数据文件的修改。</p>
+<p>MySQL/InnoDB 需要协调 Redo Log 与 Binlog 的一致性，常用两阶段提交思想避免一份日志成功而另一份失败。具体刷盘时机和持久性保证受数据库配置影响。</p>
+<h2>21. 一个 SELECT 的完整实例</h2>
+<p>执行 <code>SELECT id, name FROM users WHERE id = 42</code> 时，可以完整描述为：</p>
+<ol><li>Python 从连接池取得数据库连接。</li><li>驱动把 SQL 和参数编码后发送给数据库。</li><li>数据库验证会话、对象和访问权限。</li><li>解析器生成内部查询结构。</li><li>优化器根据统计信息发现主键访问成本较低。</li><li>执行器按照主键索引计划调用 InnoDB。</li><li>InnoDB 沿 B+ 树定位目标叶子页。</li><li>页面命中 Buffer Pool 时直接读取，未命中时从磁盘加载。</li><li>执行器只保留 <code>id</code> 和 <code>name</code> 两列。</li><li>数据库编码结果并通过连接返回。</li><li>驱动和 SQLAlchemy 把结果转换成 Python 对象。</li><li>应用将连接归还连接池。</li></ol>
+<h2>22. 如何查看数据库选择了什么计划</h2>
+<pre><code class="language-rust">EXPLAIN
+SELECT id, name
+FROM users
+WHERE id = 42;</code></pre>
+<p><code>EXPLAIN</code> 可以帮助观察访问方式、候选索引、实际使用的索引、预计扫描行数和额外操作。不同数据库的字段与输出格式不同。</p>
+<p>执行计划是理解 SQL 的重要证据，但不能只看“是否使用索引”。还应关注估算行数与实际行数、过滤比例、连接顺序、排序、临时表和执行时间。支持运行时分析的数据库还可以观察实际执行统计，但生产环境使用时要注意它可能真正执行查询。</p>
+<h2>23. 一条 SQL 为什么会慢</h2>
+<p>位置</p>
+<p>常见问题</p>
+<p>观察方向</p>
+<p>应用与连接池</p>
+<p>连接池耗尽、事务长期不释放连接</p>
+<p>获取连接等待时间</p>
+<p>优化器</p>
+<p>统计信息不准、选择错误索引或连接顺序</p>
+<p>执行计划与实际行数</p>
+<p>执行器</p>
+<p>扫描过多、排序、聚合或临时表</p>
+<p>扫描行数、排序与落盘</p>
+<p>存储引擎</p>
+<p>Buffer Pool 未命中、随机 I/O、锁等待</p>
+<p>I/O、缓存命中与锁</p>
+<p>网络与客户端</p>
+<p>结果集过大、网络慢、对象转换开销</p>
+<p>返回字节数与客户端耗时</p>
+<p>因此，优化 SQL 不能只靠“加索引”。首先要确定时间花在连接、等待锁、执行、磁盘、网络还是应用转换上，再对真正瓶颈进行优化。</p>
+<h2>24. 常见误区</h2>
+<p><strong>误区一：SQLAlchemy 会替数据库选择索引。</strong>ORM 负责生成与发送 SQL，数据库优化器才负责执行计划。</p>
+<p><strong>误区二：有索引就一定走索引。</strong>优化器根据预估成本选择访问方式，全表扫描在某些场景反而更合理。</p>
+<p><strong>误区三：每条 SELECT 都会读取磁盘。</strong>数据页可能已经位于 Buffer Pool，查询可以直接从内存完成。</p>
+<p><strong>误区四：索引只占内存，不影响写入。</strong>索引本身需要持久化，插入、更新和删除时也要维护索引页。</p>
+<p><strong>误区五：COMMIT 等于所有数据页已经写回数据文件。</strong>数据库通常先保证必要日志持久化，脏页可以稍后刷盘。</p>
+<p><strong>误区六：慢 SQL 一定是磁盘慢。</strong>锁等待、错误计划、连接池、网络和返回数据量都可能成为主要瓶颈。</p>
+<h2>25. 面试回答模板</h2>
+<p>一条 SQL 首先由客户端通过连接池中的数据库连接发送到服务端。数据库完成会话和权限检查后，对 SQL 进行词法、语法和语义解析，并生成内部查询结构。查询优化器根据表统计信息、索引、预计结果行数和 I/O 成本选择执行计划，例如决定全表扫描还是索引访问，以及多表连接顺序。执行器按照计划调用存储引擎；以 InnoDB 为例，存储引擎会通过 B+ 树定位数据页，并先检查 Buffer Pool，未命中时才从磁盘加载。执行器完成剩余过滤、排序或聚合后，通过数据库协议把结果返回客户端。写操作还会涉及锁、Undo Log、Redo Log、事务提交和脏页刷盘。</p>
+<h2>26. 学完后应该能够回答什么</h2>
+<ul><li>SQLAlchemy、数据库驱动、MySQL Server 和 InnoDB 分别负责什么？</li><li>解析器、优化器和执行器有什么区别？</li><li>为什么数据库存在索引却可能选择全表扫描？</li><li>聚簇索引、二级索引、回表和覆盖索引是什么关系？</li><li>为什么执行 SELECT 不一定访问物理磁盘？</li><li>UPDATE 为什么需要 Undo Log、Redo Log 和事务提交？</li><li>怎样通过执行计划判断查询时间可能花在哪里？</li></ul>
+<p><strong>下一步建议：</strong>学习“索引与 B+ 树：为什么数据库不用哈希表或普通二叉搜索树保存所有索引”。它会把本篇中的索引访问、范围查询、回表和数据页继续展开。</p>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

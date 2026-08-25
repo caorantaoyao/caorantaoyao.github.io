@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>索引与 B+ 树：为什么数据库不用哈希表或二叉搜索树保存所有索引 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.08.25</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">索引与 B+ 树：为什么数据库不用哈希表或二叉搜索树保存所有索引</h1>
+    <div class="article-body">
+<p>这篇文档承接<a href="https://my.feishu.cn/wiki/FynswcFXaiFY74kz3jOcPw3Vnib" target="_blank" rel="noopener">《一条 SQL 是怎样执行的：从连接、解析、优化，到索引、存储引擎与磁盘》</a>，继续回答执行计划中的一个核心问题：数据库为什么经常选择树形索引，以及为什么常见实现不是普通二叉搜索树，也不能把全部索引都换成哈希表。</p>
+<p><strong>先记住结论：</strong>B+ 树不保证每一种查询都最快，但它能在页式存储上同时兼顾等值查询、范围查询、排序、前缀扫描、动态增删和稳定性能，因此成为通用有序索引的经典选择。哈希表和其他索引结构仍然有价值，只是适用范围更窄。</p>
+<h2>1. 索引到底解决什么问题</h2>
+<p>如果一张表有一千万行，而查询条件是 <code>WHERE user_id = 10086</code>，没有可用索引时，数据库可能需要逐页读取并检查大量记录。索引额外保存“可搜索的键”和“记录位置或记录本身”，让数据库先缩小候选范围，再访问真正的数据。</p>
+<p>索引并不是数据的免费副本。它要占用磁盘和缓存，插入、删除、更新时也要维护。因此准确的理解是：<strong>索引用额外空间和写入成本，换取特定读取路径的速度。</strong></p>
+<h2>2. 数据库以页为单位管理数据</h2>
+<p>理解数据库索引时，不能只看算法课里的“比较次数”。关系数据库通常把磁盘文件划分为固定大小的页，缓存和读取也以页为基本单位。以 MySQL 8.4 的 InnoDB 为例，默认页大小是 16 KiB，也可以在实例初始化时选择其他支持的页大小。</p>
+<p>一次索引查找访问的树节点，通常对应一个页。页面已经位于 Buffer Pool 时，这是一次内存访问；页面不在缓存时，才需要物理 I/O。磁盘或远程存储访问通常比内存比较昂贵得多，所以索引结构的重要目标不是只减少比较次数，而是<strong>用尽可能少的页访问定位记录</strong>。</p>
+<h2>3. 通用数据库索引需要同时满足什么</h2>
+<p>需求</p>
+<p>典型 SQL</p>
+<p>索引需要提供的能力</p>
+<p>等值查询</p>
+<p><code>id = 42</code></p>
+<p>快速定位一个键</p>
+<p>范围查询</p>
+<p><code>created_at BETWEEN ...</code></p>
+<p>找到起点后连续扫描</p>
+<p>排序与极值</p>
+<p><code>ORDER BY price</code>、<code>MAX(id)</code></p>
+<p>保持键的有序性</p>
+<p>前缀查询</p>
+<p><code>name LIKE &#x27;cao%&#x27;</code></p>
+<p>利用有序前缀缩小范围</p>
+<p>持续写入</p>
+<p><code>INSERT</code>、<code>UPDATE</code>、<code>DELETE</code></p>
+<p>动态维护且性能不能剧烈退化</p>
+<p>单看等值查询，哈希表很有吸引力；单看内存中的有序集合，平衡二叉树也很好。但数据库要在页式存储、有限缓存和混合查询下工作，所以需要更综合的结构。</p>
+<h2>4. 为什么普通二叉搜索树不合适</h2>
+<p>二叉搜索树规定左子树的键更小、右子树的键更大。理想情况下它可以通过不断折半查找数据，但普通二叉搜索树没有自动平衡能力。如果键按递增顺序插入，它可能退化成一条链。</p>
+<pre><code class="language-plaintext">10
+  └─ 20
+       └─ 30
+            └─ 40
+                 └─ 50</code></pre>
+<p>此时查找最坏会从 <code>O(log n)</code> 退化为 <code>O(n)</code>。数据库不能接受数据分布或插入顺序稍有变化，查询延迟就从稳定变成不可预测。</p>
+<h2>5. 平衡二叉树为什么仍不是磁盘索引的首选</h2>
+<p>AVL 树和红黑树能控制高度，避免退化，在内存中的映射、集合和调度结构里非常实用。但它们的分支数通常只有 2。数据量很大时，即使高度是对数级，也可能需要经过较多层。</p>
+<p>更关键的是，每个磁盘页能容纳很多键和指针。如果一个页只发挥“左、右两个孩子”的作用，就没有充分利用整页空间。树越高，冷缓存情况下可能需要访问的页面越多。平衡二叉树解决了“会不会退化”的问题，却没有充分解决“每次 I/O 能带回多少导航信息”的问题。</p>
+<h2>6. 从二叉树走向多路平衡树</h2>
+<p>B 树家族允许一个节点包含多个键和多个子指针。一个内部页可以同时划分几十、几百甚至更多个键区间，使每下降一层就排除绝大多数数据。这个性质叫高扇出。</p>
+<p>做一个只用于建立直觉的简化估算：如果一个内部页可以保存约 500 个有效分支，三层导航理论上就能覆盖约 <code>500 × 500 × 500</code> 个叶子范围。真实容量还会受到键长度、页头、记录格式和填充率影响，但结论不变：<strong>多路树通常很矮。</strong></p>
+<h2>7. B+ 树的基本结构</h2>
+<p>B+ 树是一种多路、平衡、有序的搜索树。所有叶子通常位于同一深度；内部节点主要保存分隔键和子页指针，用于导航；真正的索引记录集中在叶子层；相邻叶子页通常按键顺序连接。</p>
+<pre><code class="language-plaintext">                    [30 | 60]
+                  /     |      \
+          [10 | 20] [40 | 50] [70 | 80]
+               叶子页按键顺序相连
+ [10,20]  &lt;-&gt;  [30,40,50]  &lt;-&gt;  [60,70,80]</code></pre>
+<p>严格的节点格式、页目录和链表实现因数据库产品而异。工程资料有时把实现统称为 B-tree 索引；本文用 B+ 树模型理解“内部页负责导航、叶子层保存索引记录、范围扫描沿叶子推进”这一组核心特性。</p>
+<h2>8. 一次等值查找怎样穿过 B+ 树</h2>
+<p>假设要查找键 47。数据库先在根页判断它落在 30 到 60 之间，于是选择中间子页；再在该内部页继续确定目标范围，最后到达包含 47 的叶子页并定位记录。</p>
+<pre><code class="language-plaintext">根页
+  -&gt; 选择键区间
+内部页
+  -&gt; 选择更小区间
+叶子页
+  -&gt; 二分或页内目录定位索引记录</code></pre>
+<p>树高决定了导航最多跨越多少层，但并不等于每层必然发生磁盘 I/O。根页和高层内部页经常留在 Buffer Pool 中，真正的物理读取可能主要发生在叶子页。</p>
+<h2>9. B+ 树为什么适合范围查询和排序</h2>
+<p>执行 <code>WHERE score BETWEEN 80 AND 90</code> 时，数据库先沿树找到第一个不小于 80 的叶子位置，然后按叶子层的顺序继续向后扫描，直到键超过 90。它不需要为区间内的每一个值重新从根开始查找。</p>
+<p>同样的有序性还能服务于 <code>ORDER BY</code>、最小值、最大值和部分前缀匹配。优化器是否最终选索引仍取决于选择性、返回行数、排序方向、覆盖情况和成本估算；“存在索引”不等于“必然走索引”。</p>
+<h2>10. 为什么不能把所有索引换成哈希表</h2>
+<p>能力</p>
+<p>哈希索引</p>
+<p>B+ 树类有序索引</p>
+<p>等值查询</p>
+<p>平均情况下很强</p>
+<p>稳定且高效</p>
+<p>范围查询</p>
+<p>通常不支持</p>
+<p>天然支持</p>
+<p>按索引顺序输出</p>
+<p>不支持</p>
+<p>可以直接按叶子顺序扫描</p>
+<p>最小值、最大值</p>
+<p>不能依赖顺序快速定位</p>
+<p>可沿最左或最右路径定位</p>
+<p>前缀扫描</p>
+<p>通常不支持</p>
+<p>满足条件时可利用有序区间</p>
+<p>冲突处理</p>
+<p>需要处理哈希碰撞</p>
+<p>通过有序键与树结构定位</p>
+<p>哈希表最大的局限不是“碰撞一定很慢”，而是<strong>哈希函数会打散原始顺序</strong>。相邻键可能落在完全不同的桶里，因此它很难直接回答“大于、小于、区间、排序、前缀”等问题。数据库的查询类型非常丰富，不能只为等值查询优化。</p>
+<h2>11. 数据库什么时候仍会使用哈希</h2>
+<p>哈希结构并没有被数据库放弃，而是被放到更匹配的场景。PostgreSQL 提供 Hash 索引，主要服务简单等值比较；MySQL 的 MEMORY 存储引擎支持 HASH 索引；查询执行器还经常使用哈希表完成 Hash Join 或 Hash Aggregate。某些数据库也会在内存中构建自适应或临时哈希结构来加速热点等值访问。</p>
+<p>因此更准确的说法是：<strong>哈希适合“我只关心这个键是否完全相等”的路径；B+ 树更适合作为要覆盖多类查询的通用有序索引。</strong></p>
+<h2>12. B 树与 B+ 树有什么差别</h2>
+<p>维度</p>
+<p>B 树</p>
+<p>B+ 树</p>
+<p>记录位置</p>
+<p>内部节点和叶子节点都可能保存记录</p>
+<p>索引记录集中在叶子层，内部节点主要导航</p>
+<p>内部页容量</p>
+<p>记录占空间，分支数可能较少</p>
+<p>内部页更紧凑，通常能容纳更多分隔键和指针</p>
+<p>范围扫描</p>
+<p>可能需要在树中穿梭</p>
+<p>到达起点后可沿叶子层连续扫描</p>
+<p>查询终点</p>
+<p>可能在内部节点命中</p>
+<p>通常走到叶子层，路径更一致</p>
+<p>B 树不是错误结构，B+ 树也不是所有条件下都绝对优于 B 树。数据库偏爱 B+ 树式布局，主要因为它更贴合页式存储、范围扫描和可预测的访问路径。</p>
+<h2>13. 插入数据时如何保持平衡</h2>
+<p>新索引键会被写入目标叶子页。如果页还有空间，只需在页内找到正确位置并更新相关元数据；如果页满了，数据库会把记录分配到两个页，并把新的分隔信息向父节点传播，这就是页分裂。父页也满时，分裂可能继续向上，极端情况下会产生新的根页，树高增加一层。</p>
+<pre><code class="language-plaintext">原叶子页：[10, 20, 30, 40]  +  插入 35
+                     |
+                     v
+左页：[10, 20, 30]       右页：[35, 40]
+                     |
+                     v
+父页增加一个指向右页的分隔键</code></pre>
+<p>连续递增主键通常更容易在索引右侧追加；随机主键可能让写入分散到多个页并增加分裂、缓存失效和空间碎片。它们的实际影响仍与数据规模、页填充率和存储引擎策略有关。</p>
+<h2>14. 删除数据时会发生什么</h2>
+<p>删除并不总是立刻把物理空间紧凑地收回。数据库可能先把记录标记为删除，之后由清理过程回收；当页面利用率下降到一定程度时，存储引擎可能尝试与相邻页合并或重新组织页面。以 InnoDB 为例，索引页还有可配置的合并阈值。</p>
+<p>这是工程实现和教材伪代码的差别：理论上可以每次严格重平衡，现实系统还要考虑并发、日志、锁、写放大和后台清理成本。</p>
+<h2>15. InnoDB 的聚簇索引</h2>
+<p>在 InnoDB 中，每张表都有一个聚簇索引。通常主键就是聚簇索引；如果没有主键，InnoDB 会按规则选择合适的唯一非空索引，否则生成隐藏的聚簇索引。</p>
+<p>聚簇索引的叶子记录保存行数据，因此通过主键查找时，沿索引到达目标叶子页就能接触到这一行。这里“聚簇”强调的是索引组织与行数据存放方式，而不是说所有行在磁盘文件中形成一段永不移动的连续字节。</p>
+<h2>16. 二级索引、主键与回表</h2>
+<p>InnoDB 中，非聚簇索引称为二级索引。二级索引的叶子记录包含二级索引列以及对应的主键列。查询若还需要其他列，存储引擎先在二级索引中得到主键，再用主键搜索聚簇索引，这个第二次查找通常称为回表。</p>
+<pre><code class="language-rust">CREATE INDEX idx_user_email ON users(email);
+
+SELECT id, nickname
+FROM users
+WHERE email = &#x27;caoran@example.com&#x27;;</code></pre>
+<pre><code class="language-plaintext">idx_user_email
+  -&gt; 找到 email 对应的主键 id
+  -&gt; 用 id 查聚簇索引
+  -&gt; 读取 nickname 等完整行字段</code></pre>
+<p>这也解释了为什么主键过长会放大二级索引：每条二级索引记录都要携带主键列。</p>
+<h2>17. 覆盖索引为什么能减少回表</h2>
+<p>如果查询所需的列都能从某个索引记录中取得，就称该索引覆盖了这次查询。此时执行器可能不必再为每条候选记录访问主数据页。</p>
+<pre><code class="language-rust">CREATE INDEX idx_order_user_status
+ON orders(user_id, status);
+
+SELECT user_id, status
+FROM orders
+WHERE user_id = 10086;</code></pre>
+<p>覆盖关系属于“索引与具体查询”的关系，不是索引永久自带的标签。同一个索引可能覆盖查询 A，却不能覆盖还要读取 <code>created_at</code> 的查询 B。不同数据库还可能因为事务可见性等原因进行额外访问，所以应结合执行计划判断实际行为。</p>
+<h2>18. 联合索引与最左前缀</h2>
+<p>联合索引 <code>(name, age)</code> 不是两棵独立的树，而是先按 <code>name</code> 排序；<code>name</code> 相同时，再按 <code>age</code> 排序。它的全局顺序首先由第一列决定。</p>
+<pre><code class="language-plaintext">(Alice, 18)
+(Alice, 25)
+(Bob,   20)
+(Bob,   31)
+(Cathy, 22)</code></pre>
+<p>因此，按 <code>name</code> 查询，或先限定 <code>name</code> 再查询 <code>age</code>，通常能利用连续的索引范围；只按 <code>age</code> 查询时，所有年龄值散布在不同姓名分组中，通常无法像使用首列那样直接定位一个连续区间。少数数据库有 Skip Scan 等优化，但不应把它当作联合索引设计的默认保证。</p>
+<pre><code class="language-rust">-- 通常可以有效使用 (name, age)
+SELECT * FROM users WHERE name = &#x27;Alice&#x27;;
+SELECT * FROM users WHERE name = &#x27;Alice&#x27; AND age = 25;
+
+-- 通常不能像首列查询那样直接定位连续范围
+SELECT * FROM users WHERE age = 25;</code></pre>
+<h2>19. 为什么索引会让写入变慢</h2>
+<p>插入一行不只要写表数据，还要向每个相关索引插入记录；更新被索引列时可能要删除旧索引项并插入新索引项；删除也要维护所有索引、事务日志和可能的页面结构。随机写入还可能触发页分裂和更多缓存页面变脏。</p>
+<p>所以索引不是越多越好。一个“从未被有效查询使用”的索引仍然会消耗磁盘、缓存和写入吞吐。</p>
+<h2>20. 应该怎样选择索引</h2>
+<p>索引设计应从真实查询模式出发，而不是给每个字段机械建索引。重点观察过滤条件、连接条件、排序、分组、返回列和查询频率，并用执行计划验证。</p>
+<ul><li><strong>高频且选择性较好的过滤列：</strong>更可能明显减少扫描行数。</li><li><strong>联合索引列顺序：</strong>结合等值条件、范围条件、排序和最左前缀安排。</li><li><strong>覆盖需求：</strong>适量加入常读列可能减少回表，但会让索引变大、写入更贵。</li><li><strong>低选择性列：</strong>例如只有少量状态值，单列索引不一定有收益，要结合数据分布和组合条件。</li><li><strong>写多读少的表：</strong>更要控制索引数量，避免维护成本吞噬吞吐。</li></ul>
+<p>最终不要只靠经验判断。使用 <code>EXPLAIN</code> 或等价工具观察访问方式、估算行数、实际行数、回表与排序，再根据真实负载调整。</p>
+<h2>21. 为什么数据库还需要其他索引结构</h2>
+<p>结构</p>
+<p>擅长场景</p>
+<p>为什么不能由普通 B+ 树完全替代</p>
+<p>哈希索引</p>
+<p>精确等值匹配</p>
+<p>可用哈希直接定位桶</p>
+<p>倒排索引</p>
+<p>全文检索、词项到文档</p>
+<p>查询对象是“包含某词的文档集合”</p>
+<p>位图索引</p>
+<p>低基数分析型过滤与集合运算</p>
+<p>位运算可高效组合多个条件</p>
+<p>LSM Tree</p>
+<p>写入密集型存储</p>
+<p>通过内存表和顺序落盘优化写路径，读取依赖多层查找与压实</p>
+<p>R-tree / GiST / SP-GiST</p>
+<p>空间、几何和特殊搜索关系</p>
+<p>一维全序无法自然表达多维空间关系</p>
+<p>GIN</p>
+<p>数组、全文等多值成员查询</p>
+<p>需要从组件值反查包含它的记录</p>
+<p>HNSW / IVF</p>
+<p>向量近邻检索</p>
+<p>目标是高维空间中的近似最近邻，而非一维键顺序</p>
+<p>“数据库为什么选择某种索引”没有脱离查询模型的答案。数据怎样比较、查询需要什么运算、读写比例如何、数据放在内存还是磁盘，都会改变最合适的结构。</p>
+<h2>22. 这道题背后的核心矛盾</h2>
+<p>如果数据全部常驻内存，而且只做等值查询，哈希表往往很合适；如果要在内存里维护通用有序集合，红黑树也很自然；如果数据远大于内存、需要以页读写、还要支持等值、范围和排序，B+ 树的高扇出、低高度和有序叶子就很有优势。</p>
+<p>所以真正的决策链是：</p>
+<pre><code class="language-plaintext">查询语义
+  + 数据规模
+  + 存储介质
+  + 缓存命中
+  + 读写比例
+  + 并发与恢复成本
+        |
+        v
+选择索引结构与具体实现</code></pre>
+<h2>23. 常见误区</h2>
+<ul><li><strong>“哈希查找是 O(1)，一定比 B+ 树快。”</strong>复杂度只描述特定假设下的增长趋势，没有覆盖范围查询、碰撞、缓存局部性、扩容和持久化维护。</li><li><strong>“B+ 树查一次就一定发生三四次磁盘 I/O。”</strong>访问层数不等于物理 I/O 次数，页面可能已在 Buffer Pool 中。</li><li><strong>“建立索引后查询一定更快。”</strong>返回比例过高、统计信息不准、隐式转换或表达式不匹配时，优化器可能选择全表扫描。</li><li><strong>“二级索引叶子保存的是物理地址。”</strong>以 InnoDB 为例，它保存主键列，再通过聚簇索引定位行。</li><li><strong>“联合索引包含 age，所以只查 age 一定能高效使用。”</strong>联合键的排序首先由左侧列决定。</li><li><strong>“索引越多越保险。”</strong>每个索引都会增加空间和写入维护成本。</li></ul>
+<h2>24. 面试时可以怎样回答</h2>
+<p>数据库不是单纯选择理论查找复杂度最低的结构，而是要适配页式存储和多种查询。普通二叉搜索树可能退化；即使使用平衡二叉树，分支数仍然只有 2，树较高，无法充分利用一个磁盘页。B+ 树的内部节点只保留大量分隔键和子页指针，扇出高、树高低，叶子有序连接，所以既能做等值查找，也适合范围查询和排序。哈希表平均等值查询很快，但不保序，难以直接支持范围、排序和前缀扫描，因此更适合专门的等值场景，而不是替代所有索引。</p>
+<p>如果面试官继续追问，可以顺着“页与 Buffer Pool → 聚簇索引和二级索引 → 回表与覆盖索引 → 联合索引最左前缀 → 页分裂与写入成本”展开。</p>
+<h2>25. 自检问题与下一步</h2>
+<ol><li>为什么平衡二叉树已经是 <code>O(log n)</code>，数据库仍然关心它的树高？</li><li>为什么哈希索引适合 <code>=</code>，却不适合 <code>BETWEEN</code> 和 <code>ORDER BY</code>？</li><li>InnoDB 用二级索引查到主键后，为什么可能还要回表？</li><li>联合索引 <code>(a, b)</code> 为什么通常不能把只查 <code>b</code> 当作一个连续范围？</li><li>覆盖索引优化了读取，但会带来什么写入和空间代价？</li></ol>
+<p><strong>建议下一步：</strong>学习“事务、ACID 与并发异常：两个请求同时修改数据库时，怎样保证数据正确”。这会把目前的“数据如何查得快”推进到“并发读写时数据如何保持正确”。</p>
+<h2>参考资料</h2>
+<ul><li><a href="https://dev.mysql.com/doc/refman/8.4/en/innodb-index-types.html" target="_blank" rel="noopener">MySQL 8.4：InnoDB Clustered and Secondary Indexes</a></li><li><a href="https://dev.mysql.com/doc/refman/8.4/en/innodb-parameters.html#sysvar_innodb_page_size" target="_blank" rel="noopener">MySQL 8.4：innodb_page_size</a></li><li><a href="https://dev.mysql.com/doc/refman/8.4/en/multiple-column-indexes.html" target="_blank" rel="noopener">MySQL 8.4：Multiple-Column Indexes</a></li><li><a href="https://www.postgresql.org/docs/current/indexes-types.html" target="_blank" rel="noopener">PostgreSQL：Index Types</a></li></ul>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

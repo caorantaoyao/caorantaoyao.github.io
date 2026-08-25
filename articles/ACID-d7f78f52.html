@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>事务、ACID 与并发异常：两个请求同时修改数据库时，怎样保证数据正确 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.08.25</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">事务、ACID 与并发异常：两个请求同时修改数据库时，怎样保证数据正确</h1>
+    <div class="article-body">
+<p>这篇文档承接<a href="https://my.feishu.cn/wiki/RRrywgXIkiX1kVkXxIQchA7Wnld" target="_blank" rel="noopener">《索引与 B+ 树：为什么数据库不用哈希表或二叉搜索树保存所有索引》</a>。上一篇回答“数据怎样查得快”，这一篇回答更重要的另一个问题：多个请求同时读写数据，系统怎样保证业务结果仍然正确。</p>
+<p><strong>先记住总框架：</strong>事务定义必须一起成功或失败的操作边界；锁与 MVCC 协调并发；隔离级别决定允许出现哪些并发现象；数据库约束守住最终底线；冲突重试和幂等处理失败与重复。跨越数据库、消息队列和多个服务后，还需要 Outbox、Saga 等分布式一致性方案。</p>
+<h2>1. 从库存超卖看并发问题</h2>
+<p>假设商品库存只剩 1，请求 A 和请求 B 同时购买。如果两个请求都先读取库存，再在应用代码中判断并写回，就可能发生下面的交错。</p>
+<pre><code class="language-plaintext">请求 A：读取 stock = 1
+请求 B：读取 stock = 1
+
+请求 A：判断可以买
+请求 B：也判断可以买
+
+请求 A：写入 stock = 0，创建订单 A
+请求 B：写入 stock = 0，创建订单 B
+
+最终库存：0
+实际订单：2 个</code></pre>
+<p>最终库存没有变成负数，却已经卖出了两件商品。问题不是某一条 SQL 语法错误，而是多个正确的局部操作以错误顺序交错，破坏了“卖出数量不能超过库存”的业务不变量。</p>
+<h2>2. 事务是什么</h2>
+<p>事务把若干数据库操作组合成一个逻辑单元。典型事务由 <code>BEGIN</code> 开始，以 <code>COMMIT</code> 提交；任何一步失败时执行 <code>ROLLBACK</code>，撤销整个事务尚未提交的影响。</p>
+<pre><code class="language-rust">BEGIN;
+
+UPDATE products
+SET stock = stock - 1
+WHERE id = 1001;
+
+INSERT INTO orders(product_id, user_id)
+VALUES (1001, 2001);
+
+COMMIT;</code></pre>
+<p>如果订单插入失败，库存扣减也应该回滚。事务首先解决的是“不能只成功一半”，但只写 <code>BEGIN</code> 和 <code>COMMIT</code> 并不会自动修复所有并发竞争，SQL 写法、隔离级别、锁和约束仍然重要。</p>
+<h2>3. ACID 总览</h2>
+<p>字母</p>
+<p>含义</p>
+<p>解决的问题</p>
+<p>A</p>
+<p>Atomicity，原子性</p>
+<p>一个事务要么全部成功，要么全部失败</p>
+<p>C</p>
+<p>Consistency，一致性</p>
+<p>事务前后数据满足声明的约束与业务不变量</p>
+<p>I</p>
+<p>Isolation，隔离性</p>
+<p>并发事务之间不能发生不被允许的干扰</p>
+<p>D</p>
+<p>Durability，持久性</p>
+<p>提交成功的数据在故障恢复后仍然存在</p>
+<p>ACID 不是四个互不相关的口号。原子性保证事务内部不残缺，隔离性约束事务之间的交错，持久性保证已提交结果不丢失，一致性是应用逻辑、数据库约束和前三项共同维护的目标。</p>
+<h2>4. Atomicity：原子性</h2>
+<p>转账需要同时执行“账户 A 减少 100 元”和“账户 B 增加 100 元”。如果第二步失败，第一步也必须撤销，不能让钱凭空消失。数据库利用事务状态、Undo 信息或其他存储引擎机制恢复未提交修改，使调用者看到的是全部完成或全部没有发生。</p>
+<p>原子性只覆盖被纳入同一个事务的操作。事务外发送的 HTTP 请求、邮件或消息队列消息，不会因为数据库回滚而自动撤销。</p>
+<h2>5. Consistency：一致性</h2>
+<p>一致性表示事务执行前后，数据仍然满足系统定义的规则，例如库存不能小于 0、订单号不能重复、外键必须指向存在的记录、转账前后资金总额符合业务规则。</p>
+<p>数据库不会自动理解全部业务含义。开发者必须通过正确的事务逻辑和数据库约束表达规则。因此更准确的公式是：</p>
+<pre><code class="language-plaintext">一致性
+= 正确的业务逻辑
++ 合理的事务边界
++ 合适的隔离方式
++ CHECK / UNIQUE / FOREIGN KEY 等约束</code></pre>
+<h2>6. Isolation：隔离性</h2>
+<p>隔离性讨论的是多个事务同时运行时，彼此能看见什么、可以怎样互相影响。最高层次的目标是让并发执行的最终效果等价于事务按照某种顺序一个接一个执行，但数据库为了提高吞吐量，通常允许选择不同强度的隔离级别。</p>
+<p>隔离不是让所有请求完全互不相干，也不是把数据库变成单线程。数据库仍然并发工作，只是在冲突点等待、选择可见版本，或者中止其中一个事务。</p>
+<h2>7. Durability：持久性</h2>
+<p>数据库返回“提交成功”后，即使数据库进程崩溃或机器重启，已提交修改也应能恢复。常见实现会先把足以重放修改的日志写入持久化存储，再向客户端确认提交。</p>
+<p>持久性还受到具体配置影响。例如异步刷盘可能用更高性能换取更弱的故障保证；复制可以提高可用性和容灾能力，但复制与单节点事务的持久化语义不是同一个概念。</p>
+<h2>8. 事务与隔离级别不是一回事</h2>
+<p>事务回答“哪些操作属于同一个提交或回滚单元”，隔离级别回答“这个事务与其他并发事务之间隔离到什么程度”。一个事务即使满足原子提交，也可能在较弱隔离级别下看到其他事务新提交的数据，或者出现业务层的并发异常。</p>
+<p>例如事务 A 两次查询余额，期间事务 B 把余额从 100 改成 80 并提交。事务 A 第二次看到 100 还是 80，取决于数据库和隔离级别，而不是取决于有没有写 <code>BEGIN</code>。</p>
+<h2>9. 脏读、不可重复读与幻读</h2>
+<p>异常</p>
+<p>含义</p>
+<p>示例</p>
+<p>脏读</p>
+<p>读取到其他事务尚未提交的数据</p>
+<p>B 看到 A 的临时余额，随后 A 回滚</p>
+<p>不可重复读</p>
+<p>同一事务再次读取同一行，值发生变化</p>
+<p>第一次余额为 100，第二次变为 80</p>
+<p>幻读</p>
+<p>同一条件再次查询，符合条件的行集合发生变化</p>
+<p>第一次查到 10 个订单，第二次出现第 11 个</p>
+<p>这些术语描述的是并发事务之间的可见性现象。不同数据库对同名隔离级别可能提供比 SQL 标准最低要求更强的保证，因此实际行为必须结合所用数据库版本理解。</p>
+<h2>10. 丢失更新与写偏差</h2>
+<p><strong>丢失更新</strong>常见于“读取—在应用中计算—写回”：A 和 B 都读到旧值，后提交者覆盖先提交者的结果。库存超卖、计数覆盖和资料编辑冲突都可能由此产生。</p>
+<p><strong>写偏差</strong>更隐蔽。两个事务根据同一个整体条件做判断，却修改不同的行，所以没有直接的同行写冲突。例如两名值班医生分别看到“另一人仍在值班”，然后同时把自己的状态改为下班，最终无人值班。快照一致并不必然阻止这种跨行不变量被破坏。</p>
+<h2>11. 四种常见隔离级别</h2>
+<p>隔离级别</p>
+<p>直观理解</p>
+<p>仍需注意</p>
+<p>Read Uncommitted</p>
+<p>可能读取其他事务尚未提交的数据</p>
+<p>隔离很弱，部分数据库会把它提升为更强语义</p>
+<p>Read Committed</p>
+<p>每条语句读取开始执行时已经提交的数据</p>
+<p>同一事务的两次查询可能看到不同结果</p>
+<p>Repeatable Read</p>
+<p>同一事务中的快照读取通常保持一致</p>
+<p>具体幻读、写冲突和快照语义因数据库而异</p>
+<p>Serializable</p>
+<p>成功提交的并发结果等价于某种串行顺序</p>
+<p>可能等待或因序列化冲突而回滚，应用必须重试</p>
+<p>隔离越强，允许的异常越少，但冲突检测、等待和重试成本通常越高。工程上常见组合是 Read Committed 或 Repeatable Read，加上原子更新、必要的锁、数据库约束和重试，而不是不加分析地把所有事务都调成 Serializable。</p>
+<h2>12. 悲观锁：先锁住再修改</h2>
+<p>悲观锁假设冲突很可能发生，所以事务在读取后续要修改的行时先加锁。另一个事务请求不兼容的锁时，需要等待当前事务提交或回滚。</p>
+<pre><code class="language-rust">BEGIN;
+
+SELECT stock
+FROM products
+WHERE id = 1001
+FOR UPDATE;
+
+-- 检查库存、扣减库存、创建订单
+
+COMMIT;</code></pre>
+<p><code>SELECT ... FOR UPDATE</code> 适合必须先读取并进行复杂判断的余额、库存和状态机操作。事务应尽量短，不要持锁等待用户输入或远程 HTTP 调用，否则会放大阻塞和死锁风险。</p>
+<h2>13. 乐观锁：提交时检查版本</h2>
+<p>乐观锁假设冲突较少，读取时不长期占用锁，更新时通过版本号确认数据是否仍是原版本。</p>
+<pre><code class="language-rust">UPDATE documents
+SET content = &#x27;new content&#x27;,
+    version = version + 1
+WHERE id = 1
+  AND version = 5;</code></pre>
+<p>影响 1 行表示更新成功；影响 0 行说明其他请求已经修改过该记录，需要重新读取、重新计算或提示用户冲突。它适合文档编辑、用户资料等读多写少且冲突概率较低的场景。</p>
+<h2>14. MVCC：让读取看到合适的数据版本</h2>
+<p>MVCC 是多版本并发控制。数据库为记录维护事务可见的版本，让普通快照读取可以看到符合自身时间视图的已提交数据，而不必总是等待正在写入的事务。</p>
+<pre><code class="language-plaintext">事务 A 正在生成新版本
+事务 B 的快照读取仍可看到旧的已提交版本
+
+读写因此可以在更多情况下并发进行</code></pre>
+<p>MVCC 主要改善读写并发，并不等于没有锁，也不等于所有并发异常自动消失。同一行的并发写入仍要协调；跨多行的不变量仍可能需要显式锁、约束或 Serializable。</p>
+<h2>15. 原子条件更新：避免库存超卖</h2>
+<p>如果业务逻辑简单，通常不需要先查询库存再扣减，可以让数据库在一条语句里同时完成条件判断和更新。</p>
+<pre><code class="language-rust">UPDATE products
+SET stock = stock - 1
+WHERE id = 1001
+  AND stock &gt; 0;</code></pre>
+<p>影响 1 行表示扣减成功；影响 0 行表示商品不存在或库存不足。当两个请求竞争最后一件库存时，只有一个请求能够把满足条件的记录更新成功。这个方案把应用层的竞争窗口压缩进数据库的一条原子语句。</p>
+<h2>16. 数据库约束是最后一道防线</h2>
+<p>应用可能有 Bug，也可能同时运行在多个进程、容器和服务器上。关键不变量不能只依赖 Python 中的 <code>if</code> 判断，还应尽可能用数据库约束表达。</p>
+<pre><code class="language-rust">ALTER TABLE products
+ADD CONSTRAINT ck_stock_non_negative
+CHECK (stock &gt;= 0);
+
+CREATE UNIQUE INDEX uk_orders_request_id
+ON orders(request_id);</code></pre>
+<p><code>CHECK</code> 防止非法库存落库，<code>UNIQUE</code> 可以让相同幂等键只能创建一个订单。完整保护往往来自“原子 UPDATE 防竞争、事务保证成组提交、约束防非法状态、幂等键防重复请求”。</p>
+<h2>17. 使用 Python 与 SQLAlchemy 落地</h2>
+<pre><code class="language-php">from sqlalchemy import update
+from sqlalchemy.orm import Session
+
+
+class OutOfStock(Exception):
+    pass
+
+
+def create_order(engine, product_id: int, user_id: int, request_id: str):
+    with Session(engine) as session:
+        with session.begin():
+            result = session.execute(
+                update(Product)
+                .where(
+                    Product.id == product_id,
+                    Product.stock &gt; 0,
+                )
+                .values(stock=Product.stock - 1)
+            )
+
+            if result.rowcount != 1:
+                raise OutOfStock(&quot;库存不足&quot;)
+
+            session.add(
+                Order(
+                    product_id=product_id,
+                    user_id=user_id,
+                    request_id=request_id,
+                )
+            )</code></pre>
+<p><code>session.begin()</code> 正常退出时提交，内部抛出异常时回滚。数据库负责协调并发写入；应用负责检查影响行数，并把冲突转换为清晰的业务结果。</p>
+<h2>18. 死锁、序列化失败与重试</h2>
+<p>如果事务 A 先锁记录 1 再等待记录 2，而事务 B 先锁记录 2 再等待记录 1，就形成死锁。数据库通常会选择回滚其中一个事务来打破循环。Serializable 等隔离方式也可能主动中止无法安全串行化的事务。</p>
+<p>因此死锁或序列化失败不是简单地“数据库坏了”，而是并发系统的正常控制结果。应用应识别可重试错误，回滚当前事务，经过有限次数的退避后从事务开头重新执行。统一锁顺序、缩短事务、减少一次事务涉及的记录数量，也能降低冲突概率。</p>
+<h2>19. 普通事务的边界在哪里</h2>
+<p>普通本地事务通常只控制当前数据库连接所参与的事务资源。事务可以一起提交订单表、库存表和 Outbox 表，只要它们属于同一个受控数据库事务；但它不能自动回滚另一个微服务、外部消息队列、邮件系统或第三方支付。</p>
+<p>部分技术支持两阶段提交等分布式事务协议，但它们需要参与资源共同支持，并带来协调、阻塞、可用性和运维复杂度。微服务系统中更常见的是本地事务配合消息、幂等、Outbox 与 Saga。</p>
+<h2>20. 什么是跨服务双写</h2>
+<p>一次业务操作需要向两个独立系统写入，就形成双写。例如订单服务既要把订单写入数据库，又要向消息队列发布 <code>OrderCreated</code>。</p>
+<pre><code class="language-plaintext">方案一：数据库提交成功
+        -&gt; 程序崩溃
+        -&gt; 消息没有发送
+
+方案二：消息已经发送
+        -&gt; 数据库事务回滚
+        -&gt; 下游处理了不存在的订单</code></pre>
+<p>改变先后顺序不能消除问题。即使把发送消息的代码写在数据库事务代码块中，消息队列也不会自动参加数据库的提交和回滚；消息发送成功后，数据库无法通过 <code>ROLLBACK</code> 把已经被消费的消息收回来。</p>
+<h2>21. Outbox Event 是什么</h2>
+<p><strong>Event</strong> 表示一个已经发生的业务事实，通常使用过去式命名，例如 <code>OrderCreated</code>、<code>InventoryReserved</code>、<code>PaymentSucceeded</code>。<strong>Outbox</strong> 是当前服务数据库里的“发件箱表”。Outbox Event 就是其中一条等待可靠发布的业务事件记录。</p>
+<pre><code class="language-json">{
+  &quot;event_id&quot;: &quot;evt-001&quot;,
+  &quot;event_type&quot;: &quot;OrderCreated&quot;,
+  &quot;aggregate_id&quot;: &quot;order-1001&quot;,
+  &quot;payload&quot;: {
+    &quot;order_id&quot;: 1001,
+    &quot;user_id&quot;: 2001
+  }
+}</code></pre>
+<p>它在刚写入数据库时还不是消息队列中已经送达的消息，而是一份持久化的“这件事必须随后通知出去”的凭证。</p>
+<h2>22. Transactional Outbox 怎样工作</h2>
+<p>订单和待发送事件在同一个本地事务中写入，所以二者一起提交或一起回滚。</p>
+<pre><code class="language-rust">BEGIN;
+
+INSERT INTO orders(id, status)
+VALUES (1001, &#x27;CREATED&#x27;);
+
+INSERT INTO outbox_events(
+    event_id,
+    event_type,
+    aggregate_id,
+    payload,
+    status
+)
+VALUES (
+    &#x27;evt-001&#x27;,
+    &#x27;OrderCreated&#x27;,
+    &#x27;order-1001&#x27;,
+    &#x27;{&quot;order_id&quot;: 1001}&#x27;,
+    &#x27;PENDING&#x27;
+);
+
+COMMIT;</code></pre>
+<p>后台发布器通过轮询或 CDC 读取已提交的 Outbox 记录，发送到消息队列，成功后再标记为已发送。消息队列暂时不可用时，事件仍保存在数据库中，可以稍后重试。</p>
+<pre><code class="language-plaintext">业务事务：订单 + Outbox Event 一起提交
+                    |
+                    v
+发布器读取 PENDING
+                    |
+                    v
+发送到消息队列
+                    |
+                    v
+标记为 SENT</code></pre>
+<h2>23. 为什么 Outbox 仍然需要幂等</h2>
+<p>发布器可能已经把消息发送成功，却在标记 <code>SENT</code> 前崩溃。重启后它会再次发送同一事件，因此 Outbox 通常提供的是可靠的至少一次传播，而不是天然保证端到端只执行一次。</p>
+<p>消费者应记录已经处理的 <code>event_id</code>，或利用业务唯一键和幂等更新，使同一事件重复到达也不会重复扣款、重复发券或重复创建记录。事件顺序重要时，还要设计聚合版本号、序列号或分区键。</p>
+<h2>24. Saga 是什么</h2>
+<p>Saga 用于协调跨越多个服务的业务流程。它把一个无法由单个数据库事务控制的大事务，拆成一系列各自可提交的本地事务。某一步失败时，不是让所有数据库执行同一个 <code>ROLLBACK</code>，而是运行补偿事务，撤销已经完成步骤的业务影响。</p>
+<pre><code class="language-plaintext">T1：订单服务创建待支付订单
+T2：库存服务预留库存
+T3：支付服务完成扣款
+T4：订单服务确认订单</code></pre>
+<pre><code class="language-plaintext">T1：订单已创建
+T2：库存已预留
+T3：支付失败
+C2：库存服务释放库存
+C1：订单服务取消订单</code></pre>
+<p>Saga 接受服务间的短暂中间状态，通过继续执行、重试或补偿，最终到达一个可接受的业务状态，因此属于最终一致性思路。</p>
+<h2>25. 补偿操作不等于数据库回滚</h2>
+<p>数据库回滚表示修改没有提交为最终结果；Saga 补偿表示原操作已经提交，现在执行一个新的、语义相反的业务操作。例如退款不是删除历史扣款，而是新增退款记录；释放库存不是让过去的预留从历史中消失，而是执行一次库存释放。</p>
+<p>正向操作</p>
+<p>补偿操作</p>
+<p>创建待支付订单</p>
+<p>取消订单</p>
+<p>预留库存</p>
+<p>释放库存</p>
+<p>扣款成功</p>
+<p>发起退款</p>
+<p>占用优惠券</p>
+<p>返还优惠券</p>
+<p>并非所有副作用都能完美撤销，例如邮件无法“取消发送”、包裹可能已经出库。因此 Saga 需要明确状态机、超时、可重试补偿、人工介入和审计记录。</p>
+<h2>26. Saga 的两种组织方式</h2>
+<p>方式</p>
+<p>工作方式</p>
+<p>主要特点</p>
+<p>Choreography，编舞式</p>
+<p>各服务订阅事件并发布下一事件</p>
+<p>耦合较松、起步简单；参与者多时流程分散、难追踪</p>
+<p>Orchestration，编排式</p>
+<p>中心协调器决定下一步与补偿步骤</p>
+<p>流程和状态集中；协调器需要高可用并承担流程复杂度</p>
+<p>简单、参与者较少的流程可以用事件编舞；步骤多、分支多、需要超时和人工恢复的核心流程，通常更适合显式编排。两种方式都需要幂等、重试、可观测性和补偿设计。</p>
+<h2>27. Outbox 与 Saga 的关系</h2>
+<p>Outbox 和 Saga 不是二选一。Outbox 解决“本地数据库提交后，事件不能因为进程故障而丢失”；Saga 解决“多个服务共同完成业务时，中间失败后如何继续或补偿”。它们经常组合使用。</p>
+<pre><code class="language-plaintext">订单服务本地事务
+  ├─ 创建订单
+  └─ 写入 OrderCreated Outbox Event
+             |
+             v
+        发布到消息队列
+             |
+             v
+库存服务本地事务
+  ├─ 预留库存
+  └─ 写入 InventoryReserved Outbox Event
+             |
+             v
+        Saga 继续下一步</code></pre>
+<p>可以把职责记成：本地事务保证每一步，Outbox 保证事件不丢，Saga 串联跨服务步骤，补偿处理部分失败，幂等处理重复执行。</p>
+<h2>28. 后端工程中的完整防线</h2>
+<ul><li><strong>先定义业务不变量：</strong>例如库存不能为负、同一请求只能生成一个订单。</li><li><strong>划清本地事务边界：</strong>只把维护一致性所需的数据库操作放进事务。</li><li><strong>优先使用原子 SQL：</strong>避免应用层“先读再写”的竞争窗口。</li><li><strong>选择并发控制：</strong>高冲突用行锁，低冲突可用版本号，复杂不变量考虑更强隔离。</li><li><strong>用数据库约束兜底：</strong>依靠 UNIQUE、CHECK、FOREIGN KEY 阻止非法状态落库。</li><li><strong>把失败视为正常路径：</strong>处理死锁、序列化失败、网络超时和有限重试。</li><li><strong>跨系统时显式设计一致性：</strong>数据库与消息队列用 Outbox，跨服务流程用 Saga。</li><li><strong>所有外部操作都考虑幂等：</strong>使用 request_id、event_id 或业务唯一键防止重复副作用。</li></ul>
+<h2>29. 面试时可以怎样回答</h2>
+<p>两个请求同时修改数据库时，先用事务定义原子操作边界，再通过锁或 MVCC 控制可见性和写冲突，隔离级别决定允许哪些并发现象。库存扣减应优先使用带条件的原子 UPDATE 并检查影响行数，复杂读改写可以使用 SELECT FOR UPDATE，低冲突场景可以使用版本号乐观锁。同时用 UNIQUE、CHECK 等约束守住最终不变量，并对死锁和序列化失败重试。普通本地事务不能自动控制消息队列和其他微服务，因此数据库与消息队列双写常用 Transactional Outbox；跨多个服务的长业务流程使用 Saga，通过一系列本地事务和补偿操作达到最终一致。</p>
+<h2>30. 自检问题与下一步</h2>
+<ol><li>为什么只写 <code>BEGIN</code> 和 <code>COMMIT</code> 仍可能发生库存超卖？</li><li>事务和隔离级别分别决定什么？</li><li>MVCC 为什么能提高读写并发，又为什么不能解决所有业务并发问题？</li><li>为什么数据库提交成功后再发送消息，仍然存在消息丢失窗口？</li><li>Outbox Event 为什么可能被重复发送，消费者怎样防止重复扣款？</li><li>Saga 补偿与数据库回滚有什么本质区别？</li></ol>
+<p><strong>建议下一步：</strong>继续学习“MVCC 与锁：快照读、当前读、行锁和版本链怎样共同工作”。它会把本篇的隔离性从业务现象深入到数据库内部实现。</p>
+<h2>参考资料</h2>
+<ul><li><a href="https://www.postgresql.org/docs/current/transaction-iso.html" target="_blank" rel="noopener">PostgreSQL：Transaction Isolation</a></li><li><a href="https://dev.mysql.com/doc/refman/8.4/en/innodb-transaction-isolation-levels.html" target="_blank" rel="noopener">MySQL 8.4：InnoDB Transaction Isolation Levels</a></li><li><a href="https://docs.sqlalchemy.org/en/20/orm/session_transaction.html" target="_blank" rel="noopener">SQLAlchemy 2.0：Transactions and Connection Management</a></li><li><a href="https://docs.aws.amazon.com/en_en/prescriptive-guidance/latest/cloud-design-patterns/transactional-outbox.html" target="_blank" rel="noopener">AWS Prescriptive Guidance：Transactional Outbox Pattern</a></li><li><a href="https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/saga-patterns.html" target="_blank" rel="noopener">AWS Prescriptive Guidance：Saga Patterns</a></li></ul>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

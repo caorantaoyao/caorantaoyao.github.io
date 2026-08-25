@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Infra 系统基础学习手册 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.08.25</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">AI Infra 系统基础学习手册</h1>
+    <div class="article-body">
+<p>使用方式：以对话学习为主。每次选择一个知识点提问，按照“直觉解释 → 底层原理 → 代码例子 → AI Infra 场景 → 小练习”完成一课；本文档负责保存学习顺序、核心结论与复习检查项。</p>
+<p><strong>适用方向：</strong>AI Infra、训练基础设施、推理基础设施、模型服务与调度。</p>
+<p><strong>建议周期：</strong>8 周系统基础，每周 10～15 小时。</p>
+<p><strong>推荐语言：</strong>Python 用于模型和服务实验，C/C++ 用于理解内存、并发与性能；所有关键实验最终在 Linux 环境验证。</p>
+<p><strong>最近更新：</strong>2026-08-25。</p>
+<h2>1 学习目标</h2>
+<p>AI Infra 的系统基础不是背诵操作系统名词，也不是提前学习大量 Kubernetes 配置。学习完成后，应当能够回答四类问题：资源在哪里消耗，程序为什么变慢，系统会怎样失败，以及如何观测和恢复。</p>
+<p>每个主题都以可验证的实验结束。只“运行成功”不算掌握；至少还要观察 CPU、内存、磁盘或网络指标，制造一次异常，并解释结果。</p>
+<h2>2 知识地图</h2>
+<p>模块</p>
+<p>核心知识</p>
+<p>与 AI Infra 的联系</p>
+<p>程序运行模型</p>
+<p>程序、进程、线程、用户态、内核态、系统调用、信号、文件描述符</p>
+<p>理解训练任务和推理服务如何被操作系统执行</p>
+<p>CPU 与并发</p>
+<p>调度、上下文切换、锁、条件变量、原子操作、竞态、死锁、线程池</p>
+<p>理解 Worker、请求调度和并发执行</p>
+<p>内存</p>
+<p>栈、堆、虚拟内存、页表、TLB、Page Fault、mmap、Page Cache、OOM、NUMA</p>
+<p>理解模型加载、数据复制、内存和显存瓶颈</p>
+<p>I/O</p>
+<p>阻塞与非阻塞、同步与异步、缓冲区、事件循环、零拷贝、fsync、Checkpoint</p>
+<p>理解数据加载、模型文件读取和异步推理</p>
+<p>网络</p>
+<p>TCP、HTTP、gRPC、连接池、超时、重试、幂等、限流、负载均衡、背压</p>
+<p>理解分布式训练通信和在线模型服务</p>
+<p>性能分析</p>
+<p>CPU Cache、数据局部性、False Sharing、吞吐、延迟、P99、Little&#x27;s Law、Profiler</p>
+<p>建立可复现的训练与推理性能基准</p>
+<p>分布式系统</p>
+<p>部分失败、心跳、租约、复制、一致性、共识、任务调度、故障恢复</p>
+<p>理解多机训练和分布式推理平台</p>
+<p>容器</p>
+<p>Namespace、Cgroup、Docker、Pod、Service、Deployment、调度</p>
+<p>理解资源隔离、交付和集群部署</p>
+<p>AI Infra 衔接</p>
+<p>CPU-GPU 传输、CUDA Stream、NCCL、DDP、FSDP、动态批处理、KV Cache</p>
+<p>进入训练 Infra 与推理 Infra 专项</p>
+<h2>3 八周学习路线</h2>
+<p>周次</p>
+<p>主题</p>
+<p>学习内容</p>
+<p>验收成果</p>
+<p>1</p>
+<p>Linux 与进程</p>
+<p>Shell、进程树、信号、文件描述符、用户态与内核态</p>
+<p>实现子进程管理器，能够处理退出和超时</p>
+<p>2</p>
+<p>并发</p>
+<p>线程、锁、条件变量、原子操作、竞态、死锁</p>
+<p>实现有界队列与线程池</p>
+<p>3</p>
+<p>内存</p>
+<p>虚拟内存、页、Page Fault、mmap、Page Cache、OOM</p>
+<p>测量顺序与随机访问的耗时和内存变化</p>
+<p>4</p>
+<p>I/O 与存储</p>
+<p>阻塞、非阻塞、缓冲、事件通知、fsync、Checkpoint</p>
+<p>实现追加日志并模拟崩溃恢复</p>
+<p>5</p>
+<p>网络</p>
+<p>TCP、HTTP、gRPC、连接池、超时、重试、限流</p>
+<p>实现带超时、重试和限流的模型网关</p>
+<p>6</p>
+<p>性能分析</p>
+<p>Cache、上下文切换、系统调用、吞吐、P99、Profiler</p>
+<p>定位一次瓶颈并用数据验证优化结果</p>
+<p>7</p>
+<p>分布式基础</p>
+<p>部分失败、心跳、复制、一致性、任务调度、Raft 概念</p>
+<p>实现简化版 MapReduce 或任务执行器</p>
+<p>8</p>
+<p>综合项目</p>
+<p>队列、Worker、背压、取消、指标与恢复</p>
+<p>完成 Mini AI Task Runtime 并进行压测</p>
+<h2>4 学习方法</h2>
+<p>每个知识点都采用同一条闭环：</p>
+<ol><li>理解它向上提供的抽象。</li><li>写一个最小可运行程序。</li><li>观察 CPU、内存、I/O 或网络行为。</li><li>人为制造阻塞、超时、崩溃或资源不足。</li><li>定位原因，记录基线、修改和实验结论。</li></ol>
+<p>例如学习线程池时，不能停在“成功处理了请求”。还要回答：线程数从 1 增加到 32 后吞吐如何变化，队列满了怎样处理，一个任务卡住会影响哪些请求，以及为什么 P99 可能突然升高。</p>
+<h2>5 第一课：Python 程序从命令行启动后发生了什么</h2>
+<h3>5.1 核心结论</h3>
+<p>操作系统不会直接理解并执行 Python 源代码。对于命令 <code>python app.py</code>，操作系统启动的是 Python 解释器；随后由解释器读取、编译并执行 <code>app.py</code>。</p>
+<pre><code class="language-plaintext">键盘输入
+  ↓
+终端把字符交给 Shell
+  ↓
+Shell 解析命令并查找 python
+  ↓
+创建子进程
+  ↓
+execve() 加载 Python 解释器
+  ↓
+CPython 读取 app.py
+  ↓
+编译成字节码并执行
+  ↓
+通过系统调用访问文件、网络和终端
+  ↓
+程序退出，Shell 回收进程</code></pre>
+<h3>5.2 Shell 解析命令</h3>
+<p>终端负责接收键盘字符，真正解析命令的是 Shell，例如 bash 或 zsh。Shell 会拆分参数、展开变量和通配符、处理管道与重定向，并根据 PATH 查找 Python 可执行文件。</p>
+<pre><code class="language-plaintext">python app.py --port 8000</code></pre>
+<p>它形成的参数数组可以理解为：</p>
+<pre><code class="language-plaintext">argv[0] = &quot;python&quot;
+argv[1] = &quot;app.py&quot;
+argv[2] = &quot;--port&quot;
+argv[3] = &quot;8000&quot;</code></pre>
+<p>PATH 查找主要由 Shell 或运行库完成；内核的 <code>execve()</code> 接口最终接收的是一个明确路径。</p>
+<h3>5.3 创建子进程并加载解释器</h3>
+<p>传统 Unix 流程通常是 Shell 调用 <code>fork()</code> 创建子进程，子进程调用 <code>execve()</code> 加载 Python，父进程则调用 <code>wait()</code> 等待程序结束。现代系统也可能通过 <code>posix_spawn()</code> 完成更高效的组合操作。</p>
+<p><strong>fork() 的作用。</strong>创建一个新进程。子进程继承当前工作目录、环境变量、文件描述符、用户身份和权限。内存通常使用写时复制，父子进程最初可以共享相同物理页面，直到其中一方修改。</p>
+<p><strong>execve() 的作用。</strong>它不会再创建一个进程，而是把当前进程的程序和虚拟地址空间替换为新的可执行程序。因此子进程执行 Python 后，PID 通常保持不变。</p>
+<h3>5.4 标准输入、输出和错误</h3>
+<p>编号</p>
+<p>名称</p>
+<p>默认连接对象</p>
+<p>0</p>
+<p>stdin</p>
+<p>终端输入</p>
+<p>1</p>
+<p>stdout</p>
+<p>终端输出</p>
+<p>2</p>
+<p>stderr</p>
+<p>终端错误输出</p>
+<p>如果执行 <code>python app.py &gt; output.log</code>，Shell 会在加载 Python 前让文件描述符 1 指向日志文件。Python 只向文件描述符 1 写数据，并不需要理解 Shell 的重定向语法。</p>
+<h3>5.5 内核建立虚拟地址空间</h3>
+<p>子进程调用 <code>execve()</code> 后，内核检查文件与执行权限，识别 Linux ELF 等可执行文件格式，建立新的虚拟地址空间，映射 Python 的代码、数据和共享库，并准备栈、堆、参数及环境变量。动态链接器还会加载 libc 等依赖库。</p>
+<pre><code class="language-plaintext">高地址
+┌──────────────┐
+│ 栈           │  参数、环境变量、函数调用
+├──────────────┤
+│ 共享库       │  libc 等
+├──────────────┤
+│ mmap 区域    │
+├──────────────┤
+│ 堆           │  动态分配对象
+├──────────────┤
+│ 数据段       │
+├──────────────┤
+│ Python 代码  │
+└──────────────┘
+低地址</code></pre>
+<p>这些内容不一定立即进入物理内存。许多页面会在第一次访问时触发 Page Fault，再由内核建立映射或加载数据。</p>
+<h3>5.6 CPython 执行 app.py</h3>
+<p>从这里开始主要是用户态中的 CPython 工作。它初始化运行时、内存分配器和导入系统，打开并读取 <code>app.py</code>，将源代码解析为抽象语法树，再编译为 Python 字节码并执行。</p>
+<pre><code class="language-php">if __name__ == &quot;__main__&quot;:
+    main()</code></pre>
+<p>Python 字节码仍然不是 CPU 机器指令。真正由 CPU 执行的是已经编译成机器指令的 CPython 解释器；解释器不断读取和处理 Python 字节码。</p>
+<h3>5.7 用户态与内核态的切换</h3>
+<p>普通计算主要发生在用户态。打开文件、创建线程、建立网络连接、等待数据、获取时间或者向终端输出时，程序需要通过系统调用请求内核。</p>
+<p>例如 <code>print(&quot;hello&quot;)</code> 的内容经过 Python 缓冲后，最终通常会形成类似 <code>write(1, &quot;hello\n&quot;, 6)</code> 的系统调用。CPU 从用户态进入内核态，内核将数据交给终端、文件或管道，然后再返回用户态。</p>
+<p>进程也不会一直独占 CPU。内核调度器为它分配时间片，必要时保存寄存器等状态并切换到其他线程或进程，这就是上下文切换。如果进程正在等待磁盘或网络，内核可以让它睡眠，把 CPU 交给其他任务。</p>
+<h3>5.8 程序退出</h3>
+<p>正常结束时，Python 刷新缓冲区并执行必要清理，然后调用退出系统调用。内核关闭文件描述符、释放进程资源并保留退出状态，通知父进程。Shell 通过 <code>wait()</code> 回收该进程，更新退出码并重新显示命令提示符。</p>
+<p>如果发生未捕获的 Python 异常，CPython 通常向文件描述符 2 输出 Traceback，并以非零状态码退出。严重的原生代码错误或外部信号则可能让进程直接异常终止。</p>
+<h3>5.9 三个必须区分的概念</h3>
+<p>概念</p>
+<p>含义</p>
+<p>程序</p>
+<p>磁盘上的代码和数据，例如 Python 解释器文件</p>
+<p>进程</p>
+<p>程序的一次运行实例，包含 PID、虚拟地址空间、文件描述符和其他资源</p>
+<p>线程</p>
+<p>进程内部被 CPU 调度执行的一条执行流</p>
+<h3>5.10 本课复习</h3>
+<p class="todo">☐ 能够解释 Shell、终端和内核分别负责什么</p>
+<p class="todo">☐ 能够解释 fork() 与 execve() 的区别</p>
+<p class="todo">☐ 能够说明文件描述符 0、1、2 的含义</p>
+<p class="todo">☐ 能够解释为什么 execve() 后 PID 通常不变</p>
+<p class="todo">☐ 能够描述 print() 如何从用户态进入内核态</p>
+<p class="todo">☐ 能够说明进程退出后为什么还需要父进程 wait()</p>
+<h2>6 后续课程顺序</h2>
+<p class="todo">☐ 进程、线程和协程有什么区别</p>
+<p class="todo">☐ 用户态和内核态为什么要隔离</p>
+<p class="todo">☐ 系统调用的完整执行过程</p>
+<p class="todo">☐ CPU 调度与上下文切换</p>
+<p class="todo">☐ 竞态条件、锁与原子操作</p>
+<p class="todo">☐ 死锁是怎样产生的</p>
+<p class="todo">☐ 虚拟内存、页表和 TLB</p>
+<p class="todo">☐ Page Fault 与按需分页</p>
+<p class="todo">☐ mmap、Page Cache 与模型加载</p>
+<p class="todo">☐ 阻塞 I/O、非阻塞 I/O 与异步 I/O</p>
+<p class="todo">☐ epoll 与事件循环</p>
+<p class="todo">☐ TCP、HTTP 与 gRPC</p>
+<p class="todo">☐ 超时、重试、幂等与背压</p>
+<p class="todo">☐ 吞吐、延迟、P95 与 P99</p>
+<p class="todo">☐ 部分失败、心跳、复制与一致性</p>
+<p class="todo">☐ Namespace、Cgroup 与容器</p>
+<p class="todo">☐ CPU-GPU 数据传输与 CUDA Stream</p>
+<p class="todo">☐ NCCL、DDP 与 FSDP</p>
+<p class="todo">☐ 动态批处理、KV Cache 与推理调度</p>
+<h2>7 知识库内配套文章</h2>
+<h2>8 外部参考资料</h2>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

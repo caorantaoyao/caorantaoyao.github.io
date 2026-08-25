@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MVCC 与锁：快照读、当前读、行锁和版本链怎样共同工作 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.08.25</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">MVCC 与锁：快照读、当前读、行锁和版本链怎样共同工作</h1>
+    <div class="article-body">
+<p>这篇文档承接 <a href="https://my.feishu.cn/wiki/XlyFwquLRiVhlTk8UGKcJz71nCh" target="_blank" rel="noopener">《事务、ACID 与并发异常》</a>，回答一个更具体的问题：多个事务同时读写同一批数据时，数据库为什么既能让普通查询少等待，又能防止写入互相覆盖？核心答案不是“只靠 MVCC”或“只靠锁”，而是二者分工协作。</p>
+<p>本文采用 MySQL 8.4 / InnoDB 的术语。MVCC 的思想具有通用性，但 PostgreSQL 等数据库保存版本、生成快照和回收旧版本的具体方式不同。</p>
+<h2>1. 一句话理解 MVCC</h2>
+<p>MVCC 是 Multi-Version Concurrency Control，即多版本并发控制。它允许一条逻辑记录在一段时间内存在多个可供判断的版本；每个事务根据自己的可见性规则，选择其中“对自己可见”的那个版本。</p>
+<p>直觉上，可以把它理解为：读者不必抢走作者手中的纸，而是根据自己的阅读时点查看合适的历史稿；作者继续修改当前稿。这样，普通读取和写入就不必总是互相阻塞。</p>
+<h2>2. 为什么不能所有并发都只靠锁</h2>
+<p>如果事务读取一行时必须加锁，并一直持有到事务结束，那么慢查询、报表和大量并发请求会阻塞更新；更新也会让随后到达的读取排队。数据虽然正确，但吞吐量和响应时间会迅速恶化。</p>
+<p>MVCC 主要优化“读与写”的并发：写事务修改当前版本时，普通读取仍可通过旧版本得到一致结果。不过，两个事务同时写同一行时仍可能冲突，因此写写竞争以及需要保护业务条件的读取仍然要靠锁、条件更新或乐观并发控制。</p>
+<h2>3. MVCC 不是一个锁，也不是一种隔离级别</h2>
+<p>这三个概念处于不同层次：MVCC 是实现并发控制的机制；锁是协调冲突访问的手段；隔离级别是数据库向应用提供的可见性保证。InnoDB 会组合 MVCC 和锁来实现 Read Committed、Repeatable Read 等隔离级别。</p>
+<p>所以，“开启了 MVCC 就没有锁”是错误的；“MVCC 等于可重复读”也不准确。相同的多版本能力，可以通过不同的快照生成规则服务于不同隔离级别。</p>
+<h2>4. InnoDB 如何表示一条记录的版本</h2>
+<p>在 InnoDB 的聚簇索引记录中，除了业务字段，还包含用于并发控制的隐藏信息。理解 MVCC 最关键的是下面两个字段。</p>
+<p>字段</p>
+<p>作用</p>
+<p>直觉</p>
+<p><code>DB_TRX_ID</code></p>
+<p>记录最后一次插入或更新该行的事务 ID</p>
+<p>“这个版本是谁写的”</p>
+<p><code>DB_ROLL_PTR</code></p>
+<p>指向 Undo Log 中可用于重建旧版本的信息</p>
+<p>“上一版从哪里找”</p>
+<p>没有显式主键或合适唯一非空索引时，InnoDB 还会生成隐藏的 <code>DB_ROW_ID</code>。它与版本可见性不是同一个概念，但也说明 InnoDB 的聚簇记录含有数据库维护的隐藏字段。</p>
+<h2>5. Undo Log 与逻辑版本链</h2>
+<p>事务把余额从 100 改成 80 时，InnoDB 不需要在数据页里并排保存许多完整行。当前记录保存新值与新的事务 ID，Undo Log 保存撤销或重建旧值所需的信息，<code>DB_ROLL_PTR</code> 将它们串联起来。</p>
+<pre><code class="language-plaintext">当前记录：balance=60, DB_TRX_ID=300
+        ↓ DB_ROLL_PTR
+旧版本：balance=80,  DB_TRX_ID=200
+        ↓ DB_ROLL_PTR
+更旧版本：balance=100, DB_TRX_ID=100</code></pre>
+<p>这条链通常被称为“版本链”。它是逻辑上的历史链条，不应简单理解为磁盘上永久保存了三份完整数据。旧版本是否还能被读取，取决于 Undo 信息是否仍被活跃事务需要。</p>
+<h2>6. Read View 是什么</h2>
+<p>只有版本链还不够，数据库还需要回答“当前事务能看到哪一个版本”。Read View 可以理解为生成一致性读取时使用的可见性快照，它记录当时活跃事务的边界和集合。</p>
+<p>从逻辑上看，判断规则包括：本事务自己已经完成的修改可见；在快照建立前已经提交的事务通常可见；快照建立时仍活跃的事务产生的版本不可见；快照建立后才开始的事务产生的版本也不可见。MySQL 内部字段名和边界判断较细，但面试时先掌握这四条语义即可。</p>
+<h2>7. 一次 MVCC 读取怎样找到结果</h2>
+<p>普通查询访问一行时，InnoDB 先检查当前记录的 <code>DB_TRX_ID</code>。如果该版本对本次 Read View 可见，就直接返回；如果不可见，就沿 <code>DB_ROLL_PTR</code> 到 Undo Log 重建上一个版本，再次判断；如此继续，直到找到可见版本或确认这行在当前快照中尚不存在。</p>
+<pre><code class="language-plaintext">读取当前记录
+  → 检查创建该版本的事务
+  → 对 Read View 可见？是：返回
+  → 否：沿 Roll Pointer 找上一版本
+  → 重复判断</code></pre>
+<p>因此，MVCC 的完整心智模型应是：<strong>版本信息 + Undo 版本链 + Read View 可见性规则 + 旧版本回收</strong>。</p>
+<h2>8. 快照读是什么</h2>
+<p>在 InnoDB 的 Read Committed 和 Repeatable Read 下，普通 <code>SELECT</code> 通常属于一致性非锁定读，也就是常说的快照读。它读取符合快照的版本，不为目标记录加共享锁，因此通常不会被正在修改该行但尚未提交的事务阻塞。</p>
+<pre><code class="language-rust">SELECT balance
+FROM accounts
+WHERE id = 1;</code></pre>
+<p>“不加记录锁”不等于完全没有任何数据库内部同步，也不等于可以读取其他事务未提交的数据。快照读仍遵守事务隔离规则。</p>
+<h2>9. 当前读是什么</h2>
+<p>有些操作不能只看历史版本。例如准备扣库存时，应用需要基于最新可用状态做决定，并阻止其他事务同时改变这项条件。此时应使用当前读：读取最新可用版本，并对相关索引记录或范围加锁；如果锁已被其他事务持有，请求可能等待。</p>
+<pre><code class="language-rust">SELECT stock
+FROM products
+WHERE id = 1001
+FOR UPDATE;</code></pre>
+<p><code>SELECT ... FOR UPDATE</code>、<code>SELECT ... FOR SHARE</code> 属于显式锁定读；<code>UPDATE</code> 和 <code>DELETE</code> 为了修改数据，也会执行当前读取并取得相应锁。</p>
+<h2>10. 快照读与当前读的区别</h2>
+<p>维度</p>
+<p>快照读</p>
+<p>当前读</p>
+<p>典型语句</p>
+<p>普通 <code>SELECT</code></p>
+<p><code>SELECT ... FOR UPDATE</code>、<code>FOR SHARE</code>、<code>UPDATE</code>、<code>DELETE</code></p>
+<p>读取目标</p>
+<p>对 Read View 可见的版本</p>
+<p>最新可用版本</p>
+<p>是否锁住目标记录</p>
+<p>通常不加记录锁</p>
+<p>会加相应记录或范围锁</p>
+<p>遇到未提交写入</p>
+<p>通常沿版本链读取旧版本</p>
+<p>可能等待持锁事务结束</p>
+<p>适合场景</p>
+<p>详情查询、列表、报表</p>
+<p>扣库存、抢任务、状态流转</p>
+<h2>11. Read Committed 怎样使用快照</h2>
+<p>在 Read Committed 下，同一事务里的每次一致性读取通常都会建立新的 Read View。事务第一次查询得到余额 100，其他事务提交余额 80 后，第一次事务再次执行同一普通查询，可能看到 80。这就是为什么 Read Committed 允许不可重复读。</p>
+<p>它的优势是更快看到其他事务已经提交的变化，也往往减少某些范围锁的影响；代价是同一事务内两次相同查询不保证得到同一快照结果。</p>
+<h2>12. Repeatable Read 怎样使用快照</h2>
+<p>在 InnoDB 的 Repeatable Read 下，同一事务中的一致性读取通常复用第一次一致性读取所建立的快照。因此，第一次普通查询看到余额 100 后，其他事务即使提交余额 80，本事务后续普通查询通常仍看到 100。</p>
+<p>需要注意，<code>BEGIN</code> 本身不一定立即建立这个一致性快照；通常是第一次一致性读取建立它。若应用确实依赖“事务开始时刻”的快照，应理解所用语句和数据库的具体行为，而不要仅凭方法名推断。</p>
+<h2>13. 同一事务为什么可能看到两个不同的值</h2>
+<p>Repeatable Read 保证的是一致性读取复用快照，不代表所有语句都只能看历史。一个事务先用普通 <code>SELECT</code> 看到旧值 100，随后执行 <code>SELECT ... FOR UPDATE</code>，后者属于当前读，可能在等待其他事务提交后看到新值 80。</p>
+<p>这并非数据库自相矛盾，而是两条语句采用了不同的读取语义。排查“同一事务为什么读到不同值”时，第一步应确认每条 SQL 是快照读还是当前读。</p>
+<h2>14. MVCC 与锁怎样分工</h2>
+<p><strong>MVCC 负责版本可见性。</strong> 它让普通读取在很多场景下绕开正在写入的最新版本，从历史版本获得一致结果。</p>
+<p><strong>锁负责冲突协调。</strong> 当两个事务要修改同一记录，或一个事务需要保证“我检查过的条件在提交前不能被别人破坏”时，数据库需要让冲突操作等待、失败或形成可检测的死锁。</p>
+<p>简化记忆：<strong>读旧版本解决读写并发，锁住当前数据解决写写竞争和受保护读取。</strong></p>
+<h2>15. InnoDB 的“行锁”本质上锁什么</h2>
+<p>InnoDB 的行级锁本质上是索引记录锁。查询通过主键或唯一索引精确定位时，通常能锁住很小的范围；范围条件、非唯一索引或缺少合适索引时，数据库可能扫描并锁住更多索引记录与间隙。</p>
+<p>所以，“SQL 只返回一行，就一定只锁一行”并不可靠。判断锁范围要同时看隔离级别、访问索引、查询条件、执行计划以及语句类型。</p>
+<h2>16. 共享锁与排他锁</h2>
+<p>锁类型</p>
+<p>含义</p>
+<p>常见来源</p>
+<p>共享锁（S Lock）</p>
+<p>允许其他事务也持有共享锁，但与排他锁冲突</p>
+<p><code>SELECT ... FOR SHARE</code></p>
+<p>排他锁（X Lock）</p>
+<p>与其他共享锁和排他锁冲突，用于独占修改</p>
+<p><code>SELECT ... FOR UPDATE</code>、<code>UPDATE</code>、<code>DELETE</code></p>
+<p>锁通常在事务结束时释放，而不是执行完一条语句立即释放。因此，事务中夹杂网络请求、模型调用或人工等待，会显著延长锁持有时间。</p>
+<h2>17. Record Lock、Gap Lock 与 Next-Key Lock</h2>
+<p>锁</p>
+<p>锁住什么</p>
+<p>主要作用</p>
+<p>Record Lock</p>
+<p>某个索引记录</p>
+<p>阻止其他事务冲突地修改该记录</p>
+<p>Gap Lock</p>
+<p>索引记录之间的间隙</p>
+<p>限制其他事务在这个范围插入新记录</p>
+<p>Next-Key Lock</p>
+<p>索引记录与它前面的间隙</p>
+<p>组合记录锁和间隙锁，保护范围并抑制幻行</p>
+<p>在 Repeatable Read 的锁定范围查询中，Next-Key Lock 很重要，因为只锁住已经存在的记录仍挡不住别人向查询范围插入新行。精确命中唯一索引时，锁范围往往可以缩小，但最终仍应以实际执行计划和锁监控结果为准。</p>
+<h2>18. 索引为什么会影响锁范围</h2>
+<p>假设 <code>id</code> 是主键，<code>WHERE id = 1001</code> 可以直接定位一个索引记录；而 <code>WHERE status = &#x27;pending&#x27;</code> 如果没有合适索引，就可能扫描大量记录。锁定读或更新语句通常会对扫描到并需要保护的索引记录或范围加锁，因此缺失索引不仅让查询变慢，也可能扩大锁冲突面。</p>
+<p>优化并发问题时，不能只问“有没有行锁”，还要问“SQL 走了哪个索引、扫描了多少记录、锁住了哪些区间”。</p>
+<h2>19. 两个事务同时更新同一行会怎样</h2>
+<p>事务 A 更新账户 1 后获得相应排他锁，但尚未提交。事务 B 也尝试更新账户 1 时，不能通过读取旧版本来完成写入，因为它最终要修改当前记录；B 通常会等待 A 提交或回滚。A 提交后，B 基于最新可用记录继续执行；等待超过限制则可能得到锁等待超时。</p>
+<pre><code class="language-plaintext">事务 A：UPDATE 行 1 → 获得 X 锁 → 暂未提交
+事务 B：UPDATE 行 1 → 请求 X 锁 → 等待
+事务 A：COMMIT → 释放锁
+事务 B：获得锁 → 继续更新 → COMMIT</code></pre>
+<h2>20. 为什么“先查再改”仍可能丢失更新</h2>
+<p>应用先用快照读查到库存 10，在 Python 中计算为 9，再把 9 写回。两个请求都读到 10 时，它们可能都写回 9，结果少扣了一件。<code>UPDATE</code> 本身会加锁，但锁只能串行化两次写入，无法自动理解应用已经基于过期快照算出了同一个绝对值。</p>
+<p>解决方案是让检查与修改在数据库中成为一个原子条件更新，或在读取时使用 <code>FOR UPDATE</code>，或增加版本号实施乐观锁。</p>
+<h2>21. 首选方案：原子条件更新</h2>
+<pre><code class="language-rust">UPDATE products
+SET stock = stock - 1
+WHERE id = 1001
+  AND stock &gt; 0;</code></pre>
+<p>应用检查受影响行数：等于 1 表示扣减成功，等于 0 表示库存不足或记录不存在。数据库在当前版本上完成条件判断和修改，避免把快照读出的旧值带回应用再覆盖。</p>
+<p>当业务逻辑可以表达成单条 SQL 时，这通常比“先锁、再读、再写”更简单，锁持有时间也更短。</p>
+<h2>22. 何时使用 SELECT FOR UPDATE</h2>
+<p>如果修改依赖多列、多行或无法压缩成一条原子 SQL，可以在事务中先执行锁定读，读取最新状态并锁住需要保护的记录，再完成校验和更新。</p>
+<pre><code class="language-rust">START TRANSACTION;
+
+SELECT stock, status
+FROM products
+WHERE id = 1001
+FOR UPDATE;
+
+UPDATE products
+SET stock = stock - 1
+WHERE id = 1001;
+
+COMMIT;</code></pre>
+<p>必须把锁定读和后续更新放在同一个事务内。事务外的 <code>FOR UPDATE</code>，或读取后先调用远程服务再更新，通常不能提供期望的保护，反而会造成长时间持锁。</p>
+<h2>23. SQLAlchemy 中怎样实现</h2>
+<p>下面的 Python 代码在一个事务中锁定商品行。数据库锁是否真正生效，仍取决于底层数据库、隔离级别、索引和 SQLAlchemy 实际生成的 SQL。</p>
+<pre><code class="language-php">from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+with Session(engine) as session:
+    with session.begin():
+        product = session.execute(
+            select(Product)
+            .where(Product.id == 1001)
+            .with_for_update()
+        ).scalar_one()
+
+        if product.stock &lt;= 0:
+            raise OutOfStock()
+
+        product.stock -= 1</code></pre>
+<p>能使用原子条件更新时，可以直接判断 <code>rowcount</code>：</p>
+<pre><code class="language-php">from sqlalchemy import update
+
+with Session(engine) as session:
+    with session.begin():
+        result = session.execute(
+            update(Product)
+            .where(Product.id == 1001, Product.stock &gt; 0)
+            .values(stock=Product.stock - 1)
+        )
+        if result.rowcount != 1:
+            raise OutOfStock()</code></pre>
+<h2>24. 乐观锁如何补充 MVCC</h2>
+<p>乐观锁通常给业务表增加 <code>version</code> 字段：读取数据时一并取得版本号，更新时要求版本仍等于旧值，同时把版本号加一。</p>
+<pre><code class="language-rust">UPDATE documents
+SET content = &#x27;new content&#x27;,
+    version = version + 1
+WHERE id = 42
+  AND version = 7;</code></pre>
+<p>受影响行数为 0 表示期间有人修改过，应用应提示冲突、重新读取或按规则重试。它不是数据库锁的替代品，而是把“我是否基于过期数据更新”变成可检测的业务并发条件。</p>
+<h2>25. 死锁为什么仍会发生</h2>
+<p>MVCC 不会消除死锁。事务 A 先锁行 1 再等行 2，事务 B 先锁行 2 再等行 1，就形成循环等待。InnoDB 会检测并回滚其中一个事务，让另一个继续。</p>
+<p>工程上应统一加锁顺序，保持事务短小，给过滤条件建立合适索引，避免事务中调用慢速外部服务，并对死锁或可重试的序列化失败做有限次数、带退避的整事务重试。不能只重放最后一条 SQL，因为事务之前的读取和判断也可能已经失效。</p>
+<h2>26. 长事务为什么会拖累 MVCC</h2>
+<p>只要较早的 Read View 仍可能需要某个历史版本，InnoDB 就不能把相应的更新 Undo 完全清理。长事务因此会让版本链变长、Undo 空间增长，并增加一致性读取沿链查找和后台 Purge 的压力。</p>
+<p>常见诱因包括：事务打开后长时间不提交、分页导出一直占用同一事务、交互式调试忘记结束事务，以及在事务中等待网络或模型响应。监控时应关注长事务、历史列表长度、Undo 表空间和锁等待，而不只是慢 SQL。</p>
+<h2>27. MVCC 能解决什么，不能解决什么</h2>
+<p>问题</p>
+<p>MVCC 是否单独解决</p>
+<p>通常还需要什么</p>
+<p>普通查询被未提交更新阻塞</p>
+<p>很多场景可以缓解</p>
+<p>正确隔离级别与一致性读</p>
+<p>两个事务同时写同一行</p>
+<p>不能</p>
+<p>行锁、原子更新或冲突重试</p>
+<p>应用基于旧值覆盖新值</p>
+<p>不能自动识别业务意图</p>
+<p>条件更新、<code>FOR UPDATE</code> 或版本号</p>
+<p>跨服务双写一致性</p>
+<p>不能</p>
+<p>Outbox、幂等、Saga 等分布式方案</p>
+<p>数据库崩溃后的恢复</p>
+<p>不是其主要职责</p>
+<p>Redo Log、WAL、检查点与恢复机制</p>
+<h2>28. 常见误区</h2>
+<p><strong>误区一：MVCC 就是把每一行完整复制很多份。</strong> InnoDB 主要通过当前记录、隐藏字段和 Undo 信息重建逻辑历史版本。</p>
+<p><strong>误区二：快照读一定读最新数据。</strong> 它读的是对当前 Read View 可见的数据，可能是已经提交但较旧的版本。</p>
+<p><strong>误区三：Repeatable Read 中任何查询都只能看到旧值。</strong> 普通一致性读与当前读采用不同语义。</p>
+<p><strong>误区四：有行锁就只会锁返回的那一行。</strong> InnoDB 锁索引记录和范围，访问路径会影响实际锁范围。</p>
+<p><strong>误区五：事务越大越安全。</strong> 长事务会延长锁持有时间、保留旧版本并扩大失败重试成本。</p>
+<h2>29. 面试时怎样回答 MVCC</h2>
+<p>可以先用 40 秒回答主干：</p>
+<p>MVCC 是多版本并发控制。以 InnoDB 为例，聚簇记录包含最后修改事务 ID 和指向 Undo 的回滚指针，更新后可以沿 Undo 形成逻辑版本链。普通一致性读会根据 Read View 判断版本是否可见，不可见就沿版本链找旧版本，所以读写很多时候不用互相阻塞。Read Committed 通常每次一致性读生成新快照，Repeatable Read 通常复用事务内第一次一致性读的快照。MVCC 主要解决读写并发，当前读和写写冲突仍需要记录锁、间隙锁或 Next-Key Lock。</p>
+<p>如果面试官继续追问，再展开快照读与当前读、Read View 边界、索引如何影响锁范围，以及长事务为什么阻碍 Purge。</p>
+<h2>30. 自检问题与下一步</h2>
+<ol><li>为什么版本链存在，却仍然需要 Read View？</li><li>Repeatable Read 中，为什么普通 <code>SELECT</code> 和 <code>SELECT ... FOR UPDATE</code> 可能读到不同值？</li><li>为什么缺少索引可能扩大锁冲突范围？</li><li>两个请求都把库存从 10 改成 9，行锁为什么没有自动避免业务上的丢失更新？</li><li>为什么长事务会阻止旧版本及时清理？</li></ol>
+<p>下一步建议学习“Redo Log、Undo Log、Binlog 与崩溃恢复”：MVCC 已解释并发读取如何找到旧版本，接下来要理解事务提交后怎样保证持久化、数据库崩溃后怎样恢复，以及主从复制怎样获得变更事件。</p>
+<h2>参考资料</h2>
+<ul><li><a href="https://dev.mysql.com/doc/refman/8.4/en/innodb-multi-versioning.html" target="_blank" rel="noopener">MySQL 8.4 Reference Manual：InnoDB Multi-Versioning</a></li><li><a href="https://dev.mysql.com/doc/refman/8.4/en/innodb-consistent-read.html" target="_blank" rel="noopener">MySQL 8.4 Reference Manual：Consistent Nonlocking Reads</a></li><li><a href="https://dev.mysql.com/doc/refman/8.4/en/innodb-locking-reads.html" target="_blank" rel="noopener">MySQL 8.4 Reference Manual：Locking Reads</a></li><li><a href="https://dev.mysql.com/doc/refman/8.4/en/innodb-locks-set.html" target="_blank" rel="noopener">MySQL 8.4 Reference Manual：Locks Set by Different SQL Statements</a></li><li><a href="https://dev.mysql.com/doc/refman/8.4/en/innodb-transaction-model.html" target="_blank" rel="noopener">MySQL 8.4 Reference Manual：InnoDB Transaction Model</a></li></ul>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

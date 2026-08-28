@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LangGraph：把 Agent Loop 工程化为可持久化状态图 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.08.27</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">LangGraph：把 Agent Loop 工程化为可持久化状态图</h1>
+    <div class="article-body">
+<h2>1. 从 Agent Loop 到 LangGraph</h2>
+<p><strong>核心结论：</strong>LangGraph 不是大模型，也不是新的 RAG 技术。它是一个低层 Agent 编排框架与运行时，用 State、Node 和 Edge 把 Agent Loop 显式建模，并补上持久化、暂停恢复、人机协作和故障恢复等生产能力。</p>
+<p>如果把模型看成负责判断下一步的“大脑”，LangGraph 更像负责组织整个任务的“执行控制器”。它既能运行完全确定性的业务步骤，也能在局部节点中调用大模型，让模型根据 Observation 动态选择工具和路径。</p>
+<pre><code class="language-plaintext">Agent Loop：决策 → 行动 → 观察 → 更新状态 → 继续或结束
+LangGraph：Node → Edge → Node → 更新 State → 下一轮</code></pre>
+<p>因此，Agent Loop 是一种设计思想，LangGraph 是帮助开发者实现这种思想的工程框架。它可以独立使用，也可以配合 LangChain 的模型、工具和检索组件使用。</p>
+<h2>2. 为什么需要 LangGraph</h2>
+<p>最简单的 Agent 可以直接写成一个 <code>while</code> 循环：</p>
+<pre><code class="language-php">while True:
+    decision = model.decide(state)
+
+    if decision.is_final:
+        break
+
+    result = execute_tool(decision.tool)
+    state.update(result)</code></pre>
+<p>这个版本适合学习，但进入生产环境后会立即遇到新的问题：进程崩溃后怎样恢复；用户审批期间怎样暂停几个小时；多个分支怎样并行并合并结果；工具超时后应该重试、换方案还是结束；如何查看每一步 State；多个子 Agent 怎样协作；以及写数据库节点恢复时被重复执行怎么办。</p>
+<p>LangGraph 的价值不是让模型变聪明，而是把这些运行时问题显式化。开发者可以看见每个节点、每次状态变化和每条控制路径，并为循环设置最大步数、权限、预算、错误处理和 Evidence Gate。</p>
+<p>如果任务只是一次模型调用、一次 RAG 检索或非常简单的工具调用，直接使用普通函数或高层 Agent 通常更省事；只有当控制流、状态和恢复开始复杂时，LangGraph 的优势才明显。</p>
+<h2>3. 核心抽象：State、Node 与 Edge</h2>
+<p>LangGraph 的核心可以记成一句话：<strong>State 保存当前快照，Node 做事情，Edge 决定下一步。</strong></p>
+<p>抽象</p>
+<p>作用</p>
+<p>典型内容</p>
+<p>State</p>
+<p>保存当前任务快照</p>
+<p>消息、计划、Observation、预算、错误和最终结果</p>
+<p>Node</p>
+<p>执行一个计算或副作用</p>
+<p>调用 LLM、查询数据库、执行工具、权限校验</p>
+<p>Edge</p>
+<p>决定下一个节点</p>
+<p>固定跳转、条件分支、循环、并行扇出</p>
+<p>START / END</p>
+<p>虚拟入口与终点</p>
+<p>标记图从哪里开始、在哪里结束</p>
+<p>Reducer</p>
+<p>合并同一字段的状态更新</p>
+<p>覆盖旧值、追加消息、合并并行结果</p>
+<p>Command</p>
+<p>同时更新状态和控制跳转</p>
+<p><code>update</code>、<code>goto</code>、<code>resume</code>、父图导航</p>
+<p><strong>State。</strong>通常用 <code>TypedDict</code>、Dataclass 或其他 Schema 定义。它不是任意共享全局变量，而是运行时管理的状态快照。节点通常只返回需要更新的字段。</p>
+<p><strong>Node。</strong>本质是同步或异步 Python 函数。它可以调用 LLM，也可以只是普通代码，因此 Node 不等于模型。</p>
+<p><strong>Edge。</strong>普通 Edge 表示固定跳转，Conditional Edge 根据 State 选择下一节点。如果同一个节点路由到多个目标，它们可以在下一轮并行执行。</p>
+<p><strong>Reducer。</strong>默认更新通常覆盖旧值。如果消息列表需要追加、并行节点需要同时写入结果，就必须定义正确的 Reducer，否则可能丢数据或发生更新冲突。</p>
+<h2>4. 一张 Graph 是怎样执行的</h2>
+<p>构建时先定义 State Schema，再添加 Node 和 Edge，最后调用 <code>compile()</code> 得到可执行图。编译阶段会检查图结构，并接入 Checkpointer、缓存、调试等运行能力。</p>
+<pre><code class="language-plaintext">START
+  ↓
+model_node：模型判断下一步
+  ├─ 产生工具调用 → tool_node → Observation → model_node
+  ├─ 需要审批 → review_node → 暂停与恢复
+  └─ 生成最终答案 → verifier_node → END</code></pre>
+<p>LangGraph 的执行受到 Pregel 风格的 super-step 启发。可以把一个 super-step 理解为图的一次“时钟跳动”：运行时确定本轮被激活的节点，让可以并行的节点执行，再合并它们产生的状态更新，然后进入下一轮。</p>
+<p>顺序节点属于不同 super-step，并行节点属于同一个 super-step。同一轮的并行节点通常读取相同的旧状态，它们的更新会在该轮结束时按 Reducer 合并。因此，并行写同一字段时必须提前设计合并规则。</p>
+<p>只要后续 Edge 再次指向前面的节点，图就会形成循环，所以 Graph 不等于 DAG。当没有节点继续被激活，或执行到 <code>END</code> 时，图才结束。生产系统还应设置执行步数、时间、Token 和费用上限，避免无限循环。</p>
+<h2>5. Python：最小可运行示例</h2>
+<p>下面的例子不调用真实模型，而是专门展示 StateGraph、条件分支、Checkpoint、Interrupt 和恢复机制。删除类操作会先进入人工审批。</p>
+<pre><code class="language-php">from typing import Literal
+from typing_extensions import NotRequired, TypedDict
+
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.graph import StateGraph, START, END
+from langgraph.types import Command, interrupt
+
+
+class State(TypedDict):
+    action: str
+    approved: NotRequired[bool]
+    result: NotRequired[str]
+
+
+def normalize(state: State):
+    return {&quot;action&quot;: state[&quot;action&quot;].strip()}
+
+
+def route(state: State) -&gt; Literal[&quot;review&quot;, &quot;execute&quot;]:
+    if state[&quot;action&quot;].lower().startswith(&quot;delete&quot;):
+        return &quot;review&quot;
+    return &quot;execute&quot;
+
+
+def review(state: State) -&gt; Command[Literal[&quot;execute&quot;, &quot;cancel&quot;]]:
+    approved = interrupt({
+        &quot;question&quot;: &quot;是否批准这个操作？&quot;,
+        &quot;action&quot;: state[&quot;action&quot;],
+    })
+
+    return Command(
+        update={&quot;approved&quot;: bool(approved)},
+        goto=&quot;execute&quot; if approved else &quot;cancel&quot;,
+    )
+
+
+def execute(state: State):
+    # 教学示例，不执行真实删除
+    return {&quot;result&quot;: f&quot;已执行：{state[&#x27;action&#x27;]}&quot;}
+
+
+def cancel(state: State):
+    return {&quot;result&quot;: &quot;操作已取消&quot;}
+
+
+builder = StateGraph(State)
+builder.add_node(&quot;normalize&quot;, normalize)
+builder.add_node(&quot;review&quot;, review)
+builder.add_node(&quot;execute&quot;, execute)
+builder.add_node(&quot;cancel&quot;, cancel)
+
+builder.add_edge(START, &quot;normalize&quot;)
+builder.add_conditional_edges(&quot;normalize&quot;, route)
+builder.add_edge(&quot;execute&quot;, END)
+builder.add_edge(&quot;cancel&quot;, END)
+
+graph = builder.compile(checkpointer=InMemorySaver())
+config = {&quot;configurable&quot;: {&quot;thread_id&quot;: &quot;demo-1&quot;}}
+
+# 第一次运行在 review 节点暂停
+paused = graph.invoke(
+    {&quot;action&quot;: &quot;delete temporary files&quot;},
+    config,
+)
+print(paused[&quot;__interrupt__&quot;])
+
+# 使用相同 thread_id 恢复
+result = graph.invoke(Command(resume=True), config)
+print(result[&quot;result&quot;])</code></pre>
+<p>执行关系是 <code>START → normalize → review / execute → END</code>。真实 Agent 只需要把 <code>normalize</code> 或其他决策节点替换成模型调用，并把工具结果写回 State，就可以形成工具调用循环。</p>
+<p><code>InMemorySaver</code> 只适合学习和测试，进程退出后数据会消失。生产环境应使用数据库支持的持久化 Checkpointer。</p>
+<h2>6. Checkpointer、Thread 与 Store</h2>
+<p>LangGraph 中需要区分线程级状态和跨线程长期记忆。</p>
+<p>机制</p>
+<p>保存内容</p>
+<p>典型用途</p>
+<p>Checkpointer</p>
+<p>某个 Thread 的 Graph State 快照</p>
+<p>对话连续性、暂停恢复、故障恢复、Time Travel</p>
+<p>Store</p>
+<p>应用定义的跨 Thread 数据</p>
+<p>用户偏好、稳定事实、共享知识、长期记忆</p>
+<p>Graph 编译时接入 Checkpointer，调用时通过 <code>thread_id</code> 标识一条连续任务：</p>
+<pre><code class="language-php">graph = builder.compile(checkpointer=checkpointer)
+
+config = {
+    &quot;configurable&quot;: {
+        &quot;thread_id&quot;: &quot;task-123&quot;,
+    }
+}
+
+graph.invoke(input_state, config)</code></pre>
+<p>复用同一个 <code>thread_id</code>，运行时就能找到这一任务之前的 Checkpoint；换一个 ID 则创建新的独立 Thread。可以把 Thread 理解为“这条会话或任务的持久游标”，但它不等于操作系统线程。</p>
+<p>Checkpointer 保存的是当前运行的短期状态，例如消息、计划、工具结果和待审批动作。Store 保存的是跨任务仍值得使用的信息。长期 Memory 不应全部注入每轮 Context，而应根据当前节点检索和选择。</p>
+<h2>7. Interrupt、Command 与人工审批</h2>
+<p><code>interrupt(value)</code> 用于在节点内部动态暂停执行。它特别适合删除、支付、生产发布、发送外部消息等需要人工确认的动作。</p>
+<ol><li>节点调用 <code>interrupt()</code>，并提供 JSON 可序列化的审批信息。</li><li>Checkpointer 保存当前 Graph State。</li><li>调用方收到中断信息，向用户展示。</li><li>用户作出决定后，使用同一个 <code>thread_id</code> 调用 <code>Command(resume=...)</code>。</li><li>恢复值成为节点中 <code>interrupt()</code> 的返回值，图继续路由。</li></ol>
+<p><code>Command</code> 是统一的控制对象：<code>update</code> 更新 State，<code>goto</code> 指定下一个节点，<code>resume</code> 恢复中断，<code>graph</code> 可用于从子图导航到父图。</p>
+<pre><code class="language-php">return Command(
+    update={&quot;status&quot;: &quot;approved&quot;},
+    goto=&quot;execute&quot;,
+)</code></pre>
+<p>同一个节点最好只选择一种动态路由方式。如果节点返回 <code>Command(goto=...)</code>，又为它配置普通静态出边，两条路径可能同时执行。</p>
+<p><strong>关键细节：</strong>恢复后并不是从 Python 的 <code>interrupt()</code> 下一行原地继续，而是包含该中断的节点从开头重新执行。因此，中断前的副作用必须可幂等；也不要用普通 <code>try/except</code> 吞掉 LangGraph 用来触发暂停的内部中断信号。</p>
+<h2>8. Durable Execution、恢复与幂等</h2>
+<p>Durable Execution 表示任务的执行进度被持久化。进程故障、人工暂停或长时间等待之后，可以从已保存的状态继续，而不必从整个任务的第一步重做。</p>
+<p>它不等于保存 Python 调用栈，也不是代码行级续跑。Checkpoint 通常位于图的执行边界，恢复时相关节点可能重新运行。因此必须把“内部状态恢复”和“外部副作用一致性”分开理解。</p>
+<pre><code class="language-plaintext">加载最近 Checkpoint
+  ↓
+发现上一次写操作状态未知
+  ↓
+使用幂等键或业务请求 ID 查询外部系统
+  ├─ 已成功：复用原结果
+  ├─ 未执行：安全执行
+  └─ 无法判断：人工处理或补偿</code></pre>
+<p>付款、创建订单、发送消息、创建容器和提交任务都不能因为超时而直接重试。客户端没有收到响应，不代表服务端没有执行。可靠做法包括幂等键、Upsert、read-before-write、请求去重表、状态查询和补偿操作。</p>
+<p>如果一个节点内部包含多个昂贵或非确定性操作，可以把它们拆成更小节点，或使用可被 Checkpointer 记录结果的 Task。这样恢复时可以跳过已完成工作，降低重复调用风险。</p>
+<p>持久化策略本身还存在可靠性与性能权衡：越频繁、越同步地保存，恢复窗口越小，但写入开销越高。选择策略时要结合任务价值、节点耗时和允许重复的范围。</p>
+<h2>9. 并行、Send、Subgraph 与多 Agent</h2>
+<p>如果一个节点拥有多个普通出边，多个目标节点可以在下一 super-step 并行执行。例如诊断服务故障时，可以同时查询指标、日志和 Trace，再把结果汇总。</p>
+<pre><code class="language-plaintext">diagnose
+  ├─ get_metrics ─┐
+  ├─ search_logs ─┼→ aggregate → planner
+  └─ read_traces ─┘</code></pre>
+<p>并行节点通常读取同一份输入 State，所以不能依赖另一个并行节点在本轮刚写入的值。它们的结果要在 super-step 结束时通过 Reducer 合并。并发修改同一外部资源时还需要锁、版本号或串行化，Reducer 只能合并内部 State，不能解决外部竞态。</p>
+<p><strong>Send。</strong>当并行分支数量在运行前未知时，可以动态返回多个 <code>Send</code>。例如模型先生成十个研究问题，再为每个问题启动一个检索节点，最后进行 Map-Reduce 汇总。</p>
+<p><strong>Subgraph。</strong>子图是作为父图一个节点使用的另一张图，适合模块复用和多 Agent 编排。父子图共享 State 字段时可以直接通信；Schema 不同时，应在父节点中显式完成输入和输出映射。</p>
+<p><strong>多 Agent。</strong>可以把代码诊断 Agent、数据库 Agent 和文档 Agent 分别做成子图，再由 Supervisor 根据任务分派。但 Subgraph 首先是执行模块，不一定等于 Agent；普通确定性流程也可以封装成子图。</p>
+<p>子 Agent 是否保留跨调用状态应显式设计。临时子任务可以每次隔离；需要连续对话或长期任务的子 Agent 才需要按 Thread 持久化自己的状态。</p>
+<h2>10. Streaming、Time Travel 与可观测性</h2>
+<p><strong>Streaming。</strong>LangGraph 可以在图运行期间持续输出事件，而不是等整张图结束才返回。前端可以接收模型 Token、节点状态更新、工具进度、中断请求和任务完成事件。Streaming 是运行事件的投影层，不会改变图本身的执行语义。</p>
+<p>在 Web 应用中，后端通常把这些事件通过 SSE 或 WebSocket 推送给浏览器。用户看到“正在检索、正在执行工具、等待审批”时，本质上是在订阅 Graph Run 的事件流。</p>
+<p><strong>Time Travel。</strong>有 Checkpoint 历史后，可以查看过去状态、从某个历史 Checkpoint 重放后续执行，或者修改历史状态后 Fork 出新分支。它适合调试 Agent 为什么走错路径、比较不同提示词或人工修正某一步。</p>
+<p>Time Travel 也不是代码行级回滚。Checkpoint 之后的模型调用、API 调用和 Interrupt 可能重新发生，因此仍要遵守幂等和可重放约束。</p>
+<p><strong>可观测性。</strong>一次运行至少应记录 <code>run_id</code>、<code>thread_id</code>、节点名称、状态版本、路由结果、模型与工具耗时、Token、费用、错误、重试和最终停止原因。聚合后可观察任务成功率、平均步数、重复调用率、人工介入率和 P95 延迟。</p>
+<p>LangSmith 可以用于 Trace、调试和评测，但 LangGraph 并不强制必须使用 LangSmith；也可以接入自己的 OpenTelemetry、日志和指标系统。</p>
+<h2>11. LangGraph、LangChain 与 Agent Loop</h2>
+<p>概念或产品</p>
+<p>主要职责</p>
+<p>与 LangGraph 的关系</p>
+<p>Agent Loop</p>
+<p>决策、行动、观察的反馈循环</p>
+<p>设计思想；LangGraph 可将它显式实现</p>
+<p>Workflow</p>
+<p>按照预先定义的步骤与规则执行</p>
+<p>LangGraph 也能表达确定性 Workflow</p>
+<p>LangChain</p>
+<p>模型、工具、检索与常见 Agent 的高层抽象</p>
+<p>高层 Agent 使用 LangGraph 的运行能力</p>
+<p>LangGraph</p>
+<p>状态图、循环、持久化、暂停恢复与编排</p>
+<p>低层 Agent Runtime</p>
+<p>LangSmith</p>
+<p>Trace、评测、调试和监控</p>
+<p>可选的可观测性平台</p>
+<p>如果只需要常见的 Tool Calling Loop，高层 Agent 能减少样板代码。需要自定义 State、复杂条件分支、人工审批、多个子 Agent 或持久化恢复时，才值得直接编写 LangGraph。</p>
+<p>生产架构通常不是“Workflow 或 Agent 二选一”，而是确定性外层与动态内层结合：初始化、权限、预算、验收和发布使用确定性节点；诊断、检索、规划等路径不确定的步骤由模型驱动。</p>
+<p>LangGraph 解决的是 Agent 编排，不是通用业务系统的全部问题。纯审批、ETL、财务结算等完全确定性的长事务，传统工作流引擎或普通状态机可能更合适。</p>
+<h2>12. 在 AI Agent 平台中的架构位置</h2>
+<p>在你的 AI Agent 运行平台中，可以把 LangGraph 放在“单次 Agent Run 的编排层”，而不是让它包办整个平台。</p>
+<pre><code class="language-plaintext">HTTP / WebSocket API
+  ↓
+任务队列与 Worker 调度
+  ↓
+LangGraph：单次 Run 的状态与控制流
+  ├─ load_context
+  ├─ planner
+  ├─ tool_executor → observe → planner
+  ├─ human_review → interrupt
+  ├─ verifier
+  └─ finalizer / safe_stop
+  ↓
+工具服务、数据库、沙箱容器、第三方 API</code></pre>
+<p><strong>Graph State。</strong>保存消息、当前计划、Observation、Artifact 引用、待执行动作、预算消耗、错误次数和任务状态。大型日志、文件和模型输出应放在对象存储或数据库中，State 只保存摘要和引用。</p>
+<p><strong>Runtime Context。</strong><code>user_id</code>、<code>tenant_id</code>、角色、授权范围、模型配置和数据库连接等可信信息应来自后端运行上下文，而不是由模型可修改的 State 决定。每次工具执行仍要重新做身份、权限和租户校验。</p>
+<p><strong>持久化。</strong>每个 Run 使用稳定的 <code>thread_id</code>，生产 Checkpointer 保存执行状态；Store 保存跨会话记忆；业务数据库保存用户、Agent 配置和审计信息。</p>
+<p><strong>基础设施边界。</strong>消息队列负责把任务分配给 Worker；容器或沙箱负责隔离代码执行；WebSocket/SSE 负责把事件推送到前端；Redis 可以承载缓存、锁或短期协调；数据库负责可靠持久化。LangGraph 负责的是这些能力之间的 Agent 控制流，不会替代它们。</p>
+<p><strong>验收。</strong>模型产生 final 之后仍应进入 Verifier。代码任务检查测试与差异，文档任务回读真实内容，部署任务检查健康状态。只有 Evidence Gate 通过，Graph 才进入成功终点。</p>
+<h2>13. 适用与不适用场景</h2>
+<p><strong>适合使用 LangGraph 的场景：</strong></p>
+<ul><li>任务可能运行很久，需要暂停、等待和故障恢复。</li><li>控制路径包含循环、复杂条件分支或动态并行。</li><li>需要人工审批、人工修改状态或补充信息。</li><li>需要多个专业 Agent 或可复用子流程协作。</li><li>需要查看历史 State、重放执行或从历史分叉。</li><li>必须把确定性业务规则和模型决策组合在一起。</li></ul>
+<p><strong>不必使用 LangGraph 的场景：</strong></p>
+<ul><li>一次模型调用即可完成的问答、分类或文本生成。</li><li>一次检索加一次生成的简单 RAG。</li><li>只有少量固定步骤且不需要恢复的业务逻辑。</li><li>完全确定性的 ETL、审批或定时任务，已有工作流工具更直接。</li><li>只是想快速体验通用 Tool Calling Agent，没有自定义编排需求。</li></ul>
+<p>判断标准不是“项目里有没有 LLM”，而是“任务是否需要显式状态、复杂控制流、持久化恢复或人工介入”。为了显得先进而把所有函数都包装成 Node，只会增加调试和维护成本。</p>
+<h2>14. 生产级设计清单</h2>
+<p>将 LangGraph 用于生产环境时，可以逐项检查：</p>
+<p class="todo">☐ 为 State 定义清晰、版本化的 Schema</p>
+<p class="todo">☐ 为追加字段和并行写入字段定义正确 Reducer</p>
+<p class="todo">☐ 为每次连续任务分配稳定且不可冲突的 thread_id</p>
+<p class="todo">☐ 生产环境使用持久化 Checkpointer，不依赖 InMemorySaver</p>
+<p class="todo">☐ 区分 Thread State 与跨 Thread 的长期 Store</p>
+<p class="todo">☐ 为模型调用、工具调用和整次 Run 设置超时</p>
+<p class="todo">☐ 限制循环步数、Token、费用、工具次数和并发数</p>
+<p class="todo">☐ 副作用节点具备幂等键、状态查询、去重或补偿机制</p>
+<p class="todo">☐ 工具执行前校验身份、权限、租户、参数和资源范围</p>
+<p class="todo">☐ 高风险动作在副作用发生前进入 Interrupt 审批</p>
+<p class="todo">☐ 模型产生 final 后仍经过外部 Evidence Gate</p>
+<p class="todo">☐ 记录节点路径、状态变化、错误、耗时、Token 与停止原因</p>
+<p class="todo">☐ 支持用户取消、SAFE_STOP、资源清理和崩溃恢复</p>
+<p class="todo">☐ 图和 State Schema 升级时考虑已有 Checkpoint 的兼容性</p>
+<p>尤其要注意代码升级：旧 Thread 恢复时可能使用当前部署的新图。重命名节点、改变 State 字段含义或调整业务规则，都可能影响仍在等待中的任务，因此应在 State 中保存行为版本，并为长期运行任务设计迁移策略。</p>
+<h2>15. 常见错误认识</h2>
+<p><strong>误区一：LangGraph 是一个大模型。</strong>它不生成答案，只负责编排模型、工具和普通代码。</p>
+<p><strong>误区二：Graph 只能是 DAG。</strong>LangGraph 支持循环，工具调用 Agent 正是通过工具节点返回模型节点形成 Loop。</p>
+<p><strong>误区三：每个 Node 都必须调用 LLM。</strong>权限校验、数据库查询、格式转换、测试和验收都可以是确定性节点。</p>
+<p><strong>误区四：State 就是聊天记录。</strong>State 还可以保存计划、工具结果、预算、待审批动作、Artifact 和任务状态。</p>
+<p><strong>误区五：Checkpoint 可以保证外部操作只执行一次。</strong>Checkpoint 只保存图状态，写数据库、付款和发消息仍需要幂等与状态查询。</p>
+<p><strong>误区六：Interrupt 会从下一行继续。</strong>恢复时相关 Node 会从开头重新执行，中断前的代码可能再次运行。</p>
+<p><strong>误区七：Memory 越多越好。</strong>Store 可以保存长期信息，但 Context 仍应按当前节点选择和压缩，避免成本、噪声与过期事实。</p>
+<p><strong>误区八：用了 LangGraph 就不需要队列、容器和权限系统。</strong>LangGraph 负责单次 Run 的编排，其他基础设施仍各自承担调度、隔离、存储和安全职责。</p>
+<h2>16. 60 秒面试回答</h2>
+<p>LangGraph 是一个用于构建长时间运行、有状态 Agent 的低层编排框架。它把 Agent 工作流表示为 State、Node 和 Edge：State 保存当前任务快照，Node 执行模型、工具或普通代码，Edge 根据状态决定下一步。它支持循环、条件分支、并行、Checkpoint、Interrupt、人工审批和故障恢复。与普通 while Agent Loop 相比，LangGraph 把控制流、状态持久化和暂停恢复显式化；但外部副作用仍需要幂等、权限校验和 Evidence Gate。实际项目中，我会用确定性节点管理权限、预算和验收，只把路径不确定的诊断、检索和规划交给模型。</p>
+<h2>17. 学习顺序与小练习</h2>
+<p>建议按依赖关系学习，而不是先背所有 API：</p>
+<ol><li><strong>State 与 Reducer：</strong>先理解节点为什么只返回局部更新，以及并行更新如何合并。</li><li><strong>Node、Edge 与条件路由：</strong>实现一个不调用 LLM 的小型状态图。</li><li><strong>Checkpointer 与 thread_id：</strong>让同一任务能够连续运行并查看历史 State。</li><li><strong>Interrupt 与 Command：</strong>实现审批、拒绝和恢复。</li><li><strong>Tool Calling Loop：</strong>接入模型和工具节点，让 Observation 返回模型节点。</li><li><strong>Subgraph、Streaming 与 Time Travel：</strong>再扩展到多 Agent、实时 UI 和调试。</li></ol>
+<p><strong>小练习：</strong>设计一个“自动处理 GitHub Issue”的 Graph，回答以下问题：</p>
+<ol><li>State 应保存哪些字段，哪些信息应放在 Runtime Context？</li><li>搜索、修改、测试、审批和发布分别是什么 Node？</li><li>测试失败后如何回到诊断节点，怎样防止无限循环？</li><li>创建分支、提交和 PR 如何保证幂等？</li><li>什么证据通过后才能进入 END？</li><li>测试运行十分钟时，怎样暂停、保存 job_id 并恢复？</li></ol>
+<p><strong>下一学习点：</strong>优先深入 LangGraph State 与 Reducer。State 更新语义是条件分支、并行、Checkpoint 和多 Agent 的共同基础。</p>
+<h2>18. 官方资料</h2>
+<p>以下资料均来自 LangChain / LangGraph 官方：</p>
+<h2>19. 一句话总结</h2>
+<p><strong>LangGraph 把 Agent Loop 显式建模为 State、Node 和 Edge：State 保存进度，Node 执行模型、工具或确定性代码，Edge 控制下一步；Checkpointer 负责保存执行现场，Interrupt 与 Command 负责暂停恢复，Subgraph 负责模块化和多 Agent 编排。它让 Agent 的执行过程变得可控制、可恢复、可观察，但权限、幂等、外部存储和验收仍需要平台自己正确设计。</strong></p>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

@@ -1,7 +1,15 @@
 {
-  "generated_at": "2026-08-26T22:34:27.110085+00:00",
-  "count": 63,
+  "generated_at": "2026-08-28T03:54:31.756802+00:00",
+  "count": 64,
   "articles": [
+    {
+      "title": "LangGraph：把 Agent Loop 工程化为可持久化状态图",
+      "date": "2026.08.27",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "核心结论：LangGraph 不是大模型，也不是新的 RAG 技术。它是一个低层 Agent 编排框架与运行时，用 State、Node 和 Edge 把 Agent Loop 显式建模，并补上持久化、暂停恢复、人机协作和故障恢复等生产能力…",
+      "url": "/articles/LangGraph--Agent-Loop-5b814e5e.html"
+    },
     {
       "title": "Agent Loop：智能体如何持续决策并完成任务",
       "date": "2026.08.26",

@@ -90,7 +90,7 @@
 <main class="container">
   <article>
     <div class="article-meta">
-      <span class="article-date">2026.07.28</span>
+      <span class="article-date">2026.08.28</span>
       <span class="article-tag cloud">学科知识正文</span>
     </div>
     <h1 class="article-title">Agent 工具调用：从 Function Calling 到安全执行</h1>
@@ -417,6 +417,9 @@ HTTP / RPC / SQL / Redis / MCP
 <p>工具调用是指模型根据用户目标，从程序提供的工具集合中选择工具并生成结构化参数。模型本身不执行函数，Agent 运行时需要验证工具名称与参数，完成鉴权、风险判断和人工确认，然后调用真实的 Python 函数、HTTP API、RPC 或数据库，再将工具结果与原 tool_call_id 一起返回模型，使模型决定下一步或生成最终回答。生产环境还必须处理超时、有限重试、幂等、租户隔离、结果截断、审计和最大执行步数。</p>
 <h2>20. 一句话总结</h2>
 <p><strong>模型负责提出工具调用，程序负责验证和执行，工具结果再驱动模型决定下一步。</strong></p>
+<h2>21. 专题拆分与延伸阅读</h2>
+<p>本页负责建立 Tool Calling 的整体框架。下面三篇子文档分别深入 Python 工程实现、生产安全边界和 MCP 协议，建议按顺序阅读。</p>
+<ol><li>：Schema、注册表、执行器和错误协议。</li><li>：多租户鉴权、幂等、审批、沙箱和审计。</li><li>：tools/list、tools/call 与协议安全边界。</li></ol>
     </div>
   </article>
 </main>

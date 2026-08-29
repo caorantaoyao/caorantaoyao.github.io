@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tool 设计与 Python 实现：Schema、注册表与错误协议 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.08.28</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">Tool 设计与 Python 实现：Schema、注册表与错误协议</h1>
+    <div class="article-body">
+<p>本篇从 Python 工程视角回答一个核心问题：怎样把普通函数变成模型能够正确选择、可靠调用、出现错误后还能恢复的 Agent Tool。总览文档见 。</p>
+<h2>1. Tool 本质上是一份带执行器的类型契约</h2>
+<p>普通函数只面向程序员；Tool 同时面向模型与运行时。模型需要理解工具做什么、什么时候用、参数怎样填写，运行时则需要知道如何校验、鉴权、执行和记录结果。因此，一个生产级 Tool 至少包含名称、描述、输入 Schema、输出 Schema、执行器和执行策略。</p>
+<p>组成部分</p>
+<p>作用</p>
+<p>典型问题</p>
+<p>name</p>
+<p>提供稳定、明确的调用标识</p>
+<p>名称是否能直接表达业务动作</p>
+<p>description</p>
+<p>告诉模型何时使用以及不能做什么</p>
+<p>是否写清只读、写入和使用边界</p>
+<p>input_schema</p>
+<p>约束模型生成的参数</p>
+<p>必填项、枚举、格式和长度是否明确</p>
+<p>output_schema</p>
+<p>让后续 Agent 稳定消费结果</p>
+<p>成功、失败和证据字段是否统一</p>
+<p>executor</p>
+<p>真正调用 Python、数据库或外部 API</p>
+<p>是否有超时、异常处理和资源释放</p>
+<p>policy</p>
+<p>控制权限、审批、幂等和预算</p>
+<p>是否把安全边界放在服务端</p>
+<h2>2. 模型不会直接执行 Python</h2>
+<p>模型只能生成结构化的 Tool Call，例如选择 <code>get_order_status</code> 并给出 <code>order_id</code>。Agent Runtime 收到调用请求后，先做 Schema 校验和权限判断，再调用真实函数；函数返回的 Tool Result 会重新进入模型上下文。模型读取结果后，才能继续调用其他工具或生成最终答案。</p>
+<pre><code class="language-plaintext">用户请求
+  -&gt; 模型读取 Tool 定义
+  -&gt; 模型生成 tool_call
+  -&gt; Runtime 校验参数与权限
+  -&gt; Python Executor 执行
+  -&gt; 返回 tool_result
+  -&gt; 模型继续决策或结束</code></pre>
+<h2>3. 一个可运行的 Python Tool</h2>
+<p>下面使用 Pydantic 定义输入输出。业务身份没有出现在模型参数中，而是由可信运行时上下文注入。</p>
+<pre><code class="language-php">from typing import Literal
+from pydantic import BaseModel, Field
+
+
+class RuntimeContext(BaseModel):
+    user_id: str
+    tenant_id: str
+    request_id: str
+
+
+class GetOrderInput(BaseModel):
+    order_id: str = Field(min_length=1, max_length=64)
+
+
+class OrderData(BaseModel):
+    order_id: str
+    status: Literal[&quot;created&quot;, &quot;paid&quot;, &quot;shipped&quot;, &quot;closed&quot;]
+
+
+class ToolResult(BaseModel):
+    ok: bool
+    data: OrderData | None = None
+    error_code: str | None = None
+    message: str | None = None
+    retryable: bool = False
+
+
+async def get_order_status(
+    ctx: RuntimeContext,
+    args: GetOrderInput,
+) -&gt; ToolResult:
+    order = await order_repo.get(
+        tenant_id=ctx.tenant_id,
+        order_id=args.order_id,
+    )
+    if order is None:
+        return ToolResult(
+            ok=False,
+            error_code=&quot;ORDER_NOT_FOUND&quot;,
+            message=&quot;订单不存在&quot;,
+            retryable=False,
+        )
+    return ToolResult(ok=True, data=OrderData(**order))</code></pre>
+<p>这一设计把模型可控参数限制为 <code>order_id</code>。即使模型在 Prompt 中看到另一个租户的 ID，也无法伪造可信的 <code>tenant_id</code>，因为真正查询时使用的是 RuntimeContext。</p>
+<h2>4. Tool Registry 与统一执行器</h2>
+<p>真实项目不应到处编写 <code>if tool_name == ...</code>。Tool Registry 负责登记工具元数据，统一执行器负责完成查找、参数校验、鉴权、超时、Trace 和错误归一化。</p>
+<pre><code class="language-php">from dataclasses import dataclass
+from typing import Awaitable, Callable, Type
+from pydantic import BaseModel, ValidationError
+
+
+@dataclass
+class ToolSpec:
+    name: str
+    description: str
+    input_model: Type[BaseModel]
+    handler: Callable[..., Awaitable[ToolResult]]
+    risk: str = &quot;read&quot;
+    timeout_seconds: float = 10.0
+
+
+TOOL_REGISTRY: dict[str, ToolSpec] = {}
+
+
+async def execute_tool(ctx, name: str, raw_args: dict) -&gt; ToolResult:
+    spec = TOOL_REGISTRY.get(name)
+    if spec is None:
+        return ToolResult(ok=False, error_code=&quot;TOOL_NOT_FOUND&quot;)
+
+    try:
+        args = spec.input_model.model_validate(raw_args)
+    except ValidationError as exc:
+        return ToolResult(
+            ok=False,
+            error_code=&quot;INVALID_ARGUMENTS&quot;,
+            message=str(exc),
+            retryable=False,
+        )
+
+    await policy_engine.authorize(ctx, spec, args)
+    return await run_with_timeout_and_trace(ctx, spec, args)</code></pre>
+<p>框架可以自动把 Python 类型标注和 docstring 转换成 JSON Schema，但自动生成并不等于设计完成。名称、描述、枚举、错误语义和权限边界仍然需要开发者主动定义。</p>
+<h2>5. 怎样写出模型容易选对的 Tool</h2>
+<p><strong>职责单一。</strong>与其暴露一个既能查又能删的 <code>manage_database</code>，不如拆成 <code>get_user</code>、<code>update_user_email</code> 和 <code>disable_user</code>。工具边界越清楚，模型越容易选择，权限也越容易控制。</p>
+<p><strong>描述包含使用边界。</strong>描述不仅要说“能做什么”，还要写清“什么时候使用、不会做什么、缺少参数时怎么办”。对于写操作，要明确它会修改外部状态。</p>
+<p><strong>参数使用业务类型。</strong>优先使用枚举、业务 ID、日期格式和有范围的数字，避免把全部能力压进一个自由文本 <code>command</code>。能用 <code>Literal[&quot;low&quot;, &quot;medium&quot;, &quot;high&quot;]</code> 的地方，就不要让模型随意编写优先级字符串。</p>
+<p><strong>返回结构化结果。</strong>稳定字段让 Agent、前端、Trace 和评测系统都能可靠消费。大文件或长报告应写入 Artifact Store，Tool Result 只返回摘要、<code>artifact_id</code> 和证据引用。</p>
+<h2>6. 错误协议决定 Agent 能否自我恢复</h2>
+<p>错误</p>
+<p>retryable</p>
+<p>Agent 的合理动作</p>
+<p>INVALID_ARGUMENTS</p>
+<p>false</p>
+<p>根据校验信息修正参数</p>
+<p>NOT_FOUND</p>
+<p>false</p>
+<p>换查询条件或向用户确认</p>
+<p>PERMISSION_DENIED</p>
+<p>false</p>
+<p>停止，不通过换 Prompt 绕过</p>
+<p>RATE_LIMITED</p>
+<p>true</p>
+<p>按服务端提示退避</p>
+<p>UPSTREAM_TIMEOUT</p>
+<p>true</p>
+<p>在预算内有限重试或降级</p>
+<p>APPROVAL_REQUIRED</p>
+<p>false</p>
+<p>暂停运行并请求人工批准</p>
+<p>不要把所有异常都转成一段自然语言。机器可读的 <code>error_code</code>、<code>retryable</code> 和 <code>details</code> 能让 Agent Loop 做出确定的下一步判断，也方便统计每种失败的频率。</p>
+<h2>7. 并行、重试与副作用</h2>
+<p>多个只读查询彼此独立时可以并行；多个写操作如果修改同一资源，应串行执行或使用版本控制。重试只适用于明确可重试的失败，写操作必须携带幂等键，否则超时后的再次调用可能重复发消息、重复扣款或重复创建订单。</p>
+<pre><code class="language-php">class SendMessageInput(BaseModel):
+    chat_id: str
+    text: str
+    idempotency_key: str
+
+
+async def send_message(ctx, args):
+    previous = await idempotency_store.get(
+        tenant_id=ctx.tenant_id,
+        key=args.idempotency_key,
+    )
+    if previous:
+        return previous
+
+    result = await message_service.send(args.chat_id, args.text)
+    await idempotency_store.save(ctx.tenant_id, args.idempotency_key, result)
+    return result</code></pre>
+<h2>8. Tool 的测试策略</h2>
+<p>Tool 测试不能只测底层 Python 函数。至少应覆盖 Schema 是否正确、典型用户表达能否选中正确工具、错误参数是否被拒绝、无权限租户能否越权、超时和重试是否受预算控制、相同幂等键是否只产生一次副作用，以及 Tool Result 是否符合约定的输出结构。</p>
+<ul><li>单元测试：执行器、参数模型、错误映射和权限策略。</li><li>契约测试：JSON Schema 与真实处理函数保持一致。</li><li>选择评测：一组用户问题对应预期 Tool 或“不调用 Tool”。</li><li>集成测试：真实数据库、HTTP 服务或沙箱中的端到端行为。</li><li>回归评测：模型或 Tool 描述调整后，比较选错率和参数错误率。</li></ul>
+<h2>9. 面试回答</h2>
+<p>在 Agent 系统中，Tool 不是普通函数的别名，而是模型与执行环境之间的类型化契约。模型只生成工具名和参数，Runtime 负责 Schema 校验、身份注入、鉴权、执行、超时、错误归一化和 Trace。我会用 Pydantic 定义输入输出，用 Registry 管理工具元数据，并让错误返回 error_code 与 retryable，帮助 Agent Loop 决定修参、重试、降级还是停止。对于写操作，还必须加入幂等键和审批，避免恢复或重试产生重复副作用。</p>
+<h2>10. 延伸阅读</h2>
+<ul><li>：服务端权限、审批、幂等和隔离。</li><li>：Tool 如何通过 MCP 被发现和远程调用。</li><li><a href="https://openai.github.io/openai-agents-python/tools/" target="_blank" rel="noopener">OpenAI Agents SDK：Tools</a></li><li><a href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works" target="_blank" rel="noopener">Claude Platform：How tool use works</a></li></ul>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

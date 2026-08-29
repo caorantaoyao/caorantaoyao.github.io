@@ -1,7 +1,39 @@
 {
-  "generated_at": "2026-08-28T03:54:31.756802+00:00",
-  "count": 64,
+  "generated_at": "2026-08-29T02:33:56.984447+00:00",
+  "count": 67,
   "articles": [
+    {
+      "title": "Agent 工具调用：从 Function Calling 到安全执行",
+      "date": "2026.08.28",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "一句话理解：模型负责决定“调用哪个工具、传什么参数”，Agent 程序负责校验、鉴权和真正执行，再把结果交回模型。",
+      "url": "/articles/Agent---Function-Calling-b8aa2cb9.html"
+    },
+    {
+      "title": "MCP 与 Tool：工具发现、远程调用与协议边界",
+      "date": "2026.08.28",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "Tool 是模型可调用的能力，MCP 则是一套让客户端发现并调用外部 Tool 的标准协议。MCP 不替你实现业务函数，也不自动解决权限问题；它主要统一“工具怎样被描述、列出、调用和返回结果”。总览文档见 。",
+      "url": "/articles/MCP--Tool-a90e5590.html"
+    },
+    {
+      "title": "Tool Gateway：多租户鉴权、幂等、审批与隔离",
+      "date": "2026.08.28",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "Tool Gateway 是 Agent Runtime 与真实业务系统之间的安全执行层。模型可以提出调用请求，但不能绕过 Gateway 直接访问数据库、密钥、宿主机或其他租户资源。总览文档见 。",
+      "url": "/articles/Tool-Gateway-316a5ea4.html"
+    },
+    {
+      "title": "Tool 设计与 Python 实现：Schema、注册表与错误协议",
+      "date": "2026.08.28",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "本篇从 Python 工程视角回答一个核心问题：怎样把普通函数变成模型能够正确选择、可靠调用、出现错误后还能恢复的 Agent Tool。总览文档见 。",
+      "url": "/articles/Tool--Python--Schema-b1f7476b.html"
+    },
     {
       "title": "LangGraph：把 Agent Loop 工程化为可持久化状态图",
       "date": "2026.08.27",
@@ -193,14 +225,6 @@
       "tag_color": "cloud",
       "summary": "一句话理解：Agent Trace 把一次 Agent 任务从用户请求到最终结果的每一步记录成一棵执行树，让我们能够还原模型调用、工具执行、RAG、RPC、审批、重试、耗时和费用。",
       "url": "/articles/Agent-Trace-5aa39404.html"
-    },
-    {
-      "title": "Agent 工具调用：从 Function Calling 到安全执行",
-      "date": "2026.07.28",
-      "category": "学科知识正文",
-      "tag_color": "cloud",
-      "summary": "一句话理解：模型负责决定“调用哪个工具、传什么参数”，Agent 程序负责校验、鉴权和真正执行，再把结果交回模型。",
-      "url": "/articles/Agent---Function-Calling-b8aa2cb9.html"
     },
     {
       "title": "四层与七层负载均衡：从连接转发到应用路由",

@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tool Gateway：多租户鉴权、幂等、审批与隔离 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.08.28</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">Tool Gateway：多租户鉴权、幂等、审批与隔离</h1>
+    <div class="article-body">
+<p>Tool Gateway 是 Agent Runtime 与真实业务系统之间的安全执行层。模型可以提出调用请求，但不能绕过 Gateway 直接访问数据库、密钥、宿主机或其他租户资源。总览文档见 。</p>
+<h2>1. 为什么不能让 Agent 直接调用业务函数</h2>
+<p>模型输出是不可信输入。它可能传错参数、重复调用、选择过高权限的工具，也可能受 Prompt Injection 影响。如果把模型生成的函数名和参数直接交给数据库或 Shell，等于把概率性决策放在了安全边界上。</p>
+<p>Tool Gateway 的任务，是把“模型建议执行什么”转化为“平台允许执行什么”。授权、租户、资源范围、审批结果和密钥都必须来自可信系统，而不是来自模型生成的文字。</p>
+<h2>2. 推荐架构</h2>
+<pre><code class="language-plaintext">用户请求
+   -&gt; Agent Runtime
+   -&gt; Tool Call
+   -&gt; Tool Gateway
+        ├─ Schema 校验
+        ├─ 身份与租户注入
+        ├─ Policy 鉴权
+        ├─ 风险分级与审批
+        ├─ 限流、预算、超时
+        ├─ 幂等与去重
+        ├─ Secret Broker
+        └─ Trace / Audit
+   -&gt; Tool Executor
+        ├─ Python 函数
+        ├─ 内部 HTTP / RPC
+        ├─ MCP Server
+        ├─ 数据库
+        └─ 隔离容器</code></pre>
+<p>Gateway 不负责替模型规划任务；它负责在每一次真实执行前进行确定性检查，并把执行结果归一化后交回 Agent Loop。</p>
+<h2>3. 可信 Runtime Context</h2>
+<p>模型参数只能包含业务所需字段。<code>user_id</code>、<code>tenant_id</code>、角色、授权范围和请求链路 ID 应由登录态和服务端会话注入。</p>
+<pre><code class="language-php">from pydantic import BaseModel
+
+
+class RuntimeContext(BaseModel):
+    user_id: str
+    tenant_id: str
+    roles: set[str]
+    scopes: set[str]
+    run_id: str
+    task_id: str
+
+
+class DeleteFileInput(BaseModel):
+    file_id: str
+    reason: str
+
+
+# 错误设计：把 tenant_id 暴露给模型填写
+# 正确设计：通过 ctx.tenant_id 确定资源边界</code></pre>
+<p>即使模型把其他租户的 ID 写进 Prompt，Gateway 仍然按当前会话的可信 <code>tenant_id</code> 查询和鉴权。多租户隔离不能依赖“请勿访问其他用户数据”这样的提示词。</p>
+<h2>4. 服务端鉴权</h2>
+<p>鉴权至少要回答四个问题：当前主体是谁、它能否调用这个 Tool、能否对目标资源执行这个动作、当前条件是否允许执行。例如，同样拥有 <code>file.delete</code> 权限的用户，也只能删除本租户并且归自己管理的文件。</p>
+<pre><code class="language-php">async def invoke_tool(ctx, tool_call):
+    spec = registry.require(tool_call.name)
+    args = spec.input_model.model_validate(tool_call.arguments)
+
+    await policy.authorize(
+        subject=ctx.user_id,
+        tenant=ctx.tenant_id,
+        action=spec.action,
+        resource=await spec.resolve_resource(args),
+    )
+
+    await budget.consume(ctx.run_id, spec.cost)
+    await approval.ensure_if_required(ctx, spec, args)
+
+    return await executor.run(
+        ctx=ctx,
+        spec=spec,
+        args=args,
+    )</code></pre>
+<p>对于 Casbin、OPA 或自研 Policy Engine，模型只提供业务参数；最终授权决策必须由服务端策略引擎完成。</p>
+<h2>5. Tool 风险分级</h2>
+<p>等级</p>
+<p>示例</p>
+<p>默认控制</p>
+<p>只读</p>
+<p>搜索文档、读取订单</p>
+<p>鉴权、限流、脱敏、审计</p>
+<p>低风险写入</p>
+<p>保存草稿、更新个人偏好</p>
+<p>鉴权、幂等、可撤销</p>
+<p>高风险写入</p>
+<p>发送消息、发布代码、删除数据</p>
+<p>参数预览、人工审批、幂等、审计</p>
+<p>特权执行</p>
+<p>Shell、生产数据库、权限变更</p>
+<p>沙箱或受限环境、临时凭据、强审批</p>
+<p>审批应展示具体目标和参数，而不是只问“是否允许 Agent 继续”。用户需要看到将要给谁发消息、删除哪个资源、执行什么命令，以及动作是否可恢复。</p>
+<h2>6. 幂等：防止同一个动作执行两次</h2>
+<p>Agent 可能因为网络超时、Worker 重启、Checkpoint 恢复或消息队列重复投递再次调用同一个工具。对写操作，Gateway 应要求稳定的幂等键，并持久化第一次执行的状态与结果。</p>
+<pre><code class="language-plaintext">RECEIVED
+  -&gt; RUNNING
+  -&gt; SUCCEEDED
+  -&gt; 返回首次结果
+
+相同 idempotency_key 再次到达：
+  RUNNING   -&gt; 返回处理中
+  SUCCEEDED -&gt; 返回已保存结果
+  FAILED    -&gt; 根据错误类型决定能否重试</code></pre>
+<p>幂等键通常应绑定 <code>tenant_id + tool_name + business_operation_id</code>。不能只放在内存里，否则进程重启后无法识别重复请求。</p>
+<h2>7. 超时、重试与熔断</h2>
+<p>每个 Tool 应设置独立超时，整个 Agent Run 还应设置总时间和总成本预算。只读、幂等并且错误明确标记为可重试的调用，可以进行带抖动的指数退避；权限拒绝、参数错误和业务校验失败不应重试。</p>
+<ul><li>Tool 超时：防止一次外部调用永久占用 Worker。</li><li>最大重试次数：防止 Agent 与执行器形成重试风暴。</li><li>熔断器：上游持续故障时快速失败，保护平台资源。</li><li>并发上限：同时限制系统、租户、用户和 Tool 四个维度。</li><li>取消传播：用户取消 Run 后，尽可能取消尚未开始的 Tool。</li></ul>
+<h2>8. 沙箱、网络与 Secret Broker</h2>
+<p>普通业务 API 可以在受控 Worker 中执行；Shell、代码运行和文件编辑则应使用隔离进程或短生命周期容器。容器只获得当前任务所需目录、网络目标和资源配额，任务结束后销毁或清理。</p>
+<p>密钥不应进入 Prompt、聊天记录或 Tool 参数。Secret Broker 根据可信身份和 Tool 策略，在执行时临时注入短期凭据；Trace 中只记录密钥引用和授权结果，不能记录明文密钥。</p>
+<p>资源</p>
+<p>隔离方式</p>
+<p>文件</p>
+<p>独立工作区、路径白名单、只读挂载</p>
+<p>数据库</p>
+<p>租户过滤、独立凭据、行级或库级隔离</p>
+<p>网络</p>
+<p>域名白名单、禁止访问元数据服务和内网敏感端点</p>
+<p>计算资源</p>
+<p>CPU、内存、运行时间和进程数限制</p>
+<p>密钥</p>
+<p>短期令牌、按 Tool 绑定、执行时注入</p>
+<h2>9. Tool Result 仍然是不可信输入</h2>
+<p>网页、邮件和外部 MCP Server 返回的内容可能携带 Prompt Injection，例如要求 Agent 忽略原规则并泄露数据。Gateway 或上层 Runtime 应保留来源标签，限制返回长度，进行必要脱敏，并把外部文本作为数据而不是高优先级指令处理。</p>
+<p>一个低权限 Tool 的输出也不能自动获得高权限。后续如果触发发送、删除或执行命令，新的 Tool 调用仍然必须重新鉴权和审批。</p>
+<h2>10. Trace 与审计</h2>
+<p>一次调用至少记录 <code>run_id</code>、<code>task_id</code>、<code>tool_call_id</code>、Tool 版本、调用主体、租户、参数摘要、授权结果、审批人、开始结束时间、错误码、幂等键和结果引用。敏感字段应脱敏或仅记录哈希。</p>
+<p>Trace 面向研发排障，Audit 面向安全追责。两者可以共享事件源，但访问权限、保留期限和展示字段通常不同。</p>
+<h2>11. 单服务器 Agent 平台怎样落地</h2>
+<p>单服务器不需要为每个 Tool 永久运行一个容器。可以复用有界 Worker Pool：数据库查询和普通 HTTP Tool 在 Worker 进程中执行；只有代码、Shell 或不可信插件才申请临时容器。高并发请求先排队，每个租户设置独立并发和成本配额。</p>
+<pre><code class="language-plaintext">FastAPI / WebSocket
+  -&gt; Agent Orchestrator
+  -&gt; Tool Gateway
+  -&gt; Redis Queue + PostgreSQL 状态
+  -&gt; 有界 Worker Pool
+  -&gt; 按需临时容器
+  -&gt; Artifact Store + Trace</code></pre>
+<h2>12. 面试回答</h2>
+<p>Tool Gateway 是模型决策层和真实执行层之间的服务端安全边界。模型只能提交工具名和业务参数，用户身份、tenant_id、角色和密钥由 Runtime 注入；Gateway 再完成 Schema 校验、资源级鉴权、预算、审批、幂等、超时和 Trace。写操作使用持久化幂等键，高风险动作在执行前展示具体参数并请求批准，Shell 和不可信代码放入受限容器。这样即使模型选错工具或受到 Prompt Injection，也不能绕过确定性的权限和隔离机制。</p>
+<h2>13. 延伸阅读</h2>
+<ul><li>：Tool 的 Schema、Python 执行器与错误协议。</li><li>：通过 MCP 发现和调用远程 Tool。</li><li><a href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/strict-tool-use" target="_blank" rel="noopener">Claude Platform：Strict tool use</a></li><li><a href="https://openai.github.io/openai-agents-python/ref/tool/" target="_blank" rel="noopener">OpenAI Agents SDK：Tool reference</a></li></ul>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

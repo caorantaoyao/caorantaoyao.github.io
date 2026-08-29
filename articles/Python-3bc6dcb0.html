@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Python 并发：线程、协程、进程与调度模型 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.08.29</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">Python 并发：线程、协程、进程与调度模型</h1>
+    <div class="article-body">
+<p><strong>核心结论：</strong>Python 并发不是“线程还是协程”二选一。大量异步 I/O 优先协程，同步阻塞 SDK 用有界线程池桥接，纯 Python CPU 密集任务使用多进程或独立 Worker；生产后端通常组合使用三者。</p>
+<p>本文面向 Python 后端和 AI Agent 平台，重点回答四个问题：Python 为什么需要并发、为什么不能把所有任务都交给线程、协程究竟怎样轻量化，以及抢占式调度和协作式调度有什么本质区别。</p>
+<h2>1. 并发与并行</h2>
+<p><strong>并发</strong>表示多个任务在同一段时间内持续推进，任务可以只是交替执行；<strong>并行</strong>表示多个任务在同一时刻由不同 CPU 核心真正执行。只有一个 CPU 核心时也能并发，但不能让两段 CPU 指令真正同时运行。</p>
+<pre><code class="language-plaintext">并发：A 执行 → A 等待 → B 执行 → B 等待 → A 恢复
+并行：CPU Core 1 执行 A，同时 CPU Core 2 执行 B</code></pre>
+<p>并发主要提高系统吞吐量和响应能力，不一定缩短一个任务本身的计算时间。并行则可能直接缩短可拆分 CPU 计算的总耗时。</p>
+<h2>2. 后端请求为什么适合并发</h2>
+<p>一次后端请求通常不是连续占用 CPU，而是在短暂计算和长时间等待之间反复切换。调用数据库、Redis、RPC、对象存储或大模型 API 时，请求的大部分时间可能都在等待网络结果。</p>
+<pre><code class="language-plaintext">请求 A：计算 → 等待 LLM ----------------→ 处理结果
+请求 B：       计算 → 等待数据库 --------→ 处理结果
+请求 C：              计算 → 等待 Tool --------→ 处理结果</code></pre>
+<p>如果串行执行，后续请求只能排队；如果并发执行，A 等待 LLM 时，CPU 可以继续推进 B 和 C。并发的价值是利用等待时间，而不是让远端 LLM 本身变快。</p>
+<h2>3. 先区分 I/O 密集和 CPU 密集</h2>
+<p>任务类型</p>
+<p>典型例子</p>
+<p>常见选择</p>
+<p>I/O 密集</p>
+<p>HTTP、数据库、Redis、文件、LLM 和 Tool API</p>
+<p>异步协程；同步库可用线程池</p>
+<p>CPU 密集</p>
+<p>纯 Python 数学计算、图算法、复杂解析</p>
+<p>多进程、独立计算服务或原生并行库</p>
+<p>长时间任务</p>
+<p>多步骤 Agent、视频处理、代码执行</p>
+<p>消息队列、Worker、容器和 Checkpoint</p>
+<p>这里的“文件”需要单独理解：普通本地文件 I/O 通常不能像 Socket 一样直接由 <code>asyncio</code> 做 I/O 多路复用，工程上常通过线程池、<code>asyncio.to_thread()</code> 或专用异步文件库桥接。</p>
+<p>选择并发模型时，首先问“任务的大部分时间在等待什么”，而不是先问“哪个 API 看起来更高级”。</p>
+<h2>4. Python 并发的四种常见方案</h2>
+<p>方案</p>
+<p>适用场景</p>
+<p>关键限制</p>
+<p><code>asyncio</code></p>
+<p>大量 Socket、HTTP、数据库和长连接</p>
+<p>协作式调度；阻塞代码会卡住事件循环</p>
+<p><code>threading</code> / 线程池</p>
+<p>阻塞式 I/O、同步 SDK、现有同步项目</p>
+<p>共享内存竞态；普通 CPython 下不适合纯 Python CPU 并行</p>
+<p><code>multiprocessing</code> / 进程池</p>
+<p>纯 Python CPU 密集任务</p>
+<p>启动、内存、序列化和进程间通信成本</p>
+<p><code>concurrent.futures</code></p>
+<p>用统一接口管理线程池、进程池等</p>
+<p>不会消除底层执行模型本身的限制</p>
+<h2>5. 线程是什么</h2>
+<p>线程是操作系统调度的执行单元。同一进程中的线程共享堆、模块和大部分进程资源，但每条线程拥有自己的原生调用栈、寄存器上下文和线程局部状态。</p>
+<p>线程执行阻塞式网络调用时，操作系统可以挂起当前线程并调度其他线程。因此，线程完全能够利用 I/O 等待时间；在同步库较多、并发规模有限的项目里，线程池往往是简单而合理的选择。</p>
+<pre><code class="language-php">from concurrent.futures import ThreadPoolExecutor
+
+
+def call_sync_tool(task):
+    return blocking_sdk_call(task)
+
+
+with ThreadPoolExecutor(max_workers=20) as pool:
+    results = list(pool.map(call_sync_tool, tasks))</code></pre>
+<h2>6. 为什么不把所有任务都交给线程</h2>
+<p>阻塞线程等待 I/O 时不会持续占用 CPU，但它仍然占用一条 OS 线程、原生线程栈、内核调度对象以及线程池中的一个工作槽。线程数量增加后，还会增加调度、上下文切换、锁竞争和内存成本。</p>
+<pre><code class="language-plaintext">线程池最多 50 个 Worker
+├─ 50 个请求正在等待 LLM
+└─ 后续 450 个请求只能在线程池队列中等待</code></pre>
+<p>因此，“线程在等待时不使用 CPU”不等于“线程在等待时没有成本”。对于大量 WebSocket、SSE、模型 API 和 Agent Tool 调用，协程可以让少量线程管理大量正在等待的任务。</p>
+<p>但这不是说线程不好。同步 SDK 为主、并发量不高、改造异步调用链成本很大时，使用一个有明确上限的线程池通常比强行异步化更稳妥。</p>
+<h2>7. GIL 限制了什么</h2>
+<p>在默认启用 GIL 的 CPython 中，同一解释器同一时刻通常只有一个线程执行 Python 代码。这使纯 Python CPU 密集任务很难仅靠增加线程充分利用多个核心。这里的准确边界是“解释器”，不是整个进程：同一进程可以通过多个相互隔离的子解释器形成各自的 GIL。</p>
+<p>GIL 并不表示线程没有价值：阻塞 I/O 期间解释器会释放执行机会，部分 C 扩展也会主动释放 GIL。GIL 也不等于业务数据线程安全，读取后修改再写回等复合操作仍然需要锁、队列、事务或原子机制。</p>
+<p>从 Python 3.13 开始，CPython 提供可选的 free-threaded 构建；在 Python 3.14 中它仍是可选模式，并非所有第三方扩展都已适配，某些扩展还可能重新启用 GIL。兼容的 free-threaded 构建可以让多个线程在不同核心并行执行 Python 代码，但共享可变状态仍要显式同步。通用后端目前不应假设运行环境已经无 GIL，而应先检查解释器模式、依赖兼容性并用真实负载测试。</p>
+<h2>8. 协程不是缩小版 OS 线程</h2>
+<p>“协程是轻量级线程”适合作为第一层直觉，但不够准确。线程由操作系统调度；Python 协程是可以暂停和恢复的函数，通常被包装成 <code>asyncio.Task</code>，由事件循环在用户态调度。</p>
+<pre><code class="language-plaintext">一个 Python Worker 进程
+├── 一个事件循环线程
+│   └── 一个 Event Loop
+│       ├── Task A：等待 LLM
+│       ├── Task B：等待数据库
+│       ├── Task C：等待 WebSocket
+│       └── Task D：当前正在运行
+└── 可选线程池工作线程：执行同步阻塞 SDK</code></pre>
+<p>同一个事件循环里的 Task 通常不会同时执行 Python 代码。当前 Task 运行到可以暂停的等待点后，事件循环才选择另一个 Task 继续。</p>
+<h2>9. 协程究竟怎样轻量化</h2>
+<p><strong>不创建独立原生线程栈。</strong>协程暂停时，主要保存执行位置、局部变量、正在等待的 Future 和异常关系。这些信息保存在协程对象及其关联执行帧中，不需要为每个任务创建一条 OS 线程。</p>
+<p><strong>切换主要发生在用户态。</strong>线程切换需要内核调度并保存、恢复线程上下文；协程通常在 <code>await</code> 处主动交还控制权，事件循环把当前 Task 放入等待集合，再从就绪队列选择下一个 Task。</p>
+<p><strong>统一管理大量 Socket。</strong>事件循环借助操作系统的就绪或完成通知机制管理大量异步 I/O：Linux 常见 <code>epoll</code>、macOS/BSD 常见 <code>kqueue</code>，Windows 常见 IOCP。前两者侧重通知“哪些资源已经就绪”，IOCP 侧重通知“哪些异步操作已经完成”；共同点是不需要让每个连接分别占用一条阻塞线程。</p>
+<p>轻量不等于没有成本。每个 Task、Future、执行帧和局部变量仍然占用内存；如果协程长期持有大型对象，或者无上限地创建 Task，同样会耗尽资源。</p>
+<h2>10. 事件循环怎样推进协程</h2>
+<pre><code class="language-plaintext">Task A 发送 HTTP 请求
+  ↓
+把 Socket 注册给事件循环
+  ↓
+await：Task A 暂停，线程继续运行 Task B
+  ↓
+操作系统通知 Socket 已就绪
+  ↓
+事件循环把 Task A 放回就绪队列
+  ↓
+Task A 从 await 后继续</code></pre>
+<p>等待期间没有一条专属线程陪着这个请求。事件循环线程可以不断推进其他已经就绪的任务。</p>
+<h2>11. 抢占式调度与协作式调度</h2>
+<p>对比项</p>
+<p>抢占式调度</p>
+<p>协作式调度</p>
+<p>常见对象</p>
+<p>操作系统进程、线程</p>
+<p>协程、事件循环 Task</p>
+<p>谁决定切换</p>
+<p>操作系统或运行时可强制暂停</p>
+<p>当前任务在等待点主动让出</p>
+<p>切换位置</p>
+<p>对应用代码相对不可预测</p>
+<p>主要出现在真正悬挂的 <code>await</code> 等位置</p>
+<p>死循环影响</p>
+<p>其他线程通常仍能获得调度</p>
+<p>可能卡死同一事件循环中的所有 Task</p>
+<p>切换成本</p>
+<p>通常需要内核调度和线程上下文切换</p>
+<p>通常主要是用户态 Task 状态切换</p>
+<p>与多核的关系</p>
+<p>OS 可以把不同线程调度到不同核心</p>
+<p>单个 asyncio 事件循环通常一次运行一个 Task；协作式调度概念本身并不禁止多线程或多进程</p>
+<p>判断两者的关键不是“任务会不会阻塞”，而是谁拥有最终的切换权。线程也会主动阻塞或让出 CPU，但操作系统仍有权在时间片结束时抢占它；协程如果不执行真正的悬挂操作，事件循环一般不会强行打断它。调度方式与能否多核并行是两个维度：本文所说“不并行”特指单线程、单事件循环中的多个 asyncio Task。</p>
+<h2>12. 两种调度的切换过程</h2>
+<pre><code class="language-plaintext">线程 A 正在执行
+  ↓ 时间片用完或更高优先级任务到来
+操作系统保存 A 的寄存器、栈指针等上下文
+  ↓
+调度线程 B
+  ↓
+未来再恢复线程 A</code></pre>
+<pre><code class="language-plaintext">Task A 正在执行
+  ↓ 遇到尚未完成的 await
+保存 A 的暂停位置和局部状态
+  ↓
+Event Loop 执行 Task B
+  ↓ A 等待条件满足
+把 A 放回就绪队列并恢复</code></pre>
+<h2>13. await 到底意味着什么</h2>
+<p><code>async def</code> 只声明这是协程函数，并不会自动产生并发。<code>await</code> 表示等待一个 Awaitable；只有当结果尚未完成时，当前 Task 才会真正暂停并让出执行权。如果被等待对象已经完成，代码可能直接继续。</p>
+<pre><code class="language-php"># 通常是顺序执行
+result_a = await request_a()
+result_b = await request_b()
+
+# 并发启动
+async with asyncio.TaskGroup() as group:
+    task_a = group.create_task(request_a())
+    task_b = group.create_task(request_b())
+
+result_a = task_a.result()
+result_b = task_b.result()</code></pre>
+<h2>14. asyncio 最小并发示例</h2>
+<pre><code class="language-php">import asyncio
+
+
+async def call_service(name: str, delay: float) -&gt; str:
+    await asyncio.sleep(delay)  # 模拟异步网络等待
+    return f&quot;{name} 完成&quot;
+
+
+async def main():
+    async with asyncio.TaskGroup() as group:
+        task_a = group.create_task(call_service(&quot;A&quot;, 2))
+        task_b = group.create_task(call_service(&quot;B&quot;, 1))
+        task_c = group.create_task(call_service(&quot;C&quot;, 3))
+
+    print(task_a.result())
+    print(task_b.result())
+    print(task_c.result())
+
+
+asyncio.run(main())</code></pre>
+<p>三个任务总耗时接近最慢任务的三秒，而不是六秒，因为等待区间发生了重叠。<code>TaskGroup</code> 提供结构化并发语义：作用域结束前会等待子任务结束；当首个子任务因 <code>CancelledError</code> 以外的异常失败时，会请求取消其余子任务并等待它们清理，随后把非取消异常合并为 <code>ExceptionGroup</code> 抛出。取消本身仍是协作式的，子任务执行清理代码时可能延迟退出。</p>
+<h2>15. 阻塞代码为什么会卡住事件循环</h2>
+<pre><code class="language-php">import time
+
+
+async def bad_task():
+    time.sleep(10)  # 同一事件循环线程被阻塞</code></pre>
+<p>虽然函数写成了 <code>async def</code>，但 <code>time.sleep()</code>、同步 HTTP SDK、普通阻塞式文件操作和长时间 CPU 计算不会自动变成异步。事件循环线程一旦被占住，其他 Task、定时器和 WebSocket 都无法及时推进。</p>
+<pre><code class="language-php">async def call_old_sdk(argument):
+    result = await asyncio.to_thread(
+        sync_sdk_call,
+        argument,
+    )
+    return result</code></pre>
+<p><code>asyncio.to_thread()</code> 主要用于让阻塞式 I/O 不阻塞事件循环，但它使用默认 Executor，并不自动提供业务背压：大量调用仍可能在 Executor 队列中堆积。应先用 <code>Semaphore</code>、有界队列等限制提交量，或者自行管理 Executor。取消外层等待也不一定能强制终止已经运行的底层线程，因此还需给同步 SDK 设置自身超时，并保证外部副作用可查询或幂等。</p>
+<h2>16. CPU 密集任务为什么使用进程</h2>
+<p>多个进程拥有独立解释器和地址空间，可以在不同 CPU 核心并行执行，并绕开普通 CPython 单进程 GIL 对纯 Python 字节码并行的限制。</p>
+<pre><code class="language-php">from concurrent.futures import ProcessPoolExecutor
+
+
+def cpu_heavy(n: int) -&gt; int:
+    return sum(i * i for i in range(n))
+
+
+def main():
+    numbers = [10_000_000] * 4
+    with ProcessPoolExecutor() as pool:
+        results = list(pool.map(cpu_heavy, numbers))
+    print(results)
+
+
+if __name__ == &quot;__main__&quot;:
+    main()</code></pre>
+<p>函数、参数和返回值通常需要能够被序列化；进程启动、数据复制和进程间通信也有成本。数据库连接、Socket 和事件循环对象不应直接传给子进程，应在子进程内重新初始化所需资源。</p>
+<h2>17. concurrent.futures 的作用</h2>
+<p><code>concurrent.futures</code> 提供统一的 Executor 和 Future 接口。<code>ThreadPoolExecutor</code> 适合同步阻塞 I/O，<code>ProcessPoolExecutor</code> 适合可序列化的 CPU 计算。Python 3.14 还提供 <code>InterpreterPoolExecutor</code>，让不同子解释器拥有相互隔离的运行时状态和各自的 GIL，但它对共享数据和第三方扩展兼容性有额外要求，基础阶段不必优先使用。</p>
+<p><code>concurrent.futures.Future</code> 和 <code>asyncio.Future</code> 不是同一种对象。前者表示 Executor 中的调用结果，后者服务于事件循环；需要通过 <code>to_thread</code>、<code>run_in_executor</code> 或包装接口在两种模型之间桥接。</p>
+<h2>18. 并发仍然会产生竞态条件</h2>
+<p>线程可能在相对不可预测的位置被抢占，所以共享可变状态需要格外谨慎。协程的切换位置更容易观察，但跨越 <code>await</code> 后，另一个 Task 也可能已经修改状态。</p>
+<pre><code class="language-php">balance = account.balance
+
+await call_payment_service()
+
+account.balance = balance - 100</code></pre>
+<p>等待支付服务时，其他协程可能已经修改余额。根据资源边界，可以使用 <code>threading.Lock</code>、<code>asyncio.Lock</code>、线程安全队列、数据库事务、乐观锁、唯一约束或消息传递。<code>asyncio.Lock</code> 用于同一事件循环中的 Task，不应拿来同步 OS 线程。</p>
+<h2>19. 并发控制、超时与取消</h2>
+<p>协程很轻，但数据库连接池、文件描述符、内存、下游 QPS 和模型配额都不是无限的。无上限地创建 Task 会把排队从应用入口转移到连接池或下游服务，最终表现为超时和雪崩。</p>
+<pre><code class="language-php">import asyncio
+
+
+llm_limit = asyncio.Semaphore(20)
+
+
+async def call_llm(prompt):
+    async with llm_limit:
+        async with asyncio.timeout(30):
+            return await llm_client.generate(prompt)</code></pre>
+<p>生产系统还要设计背压、重试、取消传播和资源清理。取消本地 Task 不代表远端请求一定停止；支付、发消息、创建云资源等外部副作用仍需幂等键、状态查询和补偿。</p>
+<h2>20. Agent 平台中的推荐组合</h2>
+<pre><code class="language-plaintext">负载均衡器
+├── Worker 进程 1
+│   └── asyncio Event Loop
+│       ├── LLM / 数据库 / WebSocket 协程
+│       ├── 有界线程池：同步 Tool SDK
+│       └── 提交 CPU / 长任务到外部 Worker
+└── Worker 进程 2
+    └── asyncio Event Loop
+        └── ...
+
+消息队列
+└── 独立 Worker / 进程 / 容器
+    ├── CPU 密集计算
+    ├── 代码执行
+    └── 需要重试与 Checkpoint 的长任务</code></pre>
+<p>API Worker 快速接收请求和推送事件；异步协程处理大量 LLM、数据库和 WebSocket I/O；有界线程池兼容阻塞 SDK；多进程利用多核并提供故障隔离；消息队列和独立 Worker 承担长任务、重试与削峰。</p>
+<p><strong>不可信代码必须单独隔离。</strong>如果“代码执行”包含 Agent 生成或用户提交的不可信程序，普通进程、线程或任务队列不是充分的安全边界。应在受限沙箱、容器或虚拟机中执行，并同时限制 CPU、内存、运行时间、文件系统、系统调用和网络访问。</p>
+<h2>21. 场景选择表</h2>
+<p>场景</p>
+<p>推荐方案</p>
+<p>异步 HTTP、LLM、数据库、WebSocket</p>
+<p><code>asyncio</code> + 有上限的 Task</p>
+<p>只有同步接口的第三方 SDK</p>
+<p>用 <code>Semaphore</code> 或有界队列控制提交量，再调用 <code>asyncio.to_thread()</code>；或自行管理 Executor</p>
+<p>纯 Python CPU 密集计算</p>
+<p><code>ProcessPoolExecutor</code> 或独立计算 Worker</p>
+<p>NumPy、PyTorch 等原生计算</p>
+<p>根据库是否释放 GIL、内部线程池和 GPU 执行方式实测</p>
+<p>长时间、多步骤、需要恢复的 Agent</p>
+<p>消息队列 + Worker + 持久化状态 / Checkpoint</p>
+<p>中小规模同步后端</p>
+<p>线程池可以是更简单的工程选择</p>
+<h2>22. 常见误区</h2>
+<p><strong>误区一：协程就是更小的线程。</strong>协程不是 OS 调度实体，而是由事件循环管理的可暂停函数和 Task。</p>
+<p><strong>误区二：用了 </strong><strong><code>async def</code></strong><strong> 就不会阻塞。</strong>内部同步 I/O 或 CPU 计算仍然会卡住事件循环。</p>
+<p><strong>误区三：看到 </strong><strong><code>await</code></strong><strong> 就一定会切换任务。</strong>只有 Awaitable 尚未完成时，当前 Task 才会真正悬挂。</p>
+<p><strong>误区四：GIL 保证线程安全。</strong>GIL 保护的是解释器内部执行条件，不会替你保证业务复合操作正确。</p>
+<p><strong>误区五：协程完全不需要锁。</strong>跨 <code>await</code> 的共享状态仍可能发生竞态。</p>
+<p><strong>误区六：并发越高吞吐越高。</strong>超过 CPU、内存、连接池和下游容量后，只会增加排队、超时和失败。</p>
+<p><strong>误区七：协程适合 CPU 密集计算。</strong>长时间不让出执行权的计算会阻塞整个事件循环。</p>
+<h2>23. 60 秒面试回答</h2>
+<p>Python 并发主要使用线程、协程和进程。线程由操作系统抢占式调度，能够处理阻塞式 I/O，但共享内存会产生数据竞争，而且普通 CPython 的 GIL 限制纯 Python CPU 密集任务的多线程并行。协程由事件循环协作式调度，在异步 I/O 的 await 处保存执行状态并主动让出控制权，不需要为每个等待任务创建 OS 线程，因此适合大量 HTTP、数据库、WebSocket 和 LLM 调用。协程如果执行阻塞代码或长时间 CPU 计算，会卡住整个事件循环。生产后端通常使用多个 Worker 进程利用多核，每个 Worker 内用 asyncio 处理 I/O，用有界线程池兼容同步 SDK，再把 CPU 密集和长时间任务交给进程池、消息队列或独立 Worker。</p>
+<h2>24. 自测问题</h2>
+<ol><li>为什么线程等待 I/O 时不占 CPU，却仍然有资源成本？</li><li>协程暂停时需要保存哪些状态？</li><li>为什么 <code>await A(); await B()</code> 通常不是并发执行？</li><li>为什么协程中的长时间 CPU 循环会卡住其他请求？</li><li>GIL 为什么不等于线程安全？</li><li>Agent 平台中的 LLM 调用、同步 Tool、CPU 计算和长任务分别应该放在哪里？</li></ol>
+<h2>25. 相关知识与官方资料</h2>
+<p><strong>知识库关联：</strong></p>
+<h2>26. 一句话总结</h2>
+<p><strong>抢占式线程把切换权交给操作系统，协作式协程在等待点主动让出执行权；协程的轻量来自不为每个任务创建 OS 线程，并用事件循环和 I/O 多路复用统一管理等待，而生产 Python 服务应根据 I/O、CPU 和可靠性边界组合使用协程、线程、进程与 Worker。</strong></p>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

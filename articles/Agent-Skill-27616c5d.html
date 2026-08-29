@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Skill：可复用工作流、渐进式加载与权限边界 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.08.29</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">Agent Skill：可复用工作流、渐进式加载与权限边界</h1>
+    <div class="article-body">
+<p>本文讨论的 Skill，是以 <code>SKILL.md</code> 为核心的 Agent Skill：它把完成一类任务所需的指令、参考资料、模板和可选脚本组织成一个可复用工作流。不同 Agent 平台的字段和目录可能不同，但“按任务触发、按需加载、调用现有工具、接受运行时权限控制”的思想是相通的。</p>
+<p><strong>最重要的边界：</strong>Skill 教 Agent“怎样完成任务”，Tool 让 Agent“能够执行动作”。Skill 可以声明自己依赖哪些 Tool 或 MCP 服务，但不能因此获得 OAuth、文件系统、网络、业务数据或高风险操作权限。</p>
+<h2>1. 一句话理解 Skill</h2>
+<p>如果 Tool 是一把扳手，那么 Skill 就是一份经过验证的维修手册。扳手提供拧螺丝的能力；维修手册规定先检查什么、按什么顺序拆装、什么时候停止、出现异常如何处理，以及最后怎样验收。</p>
+<p>因此，Skill 不是单次 Prompt 的华丽包装，也不是新的模型能力。它是一种面向特定任务的工程化工作流：同类任务再次出现时，Agent 不必临时重新规划全部步骤，而是加载已经沉淀好的操作规范。</p>
+<h2>2. Skill、Tool、MCP、Agent Loop 与 Plugin 的关系</h2>
+<p>概念</p>
+<p>主要回答的问题</p>
+<p>典型内容</p>
+<p><strong>Tool</strong></p>
+<p>Agent 能执行什么动作？</p>
+<p>查询数据库、发送 HTTP 请求、创建文档、执行命令</p>
+<p><strong>MCP</strong></p>
+<p>Host 如何统一发现、描述和调用外部能力？</p>
+<p>工具列表、参数 Schema、调用协议、资源与提示词</p>
+<p><strong>Skill</strong></p>
+<p>面对某类任务，Agent 应该怎样组合步骤和能力？</p>
+<p>触发条件、流程、检查项、模板、参考资料、脚本</p>
+<p><strong>Agent Loop</strong></p>
+<p>模型如何持续观察结果、决策并执行下一步？</p>
+<p>思考、行动、观察、状态更新、终止判断</p>
+<p><strong>Plugin</strong></p>
+<p>怎样把多个能力打包、分发和安装？</p>
+<p>一个或多个 Skill，以及可选的 MCP 连接和展示资源</p>
+<pre><code class="language-plaintext">用户目标
+  ↓
+Host 选择合适的 Skill
+  ↓
+Agent Loop 按 Skill 规划和推进步骤
+  ↓
+Host 校验 Tool 是否可用、是否允许、是否需要审批
+  ↓
+通过本地函数、HTTP、RPC 或 MCP 执行 Tool
+  ↓
+结果回到 Agent Loop，继续执行或结束</code></pre>
+<p>这里的关系不是相互替代。一个 Skill 可以编排多个 Tool；MCP 可以向 Host 暴露 Tool；Agent Loop 负责驱动整个过程；Plugin 则是安装和分发这些能力的一种载体。</p>
+<h2>3. Skill 解决什么工程问题</h2>
+<p>只靠临时 Prompt，模型每次都可能以不同顺序完成任务：有时漏掉前置检查，有时忘记验证结果，有时在失败后继续写入。Skill 把容易遗忘、需要重复执行的专业步骤固定下来，使任务从“模型临场发挥”变成“模型按照可审查的流程行动”。</p>
+<p><strong>一致性。</strong>同类请求采用相同的前置条件、执行顺序、异常处理和验收标准。</p>
+<p><strong>专业知识复用。</strong>团队成员可以把领域规则、术语、模板和经验沉淀到 Skill 中，而不必要求每位用户都写出完整 Prompt。</p>
+<p><strong>上下文节省。</strong>Host 先只保留 Skill 的名称和描述；真正需要时才加载完整指令和参考资料，避免所有操作手册同时占满上下文。</p>
+<p><strong>可维护与可测试。</strong>Skill 是文件化、可版本管理的资产，可以评审、回归测试和逐步改进。</p>
+<h2>4. 一个 Skill 的目录结构</h2>
+<pre><code class="language-plaintext">my-skill/
+├── SKILL.md              必需：元数据与执行指令
+├── scripts/              可选：确定性脚本
+├── references/           可选：规范、示例和领域资料
+├── assets/               可选：模板、图片和其他资源
+└── agents/
+    └── openai.yaml       可选：界面信息、调用策略和依赖声明</code></pre>
+<p><code>SKILL.md</code> 是入口文件。简单 Skill 可以只有这一份文件；当正文开始混入大量 API 说明、模板或长篇知识时，应把它们拆到 <code>references/</code> 或 <code>assets/</code>，在执行到对应步骤时再读取。需要稳定计算、格式校验或重复机械操作时，可以把确定性逻辑放进 <code>scripts/</code>。</p>
+<h2>5. SKILL.md 的元数据与正文</h2>
+<p>在 OpenAI 的 Skill 约定中，<code>SKILL.md</code> 至少包含 <code>name</code> 和 <code>description</code>。名称用于标识 Skill；描述既说明用途，也承担触发匹配的职责，所以应明确写出“什么时候使用”和“什么时候不使用”。</p>
+<pre><code class="language-plaintext">---
+name: lark-knowledge-author
+description: Create or update Feishu Wiki articles when the user asks to land learning notes as a Feishu document. Do not use for chat messages or mail.
+---
+
+1. Verify the active user identity and target knowledge base.
+2. Check for a same-title page before creating anything.
+3. Choose the semantically correct parent node.
+4. Write the article with the required document format.
+5. Read back placement, outline, and key terms.
+6. Report the verified document URL.</code></pre>
+<p>正文不应只写模糊目标，例如“帮用户创建高质量文档”。更可执行的写法会明确输入、输出、顺序、停止条件、失败处理和验证证据。模型仍然可以在步骤内部做判断，但关键边界不能依赖临场猜测。</p>
+<h2>6. 显式触发与隐式触发</h2>
+<p><strong>显式触发</strong>是用户直接指定 Skill。以 OpenAI 当前产品为例，ChatGPT 可以通过 <code>@</code> 选择 Skill，Codex CLI 或 IDE 扩展可以通过 <code>/skills</code> 或 <code>$</code> 提及 Skill。显式触发适合用户已经知道要采用哪套流程的场景。</p>
+<p><strong>隐式触发</strong>是 Host 根据用户任务与 Skill 的 <code>description</code> 自动匹配。它降低了使用门槛，但也要求描述具有清晰边界。描述太宽会误触发，太抽象又可能永远匹配不到。</p>
+<p>如果某个 Skill 涉及敏感操作、只适合专家主动调用，或隐式触发风险较高，可以在 <code>agents/openai.yaml</code> 中关闭隐式调用：</p>
+<pre><code class="language-plaintext">policy:
+  allow_implicit_invocation: false</code></pre>
+<p>关闭隐式调用只改变“怎样选中 Skill”，不会改变 Tool 权限，也不会绕过审批。</p>
+<h2>7. Progressive Disclosure：为什么先只加载描述</h2>
+<p>Progressive Disclosure 通常翻译为“渐进式披露”或“渐进式加载”。核心思想是：先给模型最少但足够用于选择的信息，确定需要某个 Skill 后，再加载它的完整工作流；执行到具体步骤时，才读取对应参考资料、脚本或模板。</p>
+<ol><li>启动阶段：Host 向模型提供 Skill 的名称和描述。</li><li>选择阶段：用户显式指定，或模型根据描述匹配到 Skill。</li><li>加载阶段：Host 读取完整 <code>SKILL.md</code>。</li><li>执行阶段：按照指令，只读取当前需要的 <code>references/</code>、<code>scripts/</code> 和 <code>assets/</code>。</li></ol>
+<p>这种设计同时解决两个问题：既让系统能够安装大量专业 Skill，又避免把每份完整操作手册永久塞进模型上下文。工程上也意味着描述必须短而准确，长知识应放到按需资源中。</p>
+<h2>8. Skill 的完整执行生命周期</h2>
+<ol><li><strong>发现：</strong>Host 扫描可用 Skill，并读取元数据。</li><li><strong>匹配：</strong>根据显式选择或任务语义确定候选 Skill。</li><li><strong>加载：</strong>读取 <code>SKILL.md</code>，确认适用范围、步骤和依赖。</li><li><strong>准备：</strong>检查输入、身份、目标资源、所需 Tool 与权限。</li><li><strong>执行：</strong>Agent Loop 按步骤调用 Tool、脚本或参考资料。</li><li><strong>观察：</strong>把 Tool 结果写回状态，判断重试、改道、审批或停止。</li><li><strong>验证：</strong>使用独立读操作核对产物，而不是只相信写接口返回成功。</li><li><strong>交付：</strong>向用户报告结果、证据和仍未完成的部分。</li></ol>
+<p>Skill 只是为这个生命周期提供可复用规则；真正维护状态、循环执行和决定何时终止的，仍是 Agent Runtime 与 Agent Loop。</p>
+<h2>9. Skill 与 Prompt、Memory、Context、RAG 的区别</h2>
+<p>概念</p>
+<p>主要保存什么</p>
+<p>生命周期</p>
+<p>与 Skill 的关键区别</p>
+<p><strong>Prompt</strong></p>
+<p>本次交互中的指令或问题</p>
+<p>通常面向当前请求</p>
+<p>Skill 是可复用、可版本化的工作流包；被加载后，其指令也会进入上下文</p>
+<p><strong>Memory</strong></p>
+<p>历史事实、偏好和过去决策</p>
+<p>跨会话或长期</p>
+<p>Memory 更像“以前发生了什么”，Skill 更像“这类事应该怎样做”</p>
+<p><strong>Context</strong></p>
+<p>模型当前能看到的全部信息</p>
+<p>当前推理窗口</p>
+<p>Skill 是上下文的潜在来源之一，不等于上下文本身</p>
+<p><strong>RAG</strong></p>
+<p>按查询检索出的知识片段</p>
+<p>按请求动态获取</p>
+<p>RAG 主要回答“相关知识是什么”，Skill 主要规定“任务按什么流程完成”</p>
+<p>它们可以组合使用。例如，一个客服 Skill 规定处理投诉的步骤，RAG 检索退款政策，Memory 提供用户的历史订单，Prompt 给出本次投诉内容，最终所有必要信息共同进入 Context。</p>
+<h2>10. Skill 不等于权限</h2>
+<p>Skill 文件本质上是可读的工作流和资源。即使其中写着“删除数据库”“读取邮箱”或“调用生产环境工具”，也不代表这些动作被授权。Host 与运行时必须在每次执行前独立检查能力和权限。</p>
+<pre><code class="language-plaintext">Skill 请求使用某个 Tool
+  ↓
+Host 检查该 Tool 是否已安装并向当前 Agent 暴露
+  ↓
+检查 Agent Tool 白名单与租户策略
+  ↓
+检查用户身份、OAuth Scope 与目标资源 ACL
+  ↓
+必要时进行人工审批或风险确认
+  ↓
+执行，并记录审计日志</code></pre>
+<p>这也是为什么不能把第三方 Skill 当成普通文本随意信任。Skill 可能引导 Agent 读取文件、访问网络或执行脚本；安全系统应限制其可用 Tool、运行环境和数据范围，并对写入、转账、删除等高风险动作设置额外门槛。</p>
+<h2>11. Tool 依赖与 Agent 白名单</h2>
+<p><code>agents/openai.yaml</code> 可以声明某个 Skill 依赖的工具，例如一个 MCP 服务。这个声明的作用是帮助 Host 识别和准备依赖，不是自动安装、自动登录或自动授权。</p>
+<pre><code class="language-plaintext">dependencies:
+  tools:
+    - type: mcp
+      value: openaiDeveloperDocs
+      description: OpenAI Docs MCP server
+      transport: streamable_http
+      url: https://developers.openai.com/mcp</code></pre>
+<p>运行时仍应取交集：<strong>Skill 需要的 Tool ∩ Host 已暴露的 Tool ∩ Agent 白名单 ∩ 当前用户权限</strong>。只有落在交集中的能力才可以执行。Skill 不能修改这几个集合，也不能用提示词要求模型绕过它们。</p>
+<p>更完整的白名单与运行时授权设计见 。</p>
+<h2>12. 实例：把“落地成飞书文档”做成 Skill</h2>
+<p>假设用户在学习对话结束后说“落地成飞书文档”。Tool 只提供创建、写入、查询等原子能力；真正决定完整质量的，是一套可复用的文档落地流程。</p>
+<ol><li>确认当前使用的是个人飞书身份，避免跨账号或跨租户写入。</li><li>定位目标知识库和语义最合适的父页面，不根据浏览器当前页面盲目推断。</li><li>列出父页面的现有子节点，检查同名文档，保证操作具有幂等性。</li><li>根据本次对话整理连贯大纲，并生成符合飞书文档格式的正文。</li><li>调用 Wiki 与文档 Tool 创建节点、写入正文。</li><li>重新查询父节点，验证页面层级和标题。</li><li>回读目录与多个区分性关键词，验证正文不是空页、错页或只写入了部分内容。</li><li>向用户交付真实 Wiki 链接和已验证范围。</li></ol>
+<p>在这个例子中，Skill 规定操作规范；Wiki/文档 Tool 完成读写；CLI 或 MCP 负责连接外部系统；OAuth 和文档 ACL 决定是否有权写入；Agent Loop 负责在每一步结果返回后继续推进。</p>
+<h2>13. 好 Skill 的设计原则</h2>
+<p><strong>一个 Skill 聚焦一类工作。</strong>不要把代码审查、发邮件、部署和报销审批塞进同一套工作流。边界越清楚，触发越准确，维护越容易。</p>
+<p><strong>描述先写触发场景，再写边界。</strong>使用具体任务词和对象词，并明确不适用的相邻场景。描述是路由信息，不是宣传语。</p>
+<p><strong>步骤写成可执行指令。</strong>明确输入、输出、顺序、分支、停止条件和验证方式。对于不可逆操作，还应写明审批和回滚策略。</p>
+<p><strong>优先用指令，必要时才用脚本。</strong>需要理解语义、适应上下文的部分交给模型；格式校验、哈希计算、批量转换等必须稳定复现的部分适合脚本。</p>
+<p><strong>把长知识按需拆出。</strong><code>SKILL.md</code> 保留导航和决策规则，详细 API、样例与模板放进对应目录，并明确何时读取。</p>
+<p><strong>把验证当作工作流的一部分。</strong>“接口返回成功”不等于用户目标已经实现。创建文档后要读回，修改代码后要测试，发送消息后要核对收件人和内容。</p>
+<h2>14. 常见错误</h2>
+<ul><li><strong>描述过于宽泛：</strong>“处理所有开发任务”会导致误触发，也无法表达边界。</li><li><strong>把整本手册塞进 SKILL.md：</strong>每次加载都浪费上下文，还让关键步骤难以发现。</li><li><strong>把 Skill 当成 Tool：</strong>只有指令，没有可执行能力，最终仍无法访问外部系统。</li><li><strong>把依赖声明当成授权：</strong>声明需要 MCP 服务，不代表用户已登录或拥有目标资源权限。</li><li><strong>只写正常路径：</strong>未定义重试、幂等、审批、失败退出和回滚，会在真实环境中产生副作用。</li><li><strong>相信执行器的成功提示：</strong>缺少独立读回与验收，容易交付空文档、错目录或不完整结果。</li><li><strong>脚本无限制继承权限：</strong>脚本仍应运行在受控文件系统、网络和凭据边界内。</li></ul>
+<h2>15. 面试回答模板</h2>
+<p>Skill 是面向特定任务的可复用工作流包。它通常通过 SKILL.md 描述触发条件、执行步骤和验证方式，并可附带参考资料、模板与确定性脚本。Host 先根据名称和描述选择 Skill，再按需加载完整指令，这叫渐进式披露。Skill 负责教 Agent 如何组合能力，但不会直接授予外部权限；真正的执行仍由 Tool 完成，并受 Tool 白名单、OAuth、资源 ACL、审批和沙箱控制。MCP 解决工具如何被统一发现和调用，Agent Loop 负责持续执行与观察，Plugin 则用于打包和分发 Skill 及连接器。</p>
+<h2>16. 自测问题</h2>
+<ol><li>为什么一个已经安装的 Skill 仍可能无法发送邮件或修改文档？</li><li>Progressive Disclosure 如何减少上下文占用？</li><li>为什么 <code>description</code> 同时影响可发现性和误触发风险？</li><li>什么情况适合写进 <code>scripts/</code>，什么情况应保留为自然语言指令？</li><li>Skill、MCP 与 Tool 在“落地飞书文档”任务中分别承担什么职责？</li></ol>
+<h2>17. 相关文档与官方资料</h2>
+<p><strong>知识库内延伸阅读：</strong></p>
+<ul><li>：理解模型如何发起工具调用，以及 Runtime 如何执行。</li><li>：学习 Schema、注册表、执行器与错误协议。</li><li>：理解 MCP 的工具发现、远程调用与协议边界。</li><li>：学习多租户鉴权、审批、幂等、隔离和审计。</li></ul>
+<p><strong>官方资料：</strong></p>
+<p><strong>最终记忆：</strong>Tool 决定“能做什么”，Skill 决定“应该怎样做”；Skill 可以组织能力，但不能创造权限。</p>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

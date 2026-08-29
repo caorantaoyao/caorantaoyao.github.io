@@ -90,7 +90,7 @@
 <main class="container">
   <article>
     <div class="article-meta">
-      <span class="article-date">2026.08.15</span>
+      <span class="article-date">2026.08.29</span>
       <span class="article-tag cloud">学科知识正文</span>
     </div>
     <h1 class="article-title">进程、线程与协程：一个后端服务怎样同时处理多个请求</h1>
@@ -358,6 +358,8 @@ async def get_order(order_id: int):
 <p>后端服务可以通过多进程、多线程和协程同时处理请求。多进程拥有相对独立的地址空间，可以利用多核并提供故障隔离，适合CPU密集型任务；线程共享进程内存，适合阻塞式I/O，但需要处理锁、数据竞争和CPython GIL；协程由事件循环调度，在遇到异步I/O时主动让出执行权，一个线程就能管理大量并发连接，适合数据库、Redis、RPC和模型API等I/O密集型场景。Python生产服务通常采用多Worker进程加事件循环协程的组合，同步阻塞库放入线程池，CPU密集型或长时间任务交给任务队列或独立计算服务。同时还必须限制并发，并处理连接池、超时、取消、幂等和共享状态。</p>
 <h2>30. 一句话总结</h2>
 <p><strong>进程负责资源隔离和多核并行，线程适配阻塞式I/O，协程利用等待时间处理更多请求；生产后端通常组合使用三者。</strong></p>
+<h2>31. 深入学习：Python 并发与调度模型</h2>
+<p>本页已经建立进程、线程与协程的整体框架。关于协程为什么比线程轻量、抢占式与协作式调度、<code>await</code> 的真实切换语义、线程池与进程池选择，以及 Agent 平台的混合并发架构，请继续阅读子专题：</p>
     </div>
   </article>
 </main>

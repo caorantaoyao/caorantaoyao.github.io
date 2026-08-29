@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FastAPI 服务模型：从 ASGI 到 Agent Worker — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.08.29</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">FastAPI 服务模型：从 ASGI 到 Agent Worker</h1>
+    <div class="article-body">
+<p><strong>核心结论：</strong>FastAPI 不是“每个请求一个线程”的服务器。FastAPI 是 ASGI Application，Uvicorn 是 ASGI Server。一个典型 Uvicorn Worker 是一个独立进程，内部通常运行一个事件循环；异步路由在事件循环上协作执行，同步路由由共享线程池承接，重要的长时间 Agent 任务则应进入独立任务 Worker。</p>
+<h2>1. 先建立正确心智模型</h2>
+<p>理解 FastAPI 时，不能只看路由函数。完整服务由网络服务器、ASGI 协议、Web 框架、进程、事件循环和线程池共同组成。FastAPI 负责路由、参数校验、依赖注入和业务函数；Uvicorn 负责监听端口、接收连接、解析 HTTP 或 WebSocket，并把请求按照 ASGI 规范交给 FastAPI。</p>
+<pre><code class="language-plaintext">客户端
+  ↓ HTTP / WebSocket
+Nginx 或负载均衡器（可选）
+  ↓
+Uvicorn：ASGI Server
+  ├─ 监听端口与接收连接
+  ├─ 解析 HTTP / WebSocket
+  ├─ 运行 Event Loop
+  └─ 调用 ASGI Application
+                 ↓
+             FastAPI
+             ├─ 中间件
+             ├─ 路由匹配
+             ├─ 参数校验
+             ├─ 依赖注入
+             ├─ 执行业务函数
+             └─ 构造响应</code></pre>
+<p>Uvicorn 和 FastAPI 通常处于同一个 Worker 进程内。它们是“服务器与应用”的逻辑边界，不是两个需要通过网络调用的微服务。</p>
+<h3>1.1 ASGI 解决了什么问题</h3>
+<p>ASGI 是服务器与 Python Web 应用之间的接口规范。它把服务器实现和框架实现解耦，因此 Uvicorn 可以运行 FastAPI、Starlette 等不同 ASGI 应用。一个 ASGI 应用在概念上是一个异步可调用对象：</p>
+<pre><code class="language-php">async def app(scope, receive, send):
+    ...</code></pre>
+<p><strong>scope</strong> 描述请求或连接，例如方法、路径、请求头和协议类型；<strong>receive</strong> 用于接收请求体或 WebSocket 消息；<strong>send</strong> 用于发送响应头、响应体或 WebSocket 消息。HTTP scope 通常对应一次请求，而 WebSocket scope 会持续到连接关闭。</p>
+<h2>2. 一次请求怎样经过 FastAPI</h2>
+<p>假设客户端调用 <code>POST /agent/runs</code>，请求会经历以下路径：</p>
+<ol><li>Uvicorn 从 Socket 接收网络数据并解析 HTTP 请求。</li><li>Uvicorn 为请求构造 ASGI scope，并准备 receive、send 通道。</li><li>事件循环创建并调度处理该请求的异步 Task。</li><li>请求依次经过 Trace、鉴权、CORS 等中间件。</li><li>FastAPI 匹配路由，读取路径、查询参数和请求体。</li><li>Pydantic 完成数据解析与校验，FastAPI 解析依赖关系。</li><li>FastAPI 执行路由函数和依赖函数。</li><li>返回值被转换成响应，Uvicorn 通过 send 发回客户端。</li></ol>
+<p>关键点是：一个请求通常对应事件循环中的一个异步 Task，而不是一个专属线程。请求等待数据库、Redis、LLM 或其他网络服务时，可以让出执行权，让事件循环继续推进其他请求。</p>
+<h2>3. async def 与 def 的执行位置</h2>
+<p>FastAPI 调用的对象</p>
+<p>执行位置</p>
+<p>适合场景</p>
+<p><code>async def</code> 路由</p>
+<p>Worker 的事件循环</p>
+<p>异步数据库、Redis、HTTP、LLM、SSE、WebSocket</p>
+<p>普通 <code>def</code> 路由</p>
+<p>AnyIO 共享线程池</p>
+<p>只能同步调用的阻塞式 SDK</p>
+<p><code>async def</code> 依赖</p>
+<p>Worker 的事件循环</p>
+<p>异步鉴权、异步数据库依赖</p>
+<p>普通 <code>def</code> 依赖</p>
+<p>AnyIO 共享线程池</p>
+<p>同步依赖或同步 SDK</p>
+<p>业务代码直接调用的普通函数</p>
+<p>当前线程</p>
+<p>FastAPI 不会自动替它切换线程</p>
+<h3>3.1 异步路由</h3>
+<pre><code class="language-php">@app.get(&quot;/users/{user_id}&quot;)
+async def get_user(user_id: int):
+    user = await database.get_user(user_id)
+    return user</code></pre>
+<p>执行到 <code>await</code> 时，如果数据库结果尚未返回，当前 Task 暂停并把执行权交还事件循环。事件循环可以去执行其他已经就绪的请求。数据库返回后，原 Task 再从等待点继续运行。因此单个 Worker 就能让大量 I/O 型请求处于“正在进行”状态。</p>
+<p>需要注意，<code>async def</code> 不会让代码自动变快。它只允许任务在等待期间让出执行权。如果函数一直进行 CPU 计算，或者调用阻塞函数而没有真正的 <code>await</code>，事件循环仍会被占住。</p>
+<h3>3.2 同步路由</h3>
+<pre><code class="language-php">@app.get(&quot;/legacy&quot;)
+def call_legacy_service():
+    return blocking_sdk_call()</code></pre>
+<p>FastAPI 会把普通 <code>def</code> 路由交给 Starlette 的共享线程池执行，再异步等待结果。这里不是“每个请求新建一个线程”，而是多个同步任务竞争同一个受限线程池。Starlette 当前默认的线程限制是 40 个 token，普通 def 路由、同步依赖、同步后台任务和部分文件操作会共同消耗这份容量。</p>
+<h3>3.3 最容易答错的情况</h3>
+<pre><code class="language-php">@app.get(&quot;/bad&quot;)
+async def bad():
+    result = blocking_sdk_call()
+    return result</code></pre>
+<p>FastAPI 只会自动调度它亲自调用的路由函数和依赖函数。上面的 <code>blocking_sdk_call()</code> 是业务代码直接调用的普通函数，它不会自动进入线程池，而会阻塞事件循环。同一个 Worker 上的其他 HTTP 请求、SSE 和 WebSocket 事件都可能因此延迟。</p>
+<p>可以把整个路由改成普通 <code>def</code>，也可以显式桥接到线程池：</p>
+<pre><code class="language-php">import anyio
+
+@app.get(&quot;/legacy&quot;)
+async def legacy():
+    result = await anyio.to_thread.run_sync(blocking_sdk_call)
+    return result</code></pre>
+<p>显式放进线程池仍应配合并发上限、超时和背压。线程池容量有限，下游数据库和第三方 API 的容量也有限，不能把“移到线程”理解成“可以无限并发”。</p>
+<h2>4. Worker、进程、事件循环与线程池</h2>
+<p>默认启动 <code>uvicorn main:app</code> 时，通常只有一个 Worker 进程：</p>
+<pre><code class="language-plaintext">一个 Uvicorn Worker 进程
+├─ 一个独立 Python 解释器和内存空间
+├─ 一个 FastAPI 应用实例
+├─ 一个 Event Loop
+├─ 多个异步请求 Task
+├─ 一个 AnyIO 共享线程池
+├─ 一个数据库连接池
+└─ 一个 HTTP / LLM 客户端连接池</code></pre>
+<p>单个 Worker 已能借助事件循环并发处理大量 I/O 请求。使用 <code>--workers 4</code> 启动的是四个独立进程，不是四个线程：</p>
+<pre><code class="language-plaintext">Uvicorn 进程管理器
+├─ Worker 1：Event Loop + FastAPI + 连接池
+├─ Worker 2：Event Loop + FastAPI + 连接池
+├─ Worker 3：Event Loop + FastAPI + 连接池
+└─ Worker 4：Event Loop + FastAPI + 连接池</code></pre>
+<p>多 Worker 可以利用多个 CPU 核心，也能提供一定的进程级故障隔离。但每个 Worker 有自己的普通 Python 内存。一个 1 GB 的本地模型如果由四个 Worker 分别加载，理论上可能占用约 4 GB 内存。</p>
+<h3>4.1 全局变量为什么并不全局</h3>
+<pre><code class="language-php">jobs = {}
+counter = 0</code></pre>
+<p>四个 Worker 会得到四份独立的 <code>jobs</code> 和 <code>counter</code>。第一次请求写入 Worker 1 的字典，第二次查询如果被分配到 Worker 3，就可能看不到前一次写入。因此用户会话、Agent State、Checkpoint、任务进度和分布式锁应放到数据库或 Redis。</p>
+<p><code>asyncio.Lock</code> 只能协调当前事件循环中的协程，<code>threading.Lock</code> 也不能保护其他进程。需要跨 Worker 协调时，应使用数据库约束、Redis 锁、消息队列或其他外部协调机制。</p>
+<h2>5. Lifespan 与连接池</h2>
+<p>数据库连接池、HTTP 客户端和模型客户端不应在每个请求中重复创建。FastAPI 推荐使用 lifespan 在 Worker 启动时初始化资源，在 Worker 退出时释放资源。</p>
+<pre><code class="language-php">from contextlib import asynccontextmanager
+
+import httpx
+from fastapi import FastAPI
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.http_client = httpx.AsyncClient()
+    app.state.db_pool = await create_db_pool()
+
+    yield
+
+    await app.state.http_client.aclose()
+    await app.state.db_pool.close()
+
+app = FastAPI(lifespan=lifespan)</code></pre>
+<p><code>yield</code> 之前的代码在开始接收请求前执行，<code>yield</code> 之后的代码在服务关闭时执行。多 Worker 情况下，每个 Worker 都会执行自己的 lifespan，所以数据库池、HTTP 连接池和模型对象通常都是每个 Worker 一份。</p>
+<p>连接数需要按照 Worker 总数计算。例如四个 Worker、每个数据库连接池上限 20，数据库可能面对约 80 个连接；如果连接池还允许 overflow，也要把额外连接计入总量。请求级 ORM Session 应从当前 Worker 的连接池取得，并在请求完成后归还，不能把一个 Session 作为全局对象供所有请求共享。</p>
+<h2>6. BackgroundTasks 不等于任务队列</h2>
+<p>FastAPI 的 <code>BackgroundTasks</code> 可以在响应发送后继续完成短小操作，例如写审计日志或发送非关键通知：</p>
+<pre><code class="language-php">from fastapi import BackgroundTasks
+
+@app.post(&quot;/register&quot;)
+async def register(email: str, background_tasks: BackgroundTasks):
+    background_tasks.add_task(send_email, email)
+    return {&quot;message&quot;: &quot;注册成功&quot;}</code></pre>
+<p>它仍然运行在当前 FastAPI Worker 进程中。同步后台函数还会使用共享线程池。进程异常退出或服务重启时，它没有消息队列那样的持久化、确认、重试与恢复保证。</p>
+<p>因此 BackgroundTasks 适合短小、可重做、丢失后影响较低的工作，不适合长时间 Agent Loop、必须重试的任务、CPU 密集计算或需要 Checkpoint 恢复的工作流。后台任务也不应直接复用请求依赖里即将关闭的数据库 Session；更稳妥的做法是传递 <code>user_id</code>、<code>run_id</code> 等稳定标识，在后台任务内部重新获取自己的资源。</p>
+<h2>7. AI Agent 平台中的服务模型</h2>
+<p>Agent 平台通常应把快速响应的控制面和长时间运行的执行面分开：</p>
+<pre><code class="language-plaintext">FastAPI 控制面
+├─ 接收请求与身份认证
+├─ 创建 Agent Run 记录
+├─ 写入数据库
+├─ 向消息队列投递任务
+├─ 返回 run_id
+└─ 通过 SSE / WebSocket 推送事件
+              ↓
+          消息队列
+              ↓
+Agent Worker 执行面
+├─ 执行 Agent Loop
+├─ 调用 LLM 与 Tool
+├─ 保存 State 与 Checkpoint
+├─ 处理超时、重试和取消
+└─ 持久化进度与 Trace</code></pre>
+<pre><code class="language-php">@app.post(&quot;/runs&quot;)
+async def create_run(request: RunRequest):
+    run_id = await run_store.create(request)
+
+    await message_queue.publish({
+        &quot;run_id&quot;: run_id,
+    })
+
+    return {
+        &quot;run_id&quot;: run_id,
+        &quot;status&quot;: &quot;queued&quot;,
+    }</code></pre>
+<p>客户端得到 run_id 后，可以轮询状态接口，也可以通过 SSE 接收单向事件流，或者通过 WebSocket 进行双向交互。即使只有一台云服务器，也可以在同一台机器上分别运行 FastAPI 进程、Agent Worker 进程、Redis 和数据库。这里首先是职责、资源和故障边界的拆分，不要求一开始就拥有很多服务器。</p>
+<h3>7.1 不同任务应该放在哪里</h3>
+<p>任务类型</p>
+<p>推荐执行位置</p>
+<p>异步数据库、Redis、HTTP、LLM 调用</p>
+<p><code>async def</code> 路由或异步服务函数</p>
+<p>只能同步调用的第三方 SDK</p>
+<p>受限线程池，并设置超时和并发上限</p>
+<p>很短的响应后操作</p>
+<p><code>BackgroundTasks</code></p>
+<p>纯 Python CPU 密集计算</p>
+<p>进程池或独立计算 Worker</p>
+<p>长时间 Agent Loop</p>
+<p>持久化消息队列与 Agent Worker</p>
+<p>Agent State、Checkpoint、任务进度</p>
+<p>数据库或 Redis</p>
+<p>持续推送执行事件</p>
+<p>FastAPI 的 SSE 或 WebSocket 接口</p>
+<h2>8. 常见错误</h2>
+<p><strong>在 async 路由里使用 requests、time.sleep 或同步数据库驱动。</strong>这些调用会阻塞事件循环。应优先选择异步客户端，或者显式放入受限线程池。</p>
+<p><strong>认为 def 路由可以解决 CPU 密集任务。</strong>def 路由只是把任务转移到线程池。默认启用 GIL 的 CPython 中，纯 Python CPU 计算并不会因为进入线程池就获得理想的多核并行，还会长期占用线程池容量。应使用进程池或独立计算 Worker。</p>
+<p><strong>使用全局字典保存 Agent 任务状态。</strong>多 Worker 不共享内存，服务重启也会清空状态。应将关键状态持久化。</p>
+<p><strong>使用 asyncio.create_task 承载关键长任务。</strong>它只创建当前进程内的异步任务，没有持久化确认和恢复保证。适合生命周期受控的进程内协作，不适合作为可靠任务队列。</p>
+<p><strong>盲目增加 Worker 和线程数。</strong>更多 Worker 会同步放大内存、数据库连接池和 HTTP 连接池；更多线程也会增加内存、上下文切换以及下游压力。容量应根据 CPU、内存、下游限额和延迟指标压测决定。</p>
+<p><strong>没有背压、超时和并发上限。</strong>FastAPI 可以快速接收大量请求，但数据库、LLM 服务和 Tool 通常都有容量上限。应在入口、任务队列和下游调用处设置并发限制、队列长度、超时、重试预算和取消策略。</p>
+<h2>9. 面试回答</h2>
+<p>FastAPI 本质上是一个 ASGI Application，Uvicorn 是负责网络连接、协议解析、事件循环和进程管理的 ASGI Server。一个 Uvicorn Worker 是一个独立进程，通常拥有自己的事件循环、FastAPI 实例、共享线程池和连接池。async def 路由直接在事件循环中协作执行，普通 def 路由和同步依赖由 Starlette 放入 AnyIO 线程池。多 Worker 可以利用多核，但进程之间不共享普通全局变量，因此用户会话、Agent State 和 Checkpoint 应放到数据库或 Redis。短小的响应后操作可以使用 BackgroundTasks，而 CPU 密集或需要可靠重试、恢复的长时间 Agent 任务应交给独立任务 Worker。</p>
+<h2>10. 自测问题</h2>
+<ol><li>为什么一个 Uvicorn Worker 可以同时维护大量正在等待 I/O 的请求？</li><li>为什么 async def 路由里直接调用同步 SDK 仍会阻塞事件循环？</li><li>四个 Worker、每个数据库池 20 个连接时，数据库需要承受多少潜在连接？</li><li>为什么 BackgroundTasks 不适合运行一个持续十分钟且必须恢复的 Agent Loop？</li><li>Agent State 为什么不能只保存在模块级全局字典中？</li></ol>
+<h2>参考资料</h2>
+<ul><li><a href="https://www.uvicorn.org/concepts/asgi/" target="_blank" rel="noopener">Uvicorn：ASGI</a></li><li><a href="https://fastapi.tiangolo.com/async/" target="_blank" rel="noopener">FastAPI：Concurrency and async / await</a></li><li><a href="https://fastapi.tiangolo.com/deployment/server-workers/" target="_blank" rel="noopener">FastAPI：Server Workers</a></li><li><a href="https://www.starlette.io/threadpool/" target="_blank" rel="noopener">Starlette：Thread Pool</a></li><li><a href="https://www.starlette.io/lifespan/" target="_blank" rel="noopener">Starlette：Lifespan</a></li><li><a href="https://fastapi.tiangolo.com/tutorial/background-tasks/" target="_blank" rel="noopener">FastAPI：Background Tasks</a></li></ul>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

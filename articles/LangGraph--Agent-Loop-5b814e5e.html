@@ -90,7 +90,7 @@
 <main class="container">
   <article>
     <div class="article-meta">
-      <span class="article-date">2026.08.27</span>
+      <span class="article-date">2026.08.29</span>
       <span class="article-tag cloud">学科知识正文</span>
     </div>
     <h1 class="article-title">LangGraph：把 Agent Loop 工程化为可持久化状态图</h1>
@@ -376,6 +376,8 @@ LangGraph：单次 Run 的状态与控制流
 <p>以下资料均来自 LangChain / LangGraph 官方：</p>
 <h2>19. 一句话总结</h2>
 <p><strong>LangGraph 把 Agent Loop 显式建模为 State、Node 和 Edge：State 保存进度，Node 执行模型、工具或确定性代码，Edge 控制下一步；Checkpointer 负责保存执行现场，Interrupt 与 Command 负责暂停恢复，Subgraph 负责模块化和多 Agent 编排。它让 Agent 的执行过程变得可控制、可恢复、可观察，但权限、幂等、外部存储和验收仍需要平台自己正确设计。</strong></p>
+<h2>20. 深入学习：Checkpoint 专题</h2>
+<p>本页已经说明 Checkpointer、Interrupt 与 Durable Execution 的整体位置。关于快照字段、super-step、Pending Writes、恢复流程、幂等键、Outbox、并发与版本迁移，请继续阅读子专题：</p>
     </div>
   </article>
 </main>

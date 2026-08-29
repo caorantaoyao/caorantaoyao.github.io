@@ -90,7 +90,7 @@
 <main class="container">
   <article>
     <div class="article-meta">
-      <span class="article-date">2026.08.28</span>
+      <span class="article-date">2026.08.29</span>
       <span class="article-tag cloud">学科知识正文</span>
     </div>
     <h1 class="article-title">MCP 与 Tool：工具发现、远程调用与协议边界</h1>
@@ -243,9 +243,101 @@ agent/
 <p>业务服务不依赖 MCP；MCP Server 只把已有 Tool 暴露为标准协议。这样即使将来更换 Agent 框架或通信方式，核心业务逻辑仍然可以复用。</p>
 <h2>10. Tool、Resource 与 RAG 的关系</h2>
 <p>如果模型需要主动查询实时数据库，可以提供 Tool；如果只是读取一个可寻址的静态资源，可以暴露 Resource；如果要从大量文档中按语义召回相关片段，通常由 RAG 或搜索 Tool 完成。MCP 可以承载这些接口，但不会替你完成切分、向量化、重排或权限过滤。</p>
-<h2>11. 面试回答</h2>
-<p>MCP 是连接 Agent 应用与外部能力的标准协议。MCP Server 通过 tools/list 暴露 Tool 名称、描述和 Schema，模型选择工具后，Host 先做本地的参数校验、鉴权和审批，再由 MCP Client 发送 tools/call，Server 执行业务逻辑并返回结构化或文本结果。MCP 解决的是工具发现和调用协议，不负责业务实现，也不是天然的安全边界。多租户身份、最小权限、幂等、沙箱和 Prompt Injection 防护仍然要由 Tool Gateway 与 Server 端实现。</p>
-<h2>12. 延伸阅读</h2>
+<h2>11. MCP 与 Function Calling、普通 API 的区别</h2>
+<p>这三个概念处在不同层次。Function Calling 是模型表达“我要调用哪个函数、传什么参数”的结构化输出机制；MCP 是 Host 与外部能力提供者之间进行发现和调用的标准协议；普通 API 则是业务系统真正提供的数据或操作接口。</p>
+<p>概念</p>
+<p>主要解决的问题</p>
+<p>典型内容</p>
+<p>Function Calling</p>
+<p>模型怎样表达调用意图</p>
+<p>函数名、arguments、输入 Schema</p>
+<p>MCP</p>
+<p>AI 应用怎样发现并调用外部能力</p>
+<p>Host、Client、Server、tools/list、tools/call</p>
+<p>普通 API</p>
+<p>业务系统怎样对外提供功能</p>
+<p>HTTP 接口、SDK、SQL 或内部 RPC</p>
+<pre><code class="language-plaintext">普通 API / SDK / 数据库
+          ↑
+      MCP Server
+          ↑ MCP
+Host 获取 Tool Schema
+          ↓
+转换为模型支持的 Function Calling 格式
+          ↓
+模型输出工具名和 arguments</code></pre>
+<p>因此，MCP 没有取代 API，MCP Server 通常只是把已有 API、SDK、数据库或本地程序包装成面向 AI 应用的统一接口。模型也通常不需要理解 MCP，它只需要理解 Host 最终交给它的 Tool Schema。</p>
+<p><a href="https://modelcontextprotocol.io/specification/2025-06-18/architecture" target="_blank" rel="noopener">MCP 官方架构说明</a></p>
+<h2>12. stdio 与 Streamable HTTP</h2>
+<p>MCP 使用 JSON-RPC 表达消息，但消息可以通过不同传输方式发送。最常见的是 stdio 和 Streamable HTTP。</p>
+<p>传输方式</p>
+<p>运行方式</p>
+<p>适合场景</p>
+<p>主要注意点</p>
+<p>stdio</p>
+<p>Host 启动本地 MCP Server 子进程，通过标准输入输出交换消息</p>
+<p>文件系统、Git、本地开发工具、单机插件</p>
+<p>stdout 只能输出协议消息，日志应写 stderr；进程权限应尽量收窄</p>
+<p>Streamable HTTP</p>
+<p>MCP Server 独立部署，Host 连接统一 HTTP 端点</p>
+<p>飞书、GitHub、企业数据库、多用户 Agent 平台</p>
+<p>需要认证、Origin 校验、租户隔离、限流和连接管理</p>
+<p>选择原则很简单：能力只服务本机并且需要访问本地资源时，优先 stdio；需要跨机器、多人共享、独立扩缩容或统一运维时，使用 Streamable HTTP。旧式 HTTP 加 SSE 传输属于兼容路径，新服务优先采用 Streamable HTTP。</p>
+<p><a href="https://modelcontextprotocol.io/specification/draft/basic/transports" target="_blank" rel="noopener">MCP 官方传输协议</a></p>
+<h2>13. Python SDK v2 最小实现</h2>
+<p>下面示例按照 2026 年 8 月官方 Python SDK v2 稳定线编写。它把一个普通 Python 函数暴露为 MCP Tool，类型注解会参与生成输入 Schema。</p>
+<pre><code class="language-plaintext">uv add &quot;mcp[cli]&quot;</code></pre>
+<pre><code class="language-php">from mcp.server import MCPServer
+
+mcp = MCPServer(&quot;recruitment-knowledge-base&quot;)
+
+
+@mcp.tool()
+def search_notes(keyword: str) -&gt; list[str]:
+    &quot;&quot;&quot;搜索秋招知识库中的笔记。&quot;&quot;&quot;
+    notes = [
+        &quot;Redis：缓存、持久化与分布式锁&quot;,
+        &quot;消息队列：削峰、解耦与异步&quot;,
+        &quot;MCP：Host、Client 与 Server&quot;,
+    ]
+    return [note for note in notes if keyword.lower() in note.lower()]</code></pre>
+<pre><code class="language-plaintext">uv run mcp run server.py --transport streamable-http</code></pre>
+<pre><code class="language-php">import asyncio
+from mcp import Client
+
+
+async def main() -&gt; None:
+    async with Client(&quot;http://localhost:8000/mcp&quot;) as client:
+        result = await client.call_tool(
+            &quot;search_notes&quot;,
+            {&quot;keyword&quot;: &quot;Redis&quot;},
+        )
+        print(result.structured_content)
+
+
+asyncio.run(main())</code></pre>
+<p>生产代码不要把数据库访问、鉴权和核心业务逻辑直接写进协议装饰器。MCP Server 应保持为薄适配层，调用独立的领域服务和 Tool Gateway。SDK 仍在快速演进；如果项目使用 v1 的 <code>FastMCP</code> API，应锁定依赖版本，并按官方迁移指南升级。</p>
+<p><a href="https://github.com/modelcontextprotocol/python-sdk" target="_blank" rel="noopener">MCP 官方 Python SDK</a></p>
+<h2>14. MCP 与 Agent Tool 白名单</h2>
+<p>MCP Server 的 <code>tools/list</code> 只表示“这个 Server 提供哪些 Tool”，并不表示当前 Agent 自动获得了全部权限。Host 应先把工具同步进 Tool Registry，再根据 Agent、租户、用户、环境和资源范围进行确定性过滤，只把允许的 Tool Schema 交给模型。</p>
+<pre><code class="language-plaintext">MCP tools/list
+      ↓
+Tool Registry
+      ↓
+Agent 白名单与租户、用户、环境硬过滤
+      ↓
+相关性 Top-K
+      ↓
+模型选择 Tool
+      ↓
+tools/call
+      ↓
+Tool Gateway 按具体参数再次鉴权、审批和审计</code></pre>
+<p>这里存在两道不同的安全关卡：Host 控制模型能看见哪些工具；Tool Gateway 和 MCP Server 控制这一次调用是否真的可以执行。即使旧会话中残留了某个 Tool Schema，执行层也必须能够拒绝已经撤权的调用。</p>
+<ul><li>：Agent Tool 白名单、Default Deny、策略版本与运行时二次鉴权。</li><li>：Tool Gateway 的多租户鉴权、幂等、审批与隔离。</li></ul>
+<h2>15. 面试回答</h2>
+<p>MCP 是连接 AI Host 与外部能力的标准协议，采用 Host、Client、Server 架构。Server 可以暴露 Tool、Resource 和 Prompt；Client 通过 tools/list 发现工具，通过 tools/call 发起调用，消息通常经 stdio 或 Streamable HTTP 传输。Function Calling 解决模型怎样表达调用意图，MCP 解决 Host 怎样发现和调用外部能力，真实业务仍由 API、SDK、数据库或本地程序完成。MCP 本身不是安全边界：Host 需要按 Agent 白名单过滤可见工具，执行阶段还要由 Tool Gateway 和 Server 检查用户、租户、资源、参数与审批状态。</p>
+<h2>16. 延伸阅读</h2>
 <ul><li>：本地 Python Tool 的实现方法。</li><li>：MCP Tool 进入生产环境后的安全边界。</li><li><a href="https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2026-07-28/server/tools.mdx" target="_blank" rel="noopener">MCP 官方规范：Tools</a></li><li><a href="https://modelcontextprotocol.io/specification/2025-11-25/schema" target="_blank" rel="noopener">MCP 官方 Schema Reference</a></li></ul>
     </div>
   </article>

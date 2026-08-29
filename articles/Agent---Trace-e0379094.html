@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent 评测：从 Trace 数据到质量闭环 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.08.29</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">Agent 评测：从 Trace 数据到质量闭环</h1>
+    <div class="article-body">
+<p>Agent Trace 让我们看见一次任务经历了什么，评测则判断这次任务完成得好不好。二者结合后，系统才能从线上失败中提取样本，在离线环境回归验证，再把改进版本安全地发布回线上。</p>
+<p><strong>核心结论：</strong>Trace 提供证据，Evaluation 根据标准解释证据。没有 Trace，评测难以定位失败环节；没有评测，Trace 只是大量运行记录，无法证明新版本是否更好。</p>
+<h2>1. Trace 与评测分别回答什么</h2>
+<p>能力</p>
+<p>核心问题</p>
+<p>典型产物</p>
+<p><strong>Trace</strong></p>
+<p>这一次任务发生了什么，为什么成功或失败？</p>
+<p>模型、检索、Tool、状态变化、错误、耗时和成本组成的执行链</p>
+<p><strong>Evaluation</strong></p>
+<p>一个版本在一组任务上的质量如何？</p>
+<p>数据集、评分标准、逐样本结果、聚合指标和回归报告</p>
+<p><strong>Monitoring</strong></p>
+<p>生产系统是否正在恶化？</p>
+<p>成功率、延迟、成本、错误率和安全告警看板</p>
+<p>Trace 通常关注单次 Run，评测通常关注一批样本或两个版本的比较，监控则持续观察生产流量。三个视角可以使用同一批遥测数据，但目的不同。</p>
+<h2>2. 一套评测系统的四个基本对象</h2>
+<p><strong>Eval Case。</strong>一个测试样本，至少包含输入、测试环境、期望结果或必须满足的约束，以及评分方法。例如“创建文档后必须位于指定父节点，且不得出现同名重复页面”。</p>
+<p><strong>Eval Dataset。</strong>多个 Eval Case 组成的数据集。它不应只包含顺利案例，还要覆盖边界条件、历史故障、攻击样本和高风险操作。</p>
+<p><strong>Grader。</strong>负责评分的程序或人，可以是精确匹配、规则代码、模型裁判或人工评审。</p>
+<p><strong>Eval Run。</strong>某个确定版本的 Agent 在一个确定数据集上的完整运行。结果需要绑定模型、Prompt、Skill、Tool、代码、配置、数据集和 Grader 版本，才能复现和比较。</p>
+<h2>3. 为什么不能只看最终回答</h2>
+<p>Agent 的最终文本正确，不代表整个过程正确。例如 Agent 可能先访问了错误租户的数据，最后又碰巧生成了正确答案；也可能重复创建两份文档，只把其中一份链接返回给用户。只评分最后一句话，会漏掉这些过程问题。</p>
+<p>因此 Agent 评测至少要同时覆盖三层：</p>
+<ul><li><strong>Outcome Evaluation：</strong>用户目标是否真正完成。</li><li><strong>Trajectory Evaluation：</strong>执行路径是否满足必要约束，Tool 选择、参数、顺序和重试是否合理。</li><li><strong>Component Evaluation：</strong>检索、模型、Tool、Memory、规划和安全组件分别表现如何。</li></ul>
+<h2>4. 最终结果评测：任务是否完成</h2>
+<p>最终结果评测应尽量检查真实世界状态，而不只检查 Agent 自己的口头声明。创建文档后重新查询文档，修改数据库后重新读取数据，发送消息后核对收件人和消息内容，这些都属于独立验收。</p>
+<p>常见指标包括任务成功率、字段准确率、答案正确性、引用正确性、约束满足率和人工接管率。对于有明确标准答案的任务，可以使用精确匹配或程序校验；对于开放式任务，则需要 Rubric、模型裁判或人工评审。</p>
+<h2>5. 轨迹评测：Agent 是怎样完成任务的</h2>
+<p>轨迹评测使用 Trace 中的 Span、Tool Call 和状态变化检查执行过程。常见检查项包括：</p>
+<ul><li>是否选择了允许且合适的 Tool。</li><li>参数 Schema、租户标识和目标资源是否正确。</li><li>是否执行了必须的权限检查、幂等检查和写后回读。</li><li>是否产生无意义的重复调用、循环或高成本模型调用。</li><li>失败后是否正确重试、改道、请求审批或停止。</li><li>是否违反 Tool 白名单、数据边界和风险策略。</li></ul>
+<p>轨迹评测不应把某一条固定路径当成唯一正确答案。很多任务存在多条同样合理的执行路线，更稳妥的做法是定义必须发生的步骤、禁止发生的步骤和资源预算，而不是要求每个 Span 顺序完全一致。</p>
+<h2>6. 组件评测：定位具体是哪一层变差</h2>
+<p>组件</p>
+<p>常见评测问题</p>
+<p>示例指标</p>
+<p>RAG</p>
+<p>正确文档是否被召回并排在前面？</p>
+<p>Recall@K、MRR、Context Precision、引用命中率</p>
+<p>Tool Routing</p>
+<p>是否选择正确 Tool，参数是否有效？</p>
+<p>工具选择准确率、参数校验通过率</p>
+<p>Memory</p>
+<p>是否写入正确记忆，并在需要时召回？</p>
+<p>写入准确率、召回率、过期信息使用率</p>
+<p>Planning</p>
+<p>计划是否覆盖必要步骤并能够适应反馈？</p>
+<p>步骤覆盖率、无效步骤数、重规划成功率</p>
+<p>Guardrail</p>
+<p>是否拦截越权、注入和敏感数据泄漏？</p>
+<p>攻击拦截率、误杀率、越权执行数</p>
+<p>Final Response</p>
+<p>回答是否正确、完整、可验证？</p>
+<p>正确率、事实一致性、引用准确率</p>
+<p>组件评测能回答“为什么总分下降”。如果结果正确率变差，但检索 Recall@K 没有变化，而 Tool 参数错误率明显升高，那么问题更可能出在 Tool Calling 或参数生成，而不是知识库。</p>
+<h2>7. 工程与效率指标</h2>
+<p>一个正确但极慢、极贵或经常超时的 Agent 仍然不能投入生产。评测报告应同时包含质量和工程指标：</p>
+<ul><li>任务成功率、错误率、超时率和重试成功率。</li><li>P50、P95、P99 端到端延迟，以及各 Span 的耗时占比。</li><li>平均 Agent Loop 次数、模型调用次数和 Tool 调用次数。</li><li>输入 Token、输出 Token、缓存命中和单任务成本。</li><li>人工确认率、人工接管率和恢复成功率。</li></ul>
+<p>不要只用加权总分掩盖硬约束。安全违规、跨租户泄漏和未授权写入通常应该直接判定失败，即使回答质量和延迟得分很高。</p>
+<h2>8. 离线评测：发布前的回归测试</h2>
+<p>离线评测是在固定环境中，让候选版本运行一组可复现样本，然后与基线版本比较。它适合验证 Prompt、模型、Skill、Tool 或工作流改动是否引入回归。</p>
+<pre><code class="language-plaintext">版本化评测集
+    ↓
+运行基线 Agent 与候选 Agent
+    ↓
+收集最终结果与完整 Trace
+    ↓
+规则 Grader、模型 Grader、人工抽检
+    ↓
+比较质量、安全、延迟与成本
+    ↓
+通过发布门禁或阻止上线</code></pre>
+<p>离线环境需要尽量固定外部依赖。数据库、搜索结果、时间和第三方 API 如果每次都变化，就难以判断差异究竟来自 Agent 版本还是测试环境。常见做法是使用测试租户、Mock Tool、固定快照或可重复 Fixture。</p>
+<h2>9. 在线评测：真实流量中的质量验证</h2>
+<p>离线测试无法覆盖所有真实输入，因此通过回归门禁后还需要灰度发布、A/B Test 或影子流量。在线阶段重点观察任务完成率、用户反馈、人工接管、错误率、延迟、成本和安全告警。</p>
+<p>点赞、停留时间和重复提问等行为只是代理信号，并不天然等于正确性。例如用户没有投诉，可能是因为已经放弃使用。因此线上信号应该与抽样人工评审、真实状态校验和失败 Trace 分析结合。</p>
+<h2>10. 如何从 Trace 构建评测数据集</h2>
+<pre><code class="language-plaintext">线上 Agent 运行
+      ↓
+采集正常、失败和高风险 Trace
+      ↓
+脱敏、去重、聚类并标注失败原因
+      ↓
+转化为回归、边界和对抗样本
+      ↓
+修改 Prompt、Skill、模型或 Tool
+      ↓
+离线评测与灰度发布
+      ↓
+继续收集新的线上 Trace</code></pre>
+<p>数据集应至少包含四类样本：代表正常业务分布的核心集、来自历史故障的回归集、长尾与边界条件集、越权和 Prompt Injection 等安全对抗集。容易出现的数据不一定最重要，高风险低频任务也应保留足够覆盖。</p>
+<p>生产 Trace 进入数据集前必须进行敏感信息脱敏、租户隔离和访问控制。正常请求可以按策略采样，但失败、越权、超时和高成本请求通常应提高保留优先级。</p>
+<h2>11. Grader：谁来给 Agent 打分</h2>
+<p><strong>确定性 Grader。</strong>使用字符串、JSON Schema、数据库状态、单元测试或业务规则评分。可复现、便宜，适合有明确答案和硬约束的任务。</p>
+<p><strong>模型 Grader。</strong>由另一个模型按照 Rubric 判断正确性、完整性、相关性或风格。适合开放式文本，但结果具有不确定性。</p>
+<p><strong>人工评审。</strong>适合高风险、主观标准或用于校准模型裁判的样本。成本最高，但不能完全被自动化替代。</p>
+<p>生产系统通常组合三者：程序规则先检查硬约束，模型裁判处理语义质量，人工抽检校准模型裁判并处理争议样本。</p>
+<h2>12. LLM-as-a-Judge 的使用边界</h2>
+<p>LLM-as-a-Judge 适合没有唯一标准答案的任务，但它不是绝对真值。模型可能偏爱更长的答案、偏爱特定措辞、对自己生成的内容更宽松，也可能被待评测文本中的指令干扰。</p>
+<p>使用模型裁判时应：</p>
+<ul><li>给出清晰、可分解的 Rubric，而不是只问“答案好不好”。</li><li>固定 Judge 模型、Prompt、温度和版本。</li><li>优先采用成对比较，必要时随机交换候选答案顺序。</li><li>用人工标注集校准一致率、误判率和阈值。</li><li>把评分理由和引用证据一并保存，便于审查。</li><li>安全、权限和真实状态等硬约束优先使用确定性检查。</li></ul>
+<h2>13. 非确定性：为什么同一案例要运行多次</h2>
+<p>模型采样、检索排序、外部 Tool 和并发执行都可能让同一输入产生不同轨迹。只运行一次无法代表真实稳定性。重要案例应重复运行，报告成功率、均值、分位数和波动范围，并记录随机种子、温度和外部依赖快照。</p>
+<p>如果产品允许多次尝试，可以报告多次尝试至少成功一次的指标；如果用户要求一次调用就可靠，则应重点看单次成功率。指标必须符合真实产品交互，不能用大量重试掩盖首轮失败。</p>
+<h2>14. 安全评测</h2>
+<p>Agent 能够调用外部系统，因此安全评测必须覆盖“模型输出安全”和“实际动作安全”两个层面。建议重点测试：</p>
+<ul><li>网页、文档、邮件和 MCP 返回内容中的 Prompt Injection。</li><li>Tool 白名单、参数范围和资源 ACL 是否能够阻止越权。</li><li>是否会访问其他用户或其他租户的数据。</li><li>删除、发送、支付等高风险写操作是否要求确认或审批。</li><li>Trace、日志和评测集是否泄露 Token、Cookie、PII 或商业数据。</li><li>失败或超时后是否发生重复写入和不可控重试。</li></ul>
+<p>安全失败通常应设置为发布阻断项，而不是与普通质量分数平均。</p>
+<h2>15. Agent 平台中的评测架构</h2>
+<pre><code class="language-plaintext">Agent Runtime
+  ├── 模型、RAG、Tool、Memory Span
+  └── 最终任务结果
+          ↓
+Trace Collector → Trace Store
+          ↓              ↓
+   线上监控与告警     Dataset Builder
+                          ↓
+                      Eval Runner
+                          ↓
+            规则 Grader / 模型 Grader / 人工评审
+                          ↓
+                   报告、对比与发布门禁</code></pre>
+<p>关键关联键包括 <code>trace_id</code>、<code>span_id</code>、<code>eval_case_id</code>、<code>eval_run_id</code> 和各类版本号。这样既能从低分样本跳转到对应 Trace，也能从异常 Span 找到它属于哪次评测和哪个版本。</p>
+<h2>16. 实例：评测“落地成飞书文档”</h2>
+<p>任务输入是“把当前知识落地成飞书文档”。最终结果评测可以检查页面是否真实存在、标题和父节点是否正确、正文是否包含指定知识点，以及返回链接是否可访问。</p>
+<p>轨迹评测可以检查：</p>
+<ol><li>是否先验证个人飞书账号和用户身份。</li><li>是否查询父节点并检查同名页面。</li><li>是否选择语义正确的知识库位置。</li><li>是否只创建一次 Wiki 节点。</li><li>是否在写入后回读层级、目录和区分性关键词。</li><li>是否没有访问企业飞书或其他租户资源。</li></ol>
+<p>工程指标还可以统计端到端耗时、飞书 API 调用次数、失败重试次数和单任务成本。这样评测的对象就不只是“文章写得像不像”，而是 Agent 是否正确、安全、稳定地完成了真实任务。</p>
+<h2>17. 常见错误</h2>
+<ul><li><strong>只评最终回答：</strong>无法发现越权访问、重复写入和错误 Tool 路径。</li><li><strong>只看一个总分：</strong>安全失败可能被语言质量和速度分数抵消。</li><li><strong>评测集全是简单正常样本：</strong>线上长尾、故障和攻击输入没有覆盖。</li><li><strong>模型裁判没有人工校准：</strong>评分漂移后仍被当成真实质量。</li><li><strong>不固定版本和环境：</strong>无法判断回归来自代码、模型还是外部依赖。</li><li><strong>把生产 Trace 原样加入数据集：</strong>可能造成隐私泄漏和跨租户数据污染。</li><li><strong>过度约束唯一轨迹：</strong>把另一条同样正确的执行路线错误判失败。</li></ul>
+<h2>18. 面试回答模板</h2>
+<p>Agent Trace 记录一次任务中模型、检索、Tool、状态变化、错误、耗时和成本组成的完整执行链；评测则用数据集和 Grader 判断一个版本的任务成功率、执行轨迹、组件质量、安全性与工程效率。生产中的失败 Trace 可以经过脱敏和标注后沉淀为回归样本，新版本在固定数据集上进行离线评测，通过发布门禁后再灰度上线，并继续从线上 Trace 中发现新问题。这样就形成 Trace、评测、发布和监控的持续质量闭环。</p>
+<h2>19. 落地检查清单</h2>
+<p class="todo">☐ 是否为 Trace、Span、Eval Case 和 Eval Run 建立稳定关联键？</p>
+<p class="todo">☐ 是否同时评测最终结果、执行轨迹和关键组件？</p>
+<p class="todo">☐ 是否覆盖正常、回归、边界和安全对抗样本？</p>
+<p class="todo">☐ 是否优先用确定性规则检查权限、状态和副作用？</p>
+<p class="todo">☐ 模型 Grader 是否经过人工样本校准并完成版本化？</p>
+<p class="todo">☐ 同一重要案例是否重复运行并报告稳定性？</p>
+<p class="todo">☐ Trace 和评测数据是否完成脱敏、租户隔离和保留策略？</p>
+<p class="todo">☐ 发布门禁是否把安全失败和严重回归设为阻断项？</p>
+<h2>20. 相关文档与官方资料</h2>
+<p><strong>知识库内延伸阅读：</strong></p>
+<ul><li>：Trace、Span、传播、隐私与可观测性基础。</li><li>：理解 Agent 如何在观察结果后持续决策。</li><li>：理解 Tool 调用链、错误、幂等和权限边界。</li><li>：理解可复用工作流如何规定执行与验收步骤。</li></ul>
+<p><strong>官方资料：</strong></p>
+<p><strong>一句话总结：</strong>把每一次 Trace 变成可解释的证据，把反复出现的问题变成可回归的 Eval Case，Agent 平台才能持续证明自己在变好。</p>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

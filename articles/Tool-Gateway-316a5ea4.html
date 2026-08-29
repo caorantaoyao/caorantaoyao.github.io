@@ -90,7 +90,7 @@
 <main class="container">
   <article>
     <div class="article-meta">
-      <span class="article-date">2026.08.28</span>
+      <span class="article-date">2026.08.29</span>
       <span class="article-tag cloud">学科知识正文</span>
     </div>
     <h1 class="article-title">Tool Gateway：多租户鉴权、幂等、审批与隔离</h1>
@@ -229,6 +229,9 @@ class DeleteFileInput(BaseModel):
 <p>Tool Gateway 是模型决策层和真实执行层之间的服务端安全边界。模型只能提交工具名和业务参数，用户身份、tenant_id、角色和密钥由 Runtime 注入；Gateway 再完成 Schema 校验、资源级鉴权、预算、审批、幂等、超时和 Trace。写操作使用持久化幂等键，高风险动作在执行前展示具体参数并请求批准，Shell 和不可信代码放入受限容器。这样即使模型选错工具或受到 Prompt Injection，也不能绕过确定性的权限和隔离机制。</p>
 <h2>13. 延伸阅读</h2>
 <ul><li>：Tool 的 Schema、Python 执行器与错误协议。</li><li>：通过 MCP 发现和调用远程 Tool。</li><li><a href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/strict-tool-use" target="_blank" rel="noopener">Claude Platform：Strict tool use</a></li><li><a href="https://openai.github.io/openai-agents-python/ref/tool/" target="_blank" rel="noopener">OpenAI Agents SDK：Tool reference</a></li></ul>
+<h2>14. 子专题：Agent Tool 白名单</h2>
+<p>Tool Gateway 负责执行阶段的统一治理；下面的子页面进一步说明 Host 怎样从全量 Tool Registry 中，为不同 Agent 计算可见工具集合，并在调用前重新鉴权。</p>
+<ul><li>：从 Tool Registry、Agent Grant、MCP tools/list 到运行时授权的完整落地方式。</li></ul>
     </div>
   </article>
 </main>

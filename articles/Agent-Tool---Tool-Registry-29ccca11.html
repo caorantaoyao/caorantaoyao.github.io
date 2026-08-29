@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Tool 白名单：从 Tool Registry 到运行时授权 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.08.29</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">Agent Tool 白名单：从 Tool Registry 到运行时授权</h1>
+    <div class="article-body">
+<p>Agent Tool 白名单解决的不是“模型会不会选工具”，而是“平台允许这个 Agent 看见并执行哪些工具”。它应当由 Host 或 Tool Gateway 在服务端强制执行，不能只写进 Prompt，也不能只依赖模型自觉。</p>
+<p><strong>核心结论：</strong>先用确定性的权限规则算出候选工具，再让模型在候选集合中选择；真正执行前还要再次鉴权。暴露工具不等于授权执行。</p>
+<h2>1. 一句话理解 Agent Tool 白名单</h2>
+<p>把 Agent 想成一名员工，把 Tool 想成公司的系统能力。Tool Registry 是全公司的“系统目录”，Agent 白名单则是这名员工的“岗位权限”。研究型 Agent 可以搜索资料，却不应该删除数据库；代码 Agent 可以读取工作区，却不一定能发布生产版本；审核 Agent 可以检查结果，却不应该修改原始数据。</p>
+<p>因此，一个 Agent 最终能使用的工具集合，不应直接等于 MCP Server 返回的全部工具，也不应等于代码里注册的全部函数。它必须经过 Agent、租户、用户、环境与任务上下文的共同约束。</p>
+<h2>2. Host 到底怎样决定暴露哪些 Tool</h2>
+<p>Host 通常会先汇总本地函数、MCP Server、内部 API 等来源的工具，再根据平台策略过滤。过滤之后，Host 才把工具的名称、描述和输入 Schema 发给模型。模型看到的是最终候选集，而不是平台全部能力。</p>
+<pre><code class="language-plaintext">MCP tools/list 或本地注册
+        ↓
+Tool Registry：标准化名称、Schema、风险等级
+        ↓
+Agent 白名单：这个 Agent 被授予了什么
+        ↓
+租户、用户、环境、资源范围硬过滤
+        ↓
+相关性筛选：本轮任务真正需要哪些 Tool
+        ↓
+模型选择 Tool
+        ↓
+Tool Gateway 再鉴权、审批、限流与审计
+        ↓
+执行器调用真实系统</code></pre>
+<p>这里包含两个性质不同的判断：权限过滤是安全边界，必须由确定性代码完成；相关性筛选是上下文优化，可以使用规则、标签、Embedding、Tool Search 或模型路由。相关性算法可以漏选一个工具，但绝不能越过权限边界。</p>
+<h2>3. 四个容易混淆的决策</h2>
+<p>问题</p>
+<p>负责组件</p>
+<p>含义</p>
+<p>工具是否存在</p>
+<p>Tool Registry</p>
+<p>平台是否已注册该工具及其 Schema、执行器和元数据。</p>
+<p>Agent 是否可以看见</p>
+<p>Host 的暴露策略</p>
+<p>该工具定义是否会被放进本轮模型上下文。</p>
+<p>模型是否选择它</p>
+<p>LLM / Agent Loop</p>
+<p>模型根据任务，在已经允许的候选工具中作出选择。</p>
+<p>本次调用是否可以执行</p>
+<p>Tool Gateway / Policy Engine</p>
+<p>结合当前用户、租户、参数、资源、环境和审批状态重新授权。</p>
+<p>最重要的面试表述是：<strong>白名单控制“可见范围”，调用时鉴权控制“本次动作”；两者不能合并成一次检查。</strong></p>
+<h2>4. 有效工具集合怎样计算</h2>
+<p>可以把最终候选集理解为多个集合的交集：</p>
+<pre><code class="language-plaintext">EffectiveTools
+= ServerCatalog
+  ∩ AgentAllowlist
+  ∩ TenantGrant
+  ∩ UserPermission
+  ∩ EnvironmentPolicy
+  ∩ ResourceScope
+  ∩ TaskRelevantTools
+  − ExplicitDeny</code></pre>
+<p><code>ExplicitDeny</code> 应当优先于 Allow。只要某个环境、租户或安全策略明确拒绝，就不能因为其他规则允许而重新开放。系统默认采用 <strong>Default Deny</strong>：未显式授权的工具一律不可见、不可执行。</p>
+<h2>5. 先建立稳定的 Tool Registry</h2>
+<p>白名单不能只保存一个容易重名的短名称。例如两个 MCP Server 都可能提供 <code>search</code>。实践中应使用稳定的规范化 ID，例如 <code>feishu:docs.search</code>、<code>github:repo.read</code>、<code>prod-db:order.delete</code>，并把展示名称与授权 ID 分开。</p>
+<p>字段</p>
+<p>作用</p>
+<p>示例</p>
+<p><code>tool_id</code></p>
+<p>全局稳定授权标识</p>
+<p><code>feishu:docs.read</code></p>
+<p><code>source</code></p>
+<p>工具来自本地函数还是某个 MCP Server</p>
+<p><code>mcp://feishu</code></p>
+<p><code>schema</code></p>
+<p>模型可见的参数定义</p>
+<p>JSON Schema</p>
+<p><code>risk_level</code></p>
+<p>只读、写入、敏感或危险</p>
+<p><code>read</code>、<code>write</code>、<code>critical</code></p>
+<p><code>resource_types</code></p>
+<p>该工具可以作用于哪些资源</p>
+<p>文档、仓库、数据库表</p>
+<p><code>allowed_envs</code></p>
+<p>允许在哪些环境使用</p>
+<p><code>dev</code>、<code>staging</code></p>
+<p><code>approval_mode</code></p>
+<p>是否需要用户或管理员审批</p>
+<p><code>never</code>、<code>on_write</code>、<code>always</code></p>
+<h2>6. 白名单应该存在哪里</h2>
+<p>小型项目可以把策略放在版本控制中的 YAML 或 JSON 文件里；多租户平台通常把它存进控制面的数据库，由管理后台或 API 维护。无论放在哪里，Prompt 只负责向模型解释规则，真正的授权事实必须来自服务端策略。</p>
+<p>一套常见的数据模型包括：</p>
+<ul><li><code>tool_registry</code>：保存全部工具的规范化信息。</li><li><code>agent</code>：保存 Agent 身份、所属租户与运行配置。</li><li><code>agent_tool_grant</code>：记录某 Agent 对某 Tool 的 Allow 或 Deny、资源范围和有效期。</li><li><code>policy_version</code>：记录策略版本、发布人和回滚点。</li><li><code>approval_ticket</code>：记录高风险调用的审批状态。</li><li><code>tool_audit_log</code>：记录谁在什么上下文中调用了什么工具及结果。</li></ul>
+<h2>7. Agent 声明需求，平台决定授权</h2>
+<p>Agent 的 Manifest 可以声明“我希望使用哪些工具”，但不能自行给自己授权。控制面需要把“请求能力”与“已批准能力”分开：</p>
+<pre><code class="language-plaintext">agents:
+  research-agent:
+    requested_tools:
+      - web:search
+      - feishu:docs.read
+      - feishu:docs.write
+    granted_tools:
+      - web:search
+      - feishu:docs.read
+    denied_tools:
+      - feishu:docs.delete
+    constraints:
+      tenant_id: tenant-a
+      environments: [dev]
+      max_calls_per_run: 20
+      expires_at: null
+    policy_version: 7</code></pre>
+<p>上例中，即使 Agent 请求了文档写入，平台没有批准，它也不会出现在有效工具集中。生产系统还可以按工具组授权，例如 <code>docs.readonly</code>，在发布时展开为具体 Tool ID；但审计日志最好仍记录最终的具体工具。</p>
+<h2>8. Python 中怎样实现硬过滤</h2>
+<pre><code class="language-php">from dataclasses import dataclass
+from typing import FrozenSet
+
+@dataclass(frozen=True)
+class ToolSpec:
+    tool_id: str
+    risk_level: str
+    allowed_envs: FrozenSet[str]
+
+@dataclass(frozen=True)
+class AgentPolicy:
+    allow: FrozenSet[str]
+    deny: FrozenSet[str]
+    tenant_id: str
+
+@dataclass(frozen=True)
+class RuntimeContext:
+    tenant_id: str
+    environment: str
+    user_permissions: FrozenSet[str]
+
+def compute_effective_tools(
+    registry: dict[str, ToolSpec],
+    policy: AgentPolicy,
+    ctx: RuntimeContext,
+) -&gt; list[ToolSpec]:
+    if ctx.tenant_id != policy.tenant_id:
+        return []
+
+    result = []
+    for tool_id in policy.allow:
+        if tool_id in policy.deny:
+            continue
+        tool = registry.get(tool_id)
+        if tool is None:
+            continue
+        if ctx.environment not in tool.allowed_envs:
+            continue
+        if tool_id not in ctx.user_permissions:
+            continue
+        result.append(tool)
+    return result</code></pre>
+<p>这里的 <code>RuntimeContext</code> 必须由登录态、服务端会话或网关注入，不能让模型通过 Tool 参数自行传入 <code>tenant_id</code> 或 <code>user_id</code>。否则模型只要修改参数就可能越权。</p>
+<h2>9. MCP 场景下怎样应用白名单</h2>
+<p>MCP Server 的 <code>tools/list</code> 告诉 Client“这个 Server 提供哪些工具”，但 Agent 白名单通常是 Host 的应用层策略，并不是远端 Server 自动替你完成的授权。</p>
+<p>一个典型过程是：Host 连接 MCP Server，读取工具列表；把 Server 身份与工具名组合成规范化 ID；同步进 Tool Registry；根据当前 Agent Policy 过滤；只把过滤后的 Schema 交给模型。即使 Host 没有向模型暴露某个工具，MCP Server 仍然可能知道这个工具存在，所以 Server 端也必须验证调用者身份与资源权限。</p>
+<p>换句话说，Host 的白名单负责缩小模型能力面，MCP Server 或 Tool Gateway 的鉴权负责保护真实资源。两层都要有。</p>
+<h2>10. 工具很多时还要做相关性筛选</h2>
+<p>一个 Agent 可能被允许使用数百个 Tool，但把全部 Schema 塞进上下文会消耗 Token，也会增加模型误选概率。因此可以在硬权限过滤之后，再按任务相关性选出 Top-K 工具。</p>
+<p>常见方法包括按 Agent 类型预设工具组、根据当前工作流状态选择工具、用关键词或标签匹配、用 Embedding 检索 Tool 描述，以及通过 Tool Search 动态加载。顺序必须保持为：</p>
+<pre><code class="language-plaintext">权限硬过滤 → 相关性检索 → 模型选择</code></pre>
+<p>不能先从全量工具中做语义检索，再把结果直接交给模型，因为检索阶段也可能把未授权工具带入上下文。</p>
+<h2>11. 为什么执行前还要再次鉴权</h2>
+<p>模型看到 <code>feishu:docs.write</code>，只表示这个 Agent 在某类任务中可能被允许写文档，并不表示它可以修改任意文档。真正调用时还要检查目标资源、参数、当前用户权限、租户归属、审批状态、调用次数与策略版本。</p>
+<pre><code class="language-php">def invoke_tool(ctx, tool_id: str, arguments: dict):
+    tool = registry.get(tool_id)
+    if tool is None:
+        raise PermissionError(&quot;unknown tool&quot;)
+
+    decision = policy_engine.authorize(
+        actor=ctx.actor,
+        agent_id=ctx.agent_id,
+        tenant_id=ctx.tenant_id,
+        tool_id=tool_id,
+        resource=extract_resource(tool_id, arguments),
+        environment=ctx.environment,
+        policy_version=ctx.policy_version,
+    )
+    if not decision.allowed:
+        raise PermissionError(decision.reason)
+    if decision.requires_approval:
+        return approval_service.create_ticket(ctx, tool_id, arguments)
+
+    return tool_gateway.execute(tool, arguments, ctx)</code></pre>
+<p>这次授权应当基于服务端可信上下文，并记录决策原因。这样即使模型被提示注入诱导，或者旧会话中的 Tool Schema 还残留在上下文里，执行层仍能拒绝越权调用。</p>
+<h2>12. 不要只控制 Tool，还要控制资源范围</h2>
+<p>只允许 <code>database:query</code> 仍然太宽。更完整的授权还应限制可以访问的租户、数据库、表、知识库、仓库、目录、网络域名和 Secret。对写操作，还可以约束最大影响行数、允许的 HTTP 方法、可写分支、每日调用次数以及是否必须人工确认。</p>
+<p>例如，代码 Agent 可以获得 <code>filesystem:write</code>，但资源范围只允许当前工作区；研究 Agent 可以获得 <code>web:fetch</code>，但网络策略拒绝内网地址和云元数据地址；客服 Agent 可以获得 <code>order:refund</code>，但金额超过阈值时必须审批。</p>
+<h2>13. Multi-Agent 平台怎样分配白名单</h2>
+<p>Agent</p>
+<p>建议允许</p>
+<p>建议拒绝或限制</p>
+<p>Supervisor</p>
+<p>创建子任务、查看状态、汇总结果</p>
+<p>默认不直接接触数据库、文件系统和生产发布</p>
+<p>Research Agent</p>
+<p>搜索、网页读取、知识库只读</p>
+<p>禁止删除、支付、生产写入</p>
+<p>Code Agent</p>
+<p>当前工作区读写、测试、受控终端</p>
+<p>限制目录、网络和 Secret；生产部署需单独授权</p>
+<p>Reviewer</p>
+<p>读取变更、运行只读分析</p>
+<p>不修改代码，不绕过审批合并</p>
+<p>Deployment Agent</p>
+<p>指定环境的发布与回滚</p>
+<p>生产环境短时授权，强制审批和完整审计</p>
+<p>Supervisor 调用子 Agent 时，也应把允许的 Tool Scope 一并下发，而且子 Agent 的权限只能比父任务更窄，不能因为“被委派”而自动获得平台全部工具。</p>
+<h2>14. 动态授权、版本与缓存</h2>
+<p>白名单可以静态，也可以动态。日常只读工具适合长期授权；生产写入、删除、支付等能力适合带过期时间的临时授权。每次 Agent Run 应绑定一个 <code>policy_version</code>，便于复现当时为什么允许或拒绝某次调用。</p>
+<p>如果 Host 缓存了工具列表，策略变更后要有失效机制。高风险撤权应立即生效，不能等 Agent 会话结束。常见做法是短 TTL、策略版本校验和事件通知结合；执行网关在每次调用时对比当前版本，发现旧版本就重新授权。</p>
+<h2>15. 审计日志应记录什么</h2>
+<p>审计日志至少需要记录 <code>run_id</code>、<code>trace_id</code>、用户、Agent、租户、Tool ID、策略版本、参数摘要、目标资源、授权结果、审批票据、幂等键、执行结果和耗时。敏感参数不要原样落盘，应脱敏或只记录哈希。</p>
+<p>日志不仅用于追责，也用于回答三个工程问题：某个 Tool 为什么被暴露；某次调用为什么被拒绝；策略升级后哪些 Agent 的能力发生了变化。</p>
+<h2>16. 常见错误</h2>
+<ul><li><strong>只在 Prompt 中写“不要调用危险工具”。</strong> Prompt 不是安全边界，模型可能被提示注入影响。</li><li><strong>把 MCP Server 的全部 </strong><strong><code>tools/list</code></strong><strong> 原样交给模型。</strong> 这会扩大能力面，也浪费上下文。</li><li><strong>只在暴露阶段检查一次权限。</strong> 真正执行时的资源和参数尚未确定，必须再次鉴权。</li><li><strong>相信模型传入的 </strong><strong><code>tenant_id</code></strong><strong>、</strong><strong><code>user_id</code></strong><strong>。</strong> 身份与租户必须来自服务端可信上下文。</li><li><strong>只按工具名授权。</strong> 同名工具可能来自不同 Server，应使用规范化 Tool ID。</li><li><strong>长期授予生产危险能力。</strong> 高风险能力应短时授权、强制审批并可立即撤销。</li><li><strong>没有策略版本与拒绝原因。</strong> 出问题后将无法复现当时的授权决策。</li></ul>
+<h2>17. 落地检查清单</h2>
+<p class="todo">☐ 建立全局唯一的 Tool ID 与 Tool Registry。</p>
+<p class="todo">☐ 为每个 Agent 配置显式 Allow、Deny 与资源范围，默认拒绝。</p>
+<p class="todo">☐ 把租户、用户和环境写入服务端可信 Runtime Context。</p>
+<p class="todo">☐ 先做权限硬过滤，再做相关性 Top-K。</p>
+<p class="todo">☐ 执行前按具体参数和资源重新授权。</p>
+<p class="todo">☐ 为高风险工具增加审批、限流、幂等和短时授权。</p>
+<p class="todo">☐ 记录 policy_version、trace_id 与完整授权决策。</p>
+<p class="todo">☐ 测试撤权、缓存失效、跨租户访问和提示注入场景。</p>
+<h2>18. 面试回答</h2>
+<p>Agent 白名单通常由 Host 或控制面维护，而不是让模型自己决定。平台先把本地函数和 MCP Server 的工具同步到 Tool Registry，再根据 Agent 授权、租户、用户权限、运行环境和资源范围做确定性过滤，只把候选 Tool Schema 暴露给模型。工具很多时，可以在权限过滤后再做语义 Top-K。模型发起调用后，Tool Gateway 还要结合具体参数重新鉴权，并处理审批、限流、幂等和审计。因此“模型能看见工具”和“这次调用能真正执行”是两道不同的安全关卡，系统应当默认拒绝、显式授权，并支持策略版本和撤权即时生效。</p>
+<h2>19. 相关文档</h2>
+<ul><li>：Tool Gateway 的多租户鉴权、幂等、审批与隔离。</li><li>：MCP 中 Host、Client、Server 与 Tool 的协议边界。</li><li>：Tool Schema、Python 注册表与错误协议。</li><li>：Agent 工具调用的整体视角。</li></ul>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>幂等：从 Idempotency-Key、唯一约束到 Agent Tool 副作用 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.08.30</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">幂等：从 Idempotency-Key、唯一约束到 Agent Tool 副作用</h1>
+    <div class="article-body">
+<h2>1. 真正的问题：客户端不知道第一次是否成功</h2>
+<p><strong>核心结论：</strong>幂等真正解决的不是“把相同代码再执行一次”，而是调用方无法判断第一次是否已经产生业务效果时，允许它安全地再次表达同一个业务意图。</p>
+<p>客户端发起<code>POST /agent/runs</code>后，服务端可能已经成功创建<code>run_123</code>，但响应在返回途中丢失。客户端只看到超时，无法判断请求处于哪种情况。</p>
+<p>客户端看到的现象</p>
+<p>服务端真实情况</p>
+<p>超时</p>
+<p>请求根本没有到达服务端</p>
+<p>超时</p>
+<p>请求已经到达，但尚未执行</p>
+<p>超时</p>
+<p>数据库已经提交，只是响应丢失</p>
+<p>超时</p>
+<p>任务仍在执行，最终结果未知</p>
+<pre><code class="language-plaintext">服务端已经执行成功
+  → 响应返回前网络断开
+  → 客户端不知道是否成功
+  → 客户端重新发送请求</code></pre>
+<p>客户端缺少足够信息，只能重试。幂等的任务就是保证这次重试不会创建第二个Agent Run、重复扣款、重复发送邮件或重复执行其他外部副作用。</p>
+<p><strong>相关知识：</strong>　　　　　</p>
+<h2>2. 幂等不等于每次响应完全相同</h2>
+<p>幂等判断的是业务效果，而不是每次响应的状态码和响应体是否逐字相同。</p>
+<p>例如删除用户：</p>
+<pre><code class="language-java">DELETE /users/123</code></pre>
+<p>第一次可能返回<code>204 No Content</code>，第二次可能返回<code>404 Not Found</code>。响应不同，但最终业务状态都是“用户123不存在”，因此业务效果仍然幂等。</p>
+<p>天然容易幂等的操作通常是“把状态设置为目标值”：</p>
+<pre><code class="language-rust">UPDATE agent_runs
+SET status = &#x27;cancelled&#x27;
+WHERE id = &#x27;run_123&#x27;;</code></pre>
+<p>执行一次和执行十次，最终状态都为<code>cancelled</code>。相反，下面的增量操作不是天然幂等：</p>
+<pre><code class="language-rust">UPDATE accounts
+SET balance = balance - 100
+WHERE id = 1;</code></pre>
+<p>HTTP方法的规范语义只能提供设计提示：GET、HEAD等安全方法和PUT、DELETE在规范上具有幂等语义，POST则不天然幂等。但最终是否幂等仍取决于服务端业务实现，不能因为接口使用PUT就自动认为安全。</p>
+<h2>3. 工程上实现幂等的五种方法</h2>
+<h3>3.1 把增量动作改成目标状态</h3>
+<p>非幂等操作依赖旧值，例如<code>value = value + 1</code>；目标状态操作则让系统收敛到确定结果，例如<code>status = &#x27;completed&#x27;</code>。能设计为状态机或资源最终状态时，通常优先采用这种方式。</p>
+<h3>3.2 使用稳定业务ID和唯一约束</h3>
+<p>客户端或业务系统为一次逻辑操作生成稳定ID，例如<code>run_id</code>、<code>order_no</code>或<code>payment_no</code>，数据库再为该字段建立唯一约束。相同操作重试时继续使用同一个ID，第二次插入会被数据库原子拒绝。</p>
+<h3>3.3 使用 Idempotency-Key</h3>
+<pre><code class="language-java">POST /agent/runs
+Idempotency-Key: 01JXYZ8Y6AQ...</code></pre>
+<p>幂等键代表“一次逻辑操作”，而不是“一次网络请求”。网络重试必须复用原Key；如果每次重试都生成新Key，服务端会把它们视为不同业务操作。</p>
+<h3>3.4 使用状态机和条件更新</h3>
+<pre><code class="language-rust">UPDATE orders
+SET status = &#x27;PAYING&#x27;
+WHERE id = :order_id
+  AND status = &#x27;CREATED&#x27;;</code></pre>
+<p>数据库只有在当前状态允许时才执行转换。通过检查影响行数，可以判断当前请求是否取得执行权。版本号乐观锁也是同类方法：只有持有预期版本的请求能够更新。</p>
+<h3>3.5 使用 Inbox 对重复消息去重</h3>
+<p>消息队列通常按至少一次投递设计，消费者必须假设同一个事件会重复送达。以<code>consumer_name + event_id</code>建立唯一约束，并在同一事务中写入Inbox记录和本地业务变更，可以让重复消息安全返回。</p>
+<h2>4. Idempotency-Key 的完整处理状态机</h2>
+<p>一个生产级Idempotency-Key机制不能只保存“见过这个Key”。它至少需要记录作用域、请求摘要、执行状态和第一次业务结果。</p>
+<p>命中情况</p>
+<p>处理方式</p>
+<p>Key不存在</p>
+<p>原子创建PROCESSING记录并取得执行权</p>
+<p>Key存在，request_hash不同</p>
+<p>拒绝请求；同一Key不能代表两个业务意图</p>
+<p>Key存在，状态为PROCESSING</p>
+<p>返回处理中、202或409，或引导查询状态</p>
+<p>Key存在，状态为SUCCEEDED</p>
+<p>返回第一次的resource_id或已保存响应</p>
+<p>Key存在，状态为可重试FAILED</p>
+<p>按策略重新取得执行权</p>
+<p>Key应限定在明确作用域中：</p>
+<pre><code class="language-plaintext">tenant_id + operation + idempotency_key</code></pre>
+<p>如果只使用Key，不同租户或不同接口可能意外冲突。同一个Key对应的请求参数也必须校验。常见做法是把规范化后的请求体计算SHA-256摘要：</p>
+<pre><code class="language-php">import hashlib
+import orjson
+
+def request_hash(payload: dict) -&gt; str:
+    canonical = orjson.dumps(
+        payload,
+        option=orjson.OPT_SORT_KEYS,
+    )
+    return hashlib.sha256(canonical).hexdigest()</code></pre>
+<p>请求体Hash不应直接取代客户端生成的幂等键，因为用户可能确实想连续提交两次内容完全相同的任务。正确语义是：幂等键标识业务意图，Hash只用于阻止同一个Key被错误复用于不同参数。</p>
+<p>对于异步接口，第一次成功通常表示“Run已经被接受并获得run_id”，不表示整个Agent执行结束。重试同一Key时应返回同一个run_id，真实进度再通过查询接口获得。</p>
+<h2>5. 数据库并发：为什么必须有唯一约束</h2>
+<p>下面这种“先查询、再插入”不能保证幂等：</p>
+<pre><code class="language-php">if not await run_exists(run_id):
+    await create_run(run_id)</code></pre>
+<pre><code class="language-plaintext">请求A查询：不存在
+请求B查询：不存在
+请求A插入：成功
+请求B插入：也尝试成功</code></pre>
+<p>应用层检查和数据库写入之间存在竞态窗口。多进程、多实例环境中，本地锁也无法保护其他实例，因此最终必须依靠数据库的唯一约束、条件更新或其他原子原语。</p>
+<pre><code class="language-rust">CREATE UNIQUE INDEX uk_idempotency_scope
+ON idempotency_records(
+    tenant_id,
+    operation,
+    idempotency_key
+);</code></pre>
+<p>PostgreSQL可以使用<code>INSERT ... ON CONFLICT</code>竞争执行权：</p>
+<pre><code class="language-rust">INSERT INTO idempotency_records(
+    tenant_id,
+    operation,
+    idempotency_key,
+    request_hash,
+    status
+)
+VALUES (:tenant, :operation, :key, :hash, &#x27;PROCESSING&#x27;)
+ON CONFLICT DO NOTHING
+RETURNING idempotency_key;</code></pre>
+<p>只有拿到RETURNING结果的请求创建了记录并获得执行权。没有拿到结果的请求必须读取已有记录，验证request_hash和状态，而不是继续执行业务。</p>
+<p>创建业务记录与把幂等记录标记为SUCCEEDED应尽量放在同一个本地数据库事务中。这样数据库提交后即使HTTP响应丢失，重试请求仍能读取之前保存的业务结果。</p>
+<h2>6. Python、FastAPI 与 SQLAlchemy 实现</h2>
+<p>幂等记录可以包含以下字段：</p>
+<pre><code class="language-php">class IdempotencyRecord(Base):
+    __tablename__ = &quot;idempotency_records&quot;
+
+    tenant_id: Mapped[str]
+    operation: Mapped[str]
+    key: Mapped[str]
+    request_hash: Mapped[str]
+    status: Mapped[str]
+    resource_id: Mapped[str | None]
+    response_body: Mapped[dict | None]
+
+    __table_args__ = (
+        UniqueConstraint(
+            &quot;tenant_id&quot;,
+            &quot;operation&quot;,
+            &quot;key&quot;,
+            name=&quot;uk_idempotency_scope&quot;,
+        ),
+    )</code></pre>
+<p>FastAPI接口的核心流程如下。示例省略了具体Repository实现，但事务边界和状态判断不能省略。</p>
+<pre><code class="language-php">@app.post(&quot;/agent/runs&quot;)
+async def create_agent_run(
+    request: CreateRunRequest,
+    idempotency_key: str = Header(alias=&quot;Idempotency-Key&quot;),
+    session: AsyncSession = Depends(get_session),
+):
+    payload_hash = request_hash(request.model_dump())
+
+    async with session.begin():
+        inserted = await try_insert_idempotency_record(
+            session,
+            tenant_id=request.tenant_id,
+            operation=&quot;create_agent_run&quot;,
+            key=idempotency_key,
+            request_hash=payload_hash,
+        )
+
+        if not inserted:
+            record = await get_idempotency_record(
+                session,
+                request.tenant_id,
+                &quot;create_agent_run&quot;,
+                idempotency_key,
+            )
+
+            if record.request_hash != payload_hash:
+                raise HTTPException(409, &quot;幂等键对应了不同请求&quot;)
+
+            if record.status == &quot;SUCCEEDED&quot;:
+                return record.response_body
+
+            if record.status == &quot;PROCESSING&quot;:
+                raise HTTPException(409, &quot;请求正在处理中&quot;)
+
+        run = AgentRun(
+            id=generate_run_id(),
+            tenant_id=request.tenant_id,
+            status=&quot;queued&quot;,
+        )
+        session.add(run)
+
+        response = {
+            &quot;run_id&quot;: run.id,
+            &quot;status&quot;: &quot;queued&quot;,
+        }
+
+        await mark_idempotency_succeeded(
+            session,
+            request.tenant_id,
+            &quot;create_agent_run&quot;,
+            idempotency_key,
+            run.id,
+            response,
+        )
+
+    return response</code></pre>
+<p>这里最重要的是：业务记录和幂等执行结果在同一个事务中提交。若事务失败，两者都不生效；若事务成功但响应丢失，下一次重试读取SUCCEEDED记录并返回第一次结果。</p>
+<p>长时间Agent Loop不应该在这个事务里运行。接口只原子完成“创建Run、写queued状态、写Outbox事件、保存幂等结果”，然后尽快返回<code>202 + run_id</code>。</p>
+<h2>7. 为什么不能只用 Redis 保存幂等键</h2>
+<p>Redis可以用于快速拦截重复请求，但如果业务数据保存在关系数据库中，单独依赖Redis无法自动保证跨系统原子性。</p>
+<p>执行顺序</p>
+<p>失败结果</p>
+<p>先写Redis成功，数据库失败</p>
+<p>重试被误判为已经执行，但业务记录不存在</p>
+<p>数据库成功，写Redis失败</p>
+<p>重试无法看到Key，可能重复创建业务记录</p>
+<p>Redis Key提前过期</p>
+<p>迟到的重试再次穿透并执行业务</p>
+<p>Redis故障或主从切换丢数据</p>
+<p>幂等判定失去可靠依据</p>
+<p>因此Redis适合作为缓存、限流或前置过滤，真正的业务唯一性仍应由业务数据库唯一约束、状态机或下游业务ID保证。跨服务场景则需要Outbox、Inbox、稳定业务ID和下游幂等能力共同完成。</p>
+<h2>8. 最困难的窗口：外部调用成功，本地记录失败</h2>
+<p>最困难的情况不是本地数据库事务，而是外部系统已经成功，本地却来不及保存结果。</p>
+<pre><code class="language-plaintext">Agent调用发送邮件Tool
+  → 邮件服务发送成功
+  → Agent准备保存Tool结果
+  → Worker突然崩溃
+  → Checkpoint只看到步骤未完成
+  → 恢复后再次发送邮件</code></pre>
+<p>这时本地系统无法仅凭自己的数据库判断邮件是否已经发送。最佳方案是为每次副作用调用生成稳定的<code>tool_call_id</code>，并把它作为下游幂等键：</p>
+<pre><code class="language-php">await mail_service.send(
+    idempotency_key=tool_call_id,
+    to=user_email,
+    content=content,
+)</code></pre>
+<p>下游服务应保证同一个<code>tool_call_id</code>只产生一次业务效果。支付、发邮件、创建飞书文档、提交代码、创建云资源和删除数据等Tool都属于有副作用工具。</p>
+<p>如果下游不支持幂等键，可以使用可查询的外部业务ID，在恢复时先查询结果；仍无法判断时，应把步骤标记为<code>UNKNOWN</code>并执行对账或人工确认，而不是盲目重试不可逆操作。</p>
+<p>这揭示了一个边界：本地幂等记录只能保护本地副作用。端到端幂等需要调用链上的每个有副作用系统共同支持，或者提供可靠查询和补偿机制。</p>
+<h2>9. 消息队列中的 Inbox、Outbox 与 effectively once</h2>
+<p>消息系统中的“恰好一次”需要拆开理解。消息可能因为确认丢失而重复投递，因此可靠做法通常是“至少一次投递 + 幂等处理”，得到业务上的effectively once。</p>
+<h3>9.1 Outbox：本地状态和发消息保持一致</h3>
+<p>在创建Agent Run的同一个数据库事务中，同时写入业务表和Outbox表：</p>
+<pre><code class="language-plaintext">BEGIN
+  → INSERT agent_runs
+  → INSERT outbox_events
+COMMIT</code></pre>
+<p>独立Publisher不断扫描Outbox，把事件发送到消息队列；发送失败可以重试。这样不会出现“业务提交了但消息永远没发出”，也不会要求数据库和消息队列参加同一个分布式事务。</p>
+<h3>9.2 Inbox：消费者对重复消息去重</h3>
+<pre><code class="language-rust">CREATE TABLE consumed_events (
+    consumer_name TEXT NOT NULL,
+    event_id TEXT NOT NULL,
+    consumed_at TIMESTAMP NOT NULL,
+    UNIQUE (consumer_name, event_id)
+);</code></pre>
+<p>消费者在一个事务中先原子写入Inbox记录，再执行本地业务更新。若唯一约束冲突，说明该消费者已经处理过该事件，可以直接确认消息。</p>
+<p>机制</p>
+<p>解决的问题</p>
+<p>Outbox</p>
+<p>本地数据库提交与“最终发出事件”之间的一致性</p>
+<p>Inbox</p>
+<p>消息重复投递导致消费者重复执行业务</p>
+<p>业务唯一约束</p>
+<p>即使去重代码并发失效，数据库仍不产生重复业务结果</p>
+<p>所谓端到端Exactly Once通常依赖非常严格的边界。跨数据库、消息队列、第三方API和用户设备时，更现实的目标是允许传输和代码重复执行，但让业务副作用只生效一次。</p>
+<h2>10. PROCESSING 状态、租约与崩溃恢复</h2>
+<p>如果服务端写入<code>PROCESSING</code>后进程崩溃，记录可能永久停留在处理中。长任务不能只靠一个没有期限的布尔状态。</p>
+<pre><code class="language-plaintext">status = PROCESSING
+owner_token = worker_abc
+locked_until = 10:30:00
+fencing_token = 42</code></pre>
+<p><strong>租约。</strong><code>locked_until</code>表示当前Worker的执行权到何时有效。租约过期后，其他Worker才有资格尝试接管。</p>
+<p><strong>Owner Token。</strong>只有持有当前Owner Token的Worker才能续租或提交结果，避免无关Worker误更新。</p>
+<p><strong>Fencing Token。</strong>每次接管都递增版本号。下游写入只接受更大的Token，可以阻止失去租约的旧Worker恢复后继续覆盖新结果。</p>
+<p>租约过期不自动证明旧Worker已经停止，也不证明外部副作用没有发生。接管前仍要判断操作是否可安全重试、是否存在可查询的外部业务ID，以及是否需要对账。</p>
+<p>对于短HTTP事务，通常不应保持长时间PROCESSING锁；对于长时间Agent任务，应把“请求已接受”“Run正在执行”“某一步Tool是否完成”拆成不同状态机，并通过Checkpoint持久化。</p>
+<h2>11. 幂等窗口与记录过期时间</h2>
+<p>幂等记录通常不能无限保存，但TTL也不能随意设置。假设记录只保留5分钟，而离线客户端在10分钟后重试，同一个业务操作就可能被当成新请求。</p>
+<p>幂等窗口至少要覆盖：</p>
+<ul><li>客户端SDK和人工操作可能持续重试的最长时间。</li><li>网关、服务端和RPC层的总重试时间。</li><li>消息队列的最大重投与死信恢复时间。</li><li>离线设备恢复后可能重新发送请求的时间。</li><li>业务允许判断“重复提交”的周期。</li></ul>
+<p>需要区分两类数据：</p>
+<p>数据</p>
+<p>保留策略</p>
+<p>响应缓存、HTTP状态码</p>
+<p>可以按合理幂等窗口设置TTL</p>
+<p>订单号、支付号、run_id等业务唯一身份</p>
+<p>通常应长期保留唯一约束</p>
+<p>即使Idempotency-Key响应缓存过期，也不应因此删除真正的业务唯一性，否则较晚的重试仍可能重复产生核心副作用。</p>
+<h2>12. AI Agent 平台的三层幂等设计</h2>
+<p>AI Agent平台至少需要三层幂等，每层负责不同的重复来源。</p>
+<p>层级</p>
+<p>稳定身份</p>
+<p>防止的重复</p>
+<p>创建Run</p>
+<p>client_operation_id / Idempotency-Key</p>
+<p>HTTP超时重试创建两个Run</p>
+<p>消息消费</p>
+<p>consumer_name + event_id</p>
+<p>队列重复投递启动两个Worker执行</p>
+<p>Tool调用</p>
+<p>run_id + step_id + tool_call_id</p>
+<p>Checkpoint恢复后重复执行外部副作用</p>
+<pre><code class="language-plaintext">用户操作ID
+  → run_id
+    → step_id
+      → tool_call_id
+        → 外部系统业务ID</code></pre>
+<p>每一级都需要稳定身份，系统才能回答“这次逻辑操作以前是否执行过”。</p>
+<p><strong>创建Run。</strong><code>POST /agent/runs</code>使用幂等键，首次提交创建queued记录并返回run_id；相同Key重试始终返回同一个run_id。</p>
+<p><strong>Worker执行。</strong>队列事件包含稳定event_id，Worker通过Inbox去重。Run状态转换使用条件更新，防止两个Worker同时取得同一任务。</p>
+<p><strong>Tool调用。</strong>在调用有副作用Tool之前持久化tool_call_id和调用意图；调用完成后保存外部结果。恢复时优先查询已有结果或向下游复用相同幂等键。</p>
+<p><strong>LLM调用。</strong>大模型输出可能不确定，重复调用还会产生额外成本。虽然它通常不像支付那样修改外部业务状态，也应按照run_id、step_id和attempt记录调用，明确哪些失败允许重试、是否复用已成功结果。</p>
+<p>对于删除资源、发送消息、提交代码等高风险Tool，幂等不能代替权限、审批和审计。幂等只回答“重复执行是否产生第二次效果”，不回答“第一次执行是否应该被允许”。</p>
+<h2>13. 常见错误</h2>
+<ol><li><strong>重试时生成新Key。</strong>服务端会把每次请求视为新业务操作。</li><li><strong>把请求体Hash直接当Key。</strong>用户可能确实想创建两个内容相同的任务，Hash只能校验参数，不能自动代表业务意图。</li><li><strong>只做先查询再插入。</strong>并发请求仍可能同时通过检查。</li><li><strong>只使用进程内锁。</strong>多Worker和多实例之间无法共享本地锁。</li><li><strong>Key没有租户与操作作用域。</strong>不同租户或接口可能错误冲突。</li><li><strong>同一Key允许不同参数。</strong>重试可能拿到与当前请求不匹配的旧结果。</li><li><strong>业务提交与幂等记录分开写。</strong>崩溃窗口会造成业务成功但去重状态不存在。</li><li><strong>只用Redis去重。</strong>Redis和业务数据库之间没有天然原子提交。</li><li><strong>把超时当成未执行。</strong>超时恰恰是执行结果最不确定的情况。</li><li><strong>把幂等当成Exactly Once。</strong>网络包、消息和代码仍可能执行多次，幂等只控制业务副作用。</li><li><strong>永久保留PROCESSING。</strong>进程崩溃后请求会永远无法恢复。</li><li><strong>幂等记录TTL过短。</strong>迟到重试会穿透并重新执行。</li></ol>
+<h2>14. 设计检查清单</h2>
+<p class="todo">☐ 是否明确定义了“一次逻辑业务操作”的稳定身份？</p>
+<p class="todo">☐ 幂等键是否包含租户和操作作用域？</p>
+<p class="todo">☐ 相同Key、不同请求参数是否会被拒绝？</p>
+<p class="todo">☐ 重试是否复用同一个Key？</p>
+<p class="todo">☐ 是否由数据库唯一约束或原子条件更新兜底？</p>
+<p class="todo">☐ 业务记录与幂等结果是否在同一事务中提交？</p>
+<p class="todo">☐ PROCESSING、SUCCEEDED、FAILED和UNKNOWN分别如何处理？</p>
+<p class="todo">☐ 崩溃后如何接管PROCESSING任务？</p>
+<p class="todo">☐ 幂等记录的TTL是否覆盖所有重试和消息重投窗口？</p>
+<p class="todo">☐ 消息消费者是否使用event_id进行Inbox去重？</p>
+<p class="todo">☐ 外部有副作用系统是否支持幂等键或结果查询？</p>
+<p class="todo">☐ 客户端、网关、RPC和Worker是否会形成多层重试放大？</p>
+<p class="todo">☐ 高风险Tool是否同时具备鉴权、审批、审计和幂等？</p>
+<h2>15. 面试回答</h2>
+<p>幂等在工程上主要解决超时后的结果不确定性。客户端没有收到响应，并不能判断服务端是否已经提交，所以重试可能造成重复扣款、重复创建任务或重复发送消息。</p>
+<p>常见实现方式包括把操作设计成设置目标状态、使用稳定业务ID和数据库唯一约束、为POST接口增加Idempotency-Key、使用状态机条件更新，以及在消息消费者中使用Inbox去重。Idempotency-Key需要按租户和接口限定作用域，并保存request_hash、PROCESSING或SUCCEEDED状态以及第一次结果；同一个Key对应不同参数必须拒绝。</p>
+<p>业务记录与幂等结果应在同一个数据库事务中提交，不能只依赖“先查询再插入”或Redis。跨服务调用时，最难的是外部副作用已经成功、本地记录却失败，因此还要把稳定tool_call_id传给下游作为幂等键，或者通过外部业务ID查询和对账。</p>
+<p>在Agent平台中，我会分别保证创建Run、消息消费和Tool调用三层幂等。消息链路采用Outbox保证业务提交后最终发出事件，采用Inbox应对重复投递，从而以至少一次传输配合幂等处理获得业务上的effectively once。</p>
+<h2>16. 自测问题</h2>
+<p class="todo">☐ 为什么“没有收到响应”不能证明服务端没有执行？</p>
+<p class="todo">☐ 为什么DELETE第二次返回404仍然可以是幂等的？</p>
+<p class="todo">☐ 为什么先查询再插入无法抵抗并发请求？</p>
+<p class="todo">☐ Idempotency-Key为什么必须同时保存request_hash？</p>
+<p class="todo">☐ 为什么请求体Hash不能直接代替幂等键？</p>
+<p class="todo">☐ 为什么只使用Redis会产生双写一致性问题？</p>
+<p class="todo">☐ Outbox和Inbox分别解决什么问题？</p>
+<p class="todo">☐ 外部邮件已发送但Checkpoint未保存时应该怎么办？</p>
+<p class="todo">☐ Agent平台为什么需要Run、消息和Tool三层幂等？</p>
+<p class="todo">☐ 幂等与Exactly Once的边界是什么？</p>
+<h2>参考资料</h2>
+<ul><li><a href="https://www.rfc-editor.org/rfc/rfc9110.html#section-9.2.2" target="_blank" rel="noopener">RFC 9110：Idempotent Methods</a></li><li><a href="https://www.postgresql.org/docs/current/ddl-constraints.html" target="_blank" rel="noopener">PostgreSQL：Constraints</a></li><li><a href="https://www.postgresql.org/docs/current/sql-insert.html" target="_blank" rel="noopener">PostgreSQL：INSERT 与 ON CONFLICT</a></li><li><a href="https://docs.sqlalchemy.org/en/20/core/constraints.html" target="_blank" rel="noopener">SQLAlchemy：Defining Constraints and Indexes</a></li><li><a href="https://fastapi.tiangolo.com/tutorial/header-params/" target="_blank" rel="noopener">FastAPI：Header Parameters</a></li><li><a href="https://microservices.io/patterns/data/transactional-outbox.html" target="_blank" rel="noopener">Transactional Outbox Pattern</a></li><li><a href="https://microservices.io/patterns/communication-style/idempotent-consumer.html" target="_blank" rel="noopener">Idempotent Consumer Pattern</a></li></ul>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

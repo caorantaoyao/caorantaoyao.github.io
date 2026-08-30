@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一次请求的完整链路：从 DNS 到数据库再到响应返回 — Caoran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f5f1e8; --surface:#fbf8f1; --surface-raised:#efe8da; --border:#ddd3c1; --border-soft:#e6ddcc;
+    --text:#29241f; --text-muted:#574f45; --text-dim:#928979;
+    --accent:#c0553b; --accent-bright:#9c4229; --accent-glow:rgba(192,85,59,0.09); --accent-dim:#b98a3e;
+    --green:#2f5d4e; --green-dim:#5c7d70; --red:#b06a6a; --blue:#7f96b0;
+    --font-display:'Spectral','Noto Serif SC',serif;
+    --font-serif:'Noto Serif SC','Source Han Serif SC','Songti SC',serif;
+    --font-mono:'JetBrains Mono','SF Mono',monospace;
+    --max-width:760px; --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-serif);
+    line-height:1.9; -webkit-font-smoothing:antialiased; }
+  ::selection { background:var(--accent); color:var(--bg); }
+  body::after { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"); }
+  #progress { position:fixed; top:0; left:0; height:2px; width:0; z-index:200;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent-bright)); transition:width 0.1s linear; }
+  .container { position:relative; z-index:1; max-width:var(--max-width); margin:0 auto; padding:0 1.5rem; }
+  nav { position:sticky; top:0; z-index:100; padding:1.2rem 0;
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+    background:rgba(245,241,232,0.85); border-bottom:1px solid var(--border-soft); }
+  nav .container { display:flex; justify-content:space-between; align-items:center; }
+  .nav-logo { font-family:var(--font-mono); font-size:0.85rem; letter-spacing:0.25em;
+    color:var(--accent); text-decoration:none; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; }
+  .nav-logo .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .nav-back { font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.08em;
+    color:var(--text-muted); text-decoration:none; text-transform:uppercase; transition:color 0.2s; }
+  .nav-back:hover { color:var(--accent); }
+  article { padding:clamp(3rem,8vh,5rem) 0 4rem; opacity:0; transform:translateY(20px);
+    animation:fadeUp 0.8s var(--ease) 0.1s forwards; }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  .article-meta { display:flex; gap:1rem; align-items:center; margin-bottom:1.5rem;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.05em; }
+  .article-date { color:var(--text-dim); }
+  .article-tag { text-transform:uppercase; padding:0.2rem 0.6rem; border:1px solid var(--border);
+    border-radius:2px; color:var(--text-muted); }
+  .article-tag.chemistry { color:var(--green); border-color:var(--green-dim); }
+  .article-tag.cloud { color:var(--accent); border-color:var(--accent-dim); }
+  .article-tag.security { color:var(--red); border-color:rgba(176,106,106,0.4); }
+  h1.article-title { font-family:var(--font-display); font-size:clamp(1.8rem,4vw,2.6rem); font-weight:700; line-height:1.3;
+    letter-spacing:-0.02em; margin-bottom:2.5rem; }
+  .article-body { font-size:1.02rem; color:var(--text-muted); }
+  .article-body h2 { font-family:var(--font-display); font-size:1.5rem; font-weight:600; margin:2.5rem 0 1rem;
+    color:var(--text); letter-spacing:-0.01em; }
+  .article-body h3 { font-family:var(--font-display); font-size:1.2rem; font-weight:600; margin:2rem 0 0.8rem; color:var(--text); }
+  .article-body h4,.article-body h5,.article-body h6 { font-size:1.05rem; font-weight:600;
+    margin:1.5rem 0 0.6rem; color:var(--text); }
+  .article-body p { margin-bottom:1.3rem; }
+  .article-body a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim); }
+  .article-body a:hover { border-bottom-color:var(--accent); }
+  .article-body ul,.article-body ol { margin:0 0 1.3rem 1.5rem; }
+  .article-body li { margin-bottom:0.5rem; }
+  .article-body code { font-family:var(--font-mono); font-size:0.85em;
+    background:var(--surface-raised); padding:0.15em 0.4em; border-radius:3px; color:var(--accent-bright); }
+  .article-body pre { background:var(--surface); border:1px solid var(--border); border-radius:4px;
+    padding:1.2rem; overflow-x:auto; margin-bottom:1.3rem; }
+  .article-body pre code { background:none; padding:0; color:var(--text); font-size:0.82rem; line-height:1.7; }
+  .article-body blockquote { border-left:2px solid var(--accent-dim); padding-left:1.2rem;
+    margin:0 0 1.3rem; color:var(--text-muted); font-style:italic; }
+  .article-body .callout { background:var(--surface); border:1px solid var(--border);
+    border-left:2px solid var(--accent); border-radius:4px; padding:1rem 1.2rem; margin-bottom:1.3rem; }
+  .article-body hr { border:none; border-top:1px solid var(--border); margin:2.5rem 0; }
+  .article-body .todo { color:var(--text-muted); }
+  .article-body .img-placeholder { color:var(--text-dim); font-family:var(--font-mono);
+    font-size:0.8rem; text-align:center; padding:1rem; border:1px dashed var(--border); }
+  footer { border-top:1px solid var(--border); padding:2rem 0; margin-top:3rem;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav>
+  <div class="container">
+    <a href="/" class="nav-logo"><span class="dot"></span>Caoran</a>
+    <a href="/library.html" class="nav-back">← 返回知识库</a>
+  </div>
+</nav>
+<main class="container">
+  <article>
+    <div class="article-meta">
+      <span class="article-date">2026.08.30</span>
+      <span class="article-tag cloud">学科知识正文</span>
+    </div>
+    <h1 class="article-title">一次请求的完整链路：从 DNS 到数据库再到响应返回</h1>
+    <div class="article-body">
+<h2>1. 先建立正确的整体模型</h2>
+<p><strong>核心结论：</strong>一次业务请求不是一条 TCP 连接从浏览器贯穿到数据库，而是一串彼此独立的网络 hop。一个逻辑请求会跨越多条连接，一条可复用连接也可以承载许多请求。</p>
+<p>分析完整链路时，始终先问两个问题：当前这一跳是谁在和谁通信？当前是在新建连接，还是在复用已有连接？</p>
+<pre><code class="language-plaintext">浏览器
+  ⇄ 连接 A：TCP + TLS + HTTP
+Nginx
+  ⇄ 连接 B：TCP + HTTP 或 HTTPS
+FastAPI / Uvicorn
+  ⇄ 连接 C：TCP + HTTP/2 + gRPC
+内部服务
+  ⇄ 连接 D：TCP + 数据库协议
+PostgreSQL</code></pre>
+<p><strong>冷链路。</strong>首次访问或连接失效时，可能需要 DNS 查询、TCP 三次握手、TLS 握手、建立 gRPC 底层连接以及创建数据库连接。</p>
+<p><strong>热链路。</strong>DNS 命中缓存、HTTP 连接仍可复用、gRPC Channel 和数据库连接池已有可用资源时，请求可以跳过大部分建连步骤。</p>
+<p><strong>相关知识：</strong>　　　　</p>
+<h2>2. 客户端到入口：DNS、TCP、TLS 与 HTTP</h2>
+<h3>2.1 DNS：域名变成入口地址</h3>
+<p>用户访问 <code>https://api.example.com/v1/agent/runs</code> 时，客户端先解析出协议、域名、默认端口 443 和路径。如果没有可复用连接，会从浏览器缓存、操作系统缓存和递归解析器中查找域名对应的 A 或 AAAA 记录；递归解析器必要时沿 DNS 委派关系查询，结果再按照 TTL 缓存。</p>
+<pre><code class="language-plaintext">浏览器缓存 → 操作系统缓存 → 递归 DNS
+                               ↓
+                      根 → 顶级域 → 权威 DNS
+                               ↓
+                    api.example.com → 入口 IP</code></pre>
+<p>DNS 返回的通常是 CDN、云负载均衡或 Nginx 集群的入口地址，而不是某个 FastAPI Worker 的真实地址。端口通常由 URL 协议决定，不是普通 A/AAAA 记录告诉客户端的。</p>
+<h3>2.2 TCP：建立可靠字节流</h3>
+<pre><code class="language-plaintext">客户端                         服务端
+SYN              ─────────────→
+                 ←───────────── SYN + ACK
+ACK              ─────────────→
+连接进入 ESTABLISHED</code></pre>
+<p>TCP 三次握手让双方交换并确认初始序列号。建立后，TCP提供可靠、有序、双向的字节流，并负责确认、丢包重传、流量控制和拥塞控制。TCP ACK 表示下一步期望收到的序列号，不是 HTTP 业务成功响应。</p>
+<h3>2.3 TLS：认证并加密入口连接</h3>
+<p>HTTPS 通常在 TCP 之上进行 TLS 握手。ClientHello 会携带 SNI、支持的密码套件、密钥材料和 ALPN 候选协议；服务端返回证书和握手证明。客户端校验证书链、域名和签名后，双方得到对称会话密钥。ALPN 可以在握手中协商使用 <code>http/1.1</code> 或 <code>h2</code>。</p>
+<p>TLS保护的是某一段连接。如果 TLS 在 Nginx 终止，Nginx 到 FastAPI 是另一条安全边界，需要单独决定使用内网明文、TLS还是mTLS。</p>
+<h3>2.4 HTTP：表达业务请求</h3>
+<pre><code class="language-java">POST /v1/agent/runs HTTP/1.1
+Host: api.example.com
+Authorization: Bearer ...
+Content-Type: application/json
+Idempotency-Key: 8ef1...
+
+{&quot;agent_id&quot;:&quot;research-agent&quot;,&quot;input&quot;:&quot;分析这份材料&quot;}</code></pre>
+<p>HTTP定义方法、路径、Header、请求体、状态码和响应体。HTTP/1.1 默认使用持久连接；HTTP/2则把请求映射为独立 Stream，让一条连接同时承载多个并发请求。</p>
+<p><strong>现代例外。</strong>如果入口使用 HTTP/3，客户端会使用基于 UDP 的 QUIC，并把 TLS 集成到 QUIC 握手中，因此入口段不再是传统的“TCP → TLS”；后端各跳仍需独立分析。</p>
+<h2>3. 四层与七层负载均衡</h2>
+<p>四层和七层负载均衡解决的不是同一个粒度的问题。它们经常同时存在：四层入口先把连接分给多台 Nginx，Nginx 再按 HTTP 语义把请求路由给业务实例。</p>
+<p>维度</p>
+<p>四层负载均衡</p>
+<p>七层负载均衡</p>
+<p>调度对象</p>
+<p>TCP 连接或 UDP 流量</p>
+<p>HTTP 请求或 gRPC Stream</p>
+<p>可见信息</p>
+<p>IP、端口、协议等传输层信息</p>
+<p>Host、Path、Method、Header、Cookie</p>
+<p>URL 路由</p>
+<p>通常不支持</p>
+<p>支持</p>
+<p>TLS</p>
+<p>常见为透传，也可能代理终止</p>
+<p>常在此终止，以便解析 HTTP</p>
+<p>典型能力</p>
+<p>高效连接转发</p>
+<p>鉴权、限流、重写、缓存、请求级观测</p>
+<p>典型用途</p>
+<p>把连接分给入口集群</p>
+<p>把请求分给不同业务服务</p>
+<p>判断 L4 和 L7 的关键不是“有没有终止 TLS”，而是是否解析并依据应用层语义做决策。</p>
+<p>gRPC通常在一条 HTTP/2 长连接上承载很多 RPC。纯四层负载均衡会把整条连接固定到一个后端，可能造成实例间不均；理解 gRPC 的七层代理可以按 RPC Stream 选择后端，但已经开始的 Stream 不能中途迁移。</p>
+<h2>4. Nginx：TLS 终止、路由与反向代理</h2>
+<p>Nginx 在典型架构中既是客户端连接上的服务器，也是 FastAPI 上游连接上的客户端。它可能完成 TLS 终止、HTTP 解析、请求大小限制、鉴权、限流、访问日志、Trace ID 传递以及上游选择。</p>
+<pre><code class="language-plaintext">浏览器请求
+  ↓ TLS 解密
+Nginx 解析 Host、Path、Header
+  ↓ 路由与负载均衡
+选择 FastAPI 实例
+  ↓
+通过独立上游连接转发</code></pre>
+<p>必须牢牢记住：</p>
+<pre><code class="language-plaintext">浏览器 ← 连接 A → Nginx ← 连接 B → Uvicorn / FastAPI</code></pre>
+<p>连接 A 和连接 B 可以使用不同的 HTTP 版本、TLS策略、空闲时间和缓冲策略。浏览器 Keep-Alive 不代表 Nginx 到 FastAPI 的连接一定仍然可用；Nginx需要维护自己的上游连接复用机制。</p>
+<p>Nginx也可以直接代理gRPC。无论代理HTTP还是gRPC，只有尚未开始向客户端发送响应时，才可能切换到其他上游；响应一旦已经发送一部分，就不能通过换后端重新生成同一响应。</p>
+<h2>5. Uvicorn 与 FastAPI：请求进入 Python 应用</h2>
+<p>Uvicorn负责接受连接、解析HTTP并通过ASGI调用FastAPI。ASGI的核心接口可以抽象为：</p>
+<pre><code class="language-php">async def app(scope, receive, send):
+    ...</code></pre>
+<p><code>scope</code>保存协议、方法、路径和Header等元数据；<code>receive</code>用于异步接收请求体或断开事件；<code>send</code>用于发送响应头和响应体。</p>
+<pre><code class="language-plaintext">Uvicorn解析HTTP
+  → ASGI scope / receive / send
+  → FastAPI中间件
+  → 路由匹配
+  → 身份认证与依赖注入
+  → 参数校验
+  → endpoint
+  → 响应序列化</code></pre>
+<p><code>async def</code>路由在等待异步数据库、HTTP或gRPC I/O时会让出事件循环，因此同一Worker可以继续处理其他请求。普通<code>def</code>路由通常在线程池中执行；但是在<code>async def</code>中直接调用一个阻塞函数，并不会自动把它移到线程池。</p>
+<p><strong>逻辑同步不等于线程阻塞。</strong>FastAPI执行<code>await agent_stub.CreateRun(...)</code>时，当前业务请求必须等待RPC结果才能继续，因此是同步依赖；但等待期间事件循环线程仍可调度其他协程。</p>
+<h2>6. gRPC：同步调用内部服务</h2>
+<p>FastAPI把内部服务调用交给生成的Stub。一次gRPC调用通常会经历：</p>
+<ol><li>把Python对象序列化为Protocol Buffers消息。</li><li>复用长期存在的gRPC Channel和底层HTTP/2连接。</li><li>在连接上创建新的HTTP/2 Stream。</li><li>发送方法名、Metadata、Deadline和消息体。</li><li>等待服务端返回Protobuf消息与<code>grpc-status</code> trailers。</li><li>反序列化为应用对象并交还FastAPI。</li></ol>
+<pre><code class="language-plaintext">一条 gRPC HTTP/2 连接
+├─ Stream 1：CreateRun
+├─ Stream 3：GetRun
+├─ Stream 5：CancelRun
+└─ Stream 7：ReportToolResult</code></pre>
+<p>HTTP/2允许多个RPC并发复用同一连接，因此Channel通常应作为应用生命周期级资源，而不是每个HTTP请求都重新创建。达到并发Stream上限时，新的RPC仍可能在客户端排队。</p>
+<p>gRPC默认不替业务设置合理Deadline，调用方应明确给出总等待边界，并将剩余时间向下游传播。客户端Deadline到期只表示不再等待，不会自动撤销服务端已经完成的数据库副作用。</p>
+<h2>7. 数据库：连接池、事务与 SQL 执行</h2>
+<p>数据库访问可能发生在FastAPI，也可能发生在被调用的gRPC服务中。应用一般不会为每条SQL重新建立数据库连接，而是从SQLAlchemy Engine的连接池中借用已有连接。</p>
+<pre><code class="language-plaintext">等待连接池
+  → checkout连接
+  → BEGIN
+  → 发送SQL
+  → 解析、重写、优化、执行
+  → MVCC、锁、缓存或磁盘访问
+  → COMMIT或ROLLBACK
+  → reset并归还连接池</code></pre>
+<p><strong>连接池等待也是延迟。</strong>连接池只有20条连接而同时到达100个数据库操作时，20个请求能够执行，另外80个会等待。排查慢请求时要把“等待连接”“等待锁”和“SQL执行”分别统计。</p>
+<p>数据库连接总量不能只看单个Worker。粗略上限通常是：</p>
+<pre><code class="language-plaintext">应用实例数 × 每实例Worker数 × 每Worker连接池上限</code></pre>
+<p>池过小会让应用排队，池过大则会把压力直接推给数据库。连接对象的<code>close()</code>通常表示把连接归还池，而不是立即关闭底层TCP连接。</p>
+<p>PostgreSQL收到SQL后会经过parser、rewriter、planner/optimizer和executor。执行器结合MVCC、索引、锁、Buffer Cache与存储系统读取或修改数据；事务最终提交或回滚后，连接才应安全归还。</p>
+<h2>8. 响应如何返回浏览器</h2>
+<p>数据库完成后，逻辑结果逐层向外返回，但不是同一个协议包原路透传。每一层都把自己的协议对象转换为上一层能够理解的表示。</p>
+<pre><code class="language-plaintext">PostgreSQL查询结果或提交结果
+  → 数据库驱动解码
+  → gRPC服务构造Protobuf响应
+  → gRPC message + grpc-status trailers
+  → FastAPI客户端反序列化
+  → endpoint构造响应对象
+  → FastAPI序列化JSON
+  → ASGI response事件
+  → Uvicorn编码HTTP响应
+  → Nginx缓冲或流式转发
+  → TLS record加密
+  → TCP分段传输
+  → 浏览器解密、解析并更新页面</code></pre>
+<p>数据库错误可能被映射成gRPC状态，再由FastAPI映射成HTTP状态码。如果映射不清晰，客户端最终只会看到笼统的500错误，失去定位价值。</p>
+<p>返回阶段通常复用刚才各hop上的现有连接，不会重新执行DNS、TCP和TLS。响应包是新发送的数据包，并不是请求数据包倒着移动；现实网络的去程和回程路由甚至可能不完全相同。</p>
+<p>如果是普通JSON接口，通常生成完整响应后返回；如果是流式gRPC、SSE或WebSocket，响应可能在业务尚未结束时持续发送，此时超时、断开检测和取消传播需要单独设计。</p>
+<h2>9. Keep-Alive 与连接池</h2>
+<p>“Keep-Alive”在不同层代表不同机制，不能混为一谈。</p>
+<p>机制</p>
+<p>所在层</p>
+<p>解决的问题</p>
+<p>HTTP持久连接</p>
+<p>HTTP连接管理</p>
+<p>让后续HTTP请求复用已经建立的传输连接，减少TCP/TLS握手</p>
+<p>TCP keepalive</p>
+<p>操作系统TCP</p>
+<p>对长期空闲连接发送探针，发现已经失效的对端或网络路径</p>
+<p>gRPC keepalive</p>
+<p>gRPC / HTTP/2</p>
+<p>使用HTTP/2 PING检测长期连接是否仍可用</p>
+<p>业务心跳</p>
+<p>应用层</p>
+<p>确认用户会话、Worker或业务任务是否仍然健康</p>
+<p>HTTP Keep-Alive不是心跳，TCP keepalive也不证明服务端业务健康，gRPC keepalive更不等于RPC Deadline。</p>
+<p><strong>连接池不是一个“大连接”。</strong>它管理一组可复用连接的创建、借出、归还、健康检查、空闲回收和数量上限。请求到达后可能直接取得空闲连接，也可能新建、排队，最后因等待过久触发pool timeout。</p>
+<p>位置</p>
+<p>管理对象</p>
+<p>主要风险</p>
+<p>Nginx upstream</p>
+<p>Nginx Worker到FastAPI的连接</p>
+<p>每个Worker独立，容易低估总连接数</p>
+<p>HTTP客户端</p>
+<p>到下游HTTP服务的连接</p>
+<p>陈旧连接、连接数过多、池等待</p>
+<p>gRPC Channel</p>
+<p>HTTP/2连接和并发Stream</p>
+<p>Stream达到上限后排队，长流影响负载分布</p>
+<p>SQLAlchemy</p>
+<p>数据库驱动连接</p>
+<p>连接泄漏、pool timeout、超过数据库上限</p>
+<p>一句话区分：Keep-Alive表示“这条连接先不要关闭”，连接池表示“统一管理一组可以借用和复用的连接”，HTTP/2多路复用则表示“一条连接可以同时承载多个Stream”。</p>
+<h2>10. 超时：为整条调用链分配时间预算</h2>
+<p>完整链路不能只有一个笼统的“请求超时”。不同超时约束的是不同等待阶段。</p>
+<p>超时</p>
+<p>约束阶段</p>
+<p>DNS timeout</p>
+<p>等待名称解析</p>
+<p>TCP connect timeout</p>
+<p>等待建立传输连接</p>
+<p>TLS handshake timeout</p>
+<p>等待完成TLS协商与认证</p>
+<p>pool acquisition timeout</p>
+<p>等待HTTP、gRPC或数据库连接池资源</p>
+<p>send / write timeout</p>
+<p>发送请求数据的停滞时间</p>
+<p>read timeout</p>
+<p>等待下一批响应数据的停滞时间</p>
+<p>gRPC Deadline</p>
+<p>调用方愿意等待整个RPC的总时间</p>
+<p>DB lock / statement timeout</p>
+<p>数据库锁等待或语句执行</p>
+<p>overall deadline</p>
+<p>用户操作的端到端总预算</p>
+<p>idle keep-alive timeout</p>
+<p>两个请求之间允许连接空闲多久</p>
+<p>推荐使用递减时间预算，让内层比外层更早失败，给错误转换、资源释放和响应返回留出时间：</p>
+<pre><code class="language-plaintext">客户端整体预算：3.0s
+└─ 网关 / FastAPI：2.8s
+   └─ gRPC Deadline：2.0s
+      ├─ 数据库连接池等待：0.1s
+      └─ 数据库语句：1.5s</code></pre>
+<p>Nginx的<code>proxy_read_timeout</code>通常限制两次读取之间能够沉默多久，不是整个请求的总时长。流式接口只要持续输出数据，就可能运行得远超该值，因此仍需应用层overall deadline。</p>
+<p>调用方超时或客户端断开，只表示调用方不再等待；服务端可能仍在运行，数据库也可能已经提交。取消信号应尽量向下传播，但不能把“收到取消”误认为“副作用自动回滚”。</p>
+<h2>11. 重试：必须与幂等一起设计</h2>
+<p>重试最危险的问题不是“能不能再发一次”，而是“第一次到底有没有产生业务效果”。</p>
+<pre><code class="language-plaintext">服务端已经INSERT并COMMIT
+  → 返回响应时连接断开
+  → 客户端只看到超时
+  → 客户端重试POST
+  → 可能重复创建两条Agent Run</code></pre>
+<p>“没有收到响应”不等于“服务端没有执行”。创建订单、支付、启动Agent等有副作用的接口，应使用稳定业务ID或幂等键：</p>
+<pre><code class="language-java">Idempotency-Key: 8ef1...</code></pre>
+<p>服务端把“租户 + 接口 + 幂等键”建立唯一约束或幂等记录。相同请求再次到达时返回第一次结果，而不是重新创建业务对象。</p>
+<p>安全的重试策略应同时满足：</p>
+<ul><li>只重试明确的瞬态故障，例如临时不可用、连接建立失败或符合策略的限流。</li><li>操作本身幂等，或者通过幂等键和唯一约束实现业务幂等。</li><li>限制最大尝试次数，使用指数退避与随机抖动。</li><li>所有尝试共享overall deadline和retry budget。</li><li>明确一个主要重试层，避免客户端、Nginx、FastAPI和gRPC同时重试。</li></ul>
+<pre><code class="language-plaintext">客户端最多3次 × Nginx最多2次 × gRPC最多3次
+= 最坏18次下游调用</code></pre>
+<p>Nginx默认不会在请求已经发给上游后随意重试POST、PATCH等非幂等请求；gRPC虽然具有重试机制，但没有默认业务retry policy，透明重试也只覆盖能够确认尚未进入服务端业务处理的有限情况。</p>
+<h2>12. AI Agent 平台中的推荐链路</h2>
+<p>如果Agent只做一次很快的查询，FastAPI同步等待gRPC和数据库结果是合理的。但长时间运行的Agent Loop不应一直占用普通HTTP请求。</p>
+<p><strong>创建Run的短链路：</strong></p>
+<pre><code class="language-plaintext">POST /agent/runs
+  → FastAPI鉴权与参数校验
+  → 创建Run记录
+  → 写入消息队列
+  → 返回202 Accepted + run_id</code></pre>
+<p><strong>后台执行链路：</strong></p>
+<pre><code class="language-plaintext">Agent Worker消费任务
+  → 执行Agent Loop
+  → 调用LLM与Tool
+  → 保存State、Checkpoint和Trace
+  → 更新Run状态
+  → 通过SSE或WebSocket推送进度</code></pre>
+<p>这样客户端只需要重试“创建Run”这个短操作，并通过幂等键防止重复创建。长任务由消息队列、状态机和Checkpoint负责恢复；用户刷新页面后，可以依据<code>run_id</code>重新读取进度。</p>
+<p>如果使用WebSocket或SSE持续推送，需要把连接存活、业务任务存活和客户端在线状态分开建模：连接断开不应自动等于Agent任务失败，Agent任务结束也不一定要求立即关闭用户的会话连接。</p>
+<h2>13. 面试回答</h2>
+<p>用户访问一个HTTPS接口时，客户端先通过DNS缓存或递归解析得到负载均衡入口IP。如果没有可复用连接，就通过TCP三次握手建立可靠字节流，再进行TLS握手，验证服务器证书、协商密钥，并通过ALPN选择HTTP/1.1或HTTP/2。</p>
+<p>请求可能先经过四层负载均衡，四层按连接选择Nginx节点。Nginx终止TLS并解析HTTP，根据Host、路径和Header进行七层路由，再通过独立的上游连接把请求转发给Uvicorn和FastAPI。Uvicorn把HTTP转换为ASGI事件，FastAPI执行中间件、鉴权、依赖注入、参数校验和业务代码。</p>
+<p>FastAPI如果需要调用内部服务，会复用gRPC Channel，在HTTP/2连接上创建独立Stream并发送Protobuf消息。下游服务再从数据库连接池借出连接，在事务中执行SQL。SQL经过解析、重写、优化和执行后提交，数据库连接被归还连接池。</p>
+<p>结果随后通过数据库协议、gRPC、FastAPI、Nginx、TLS和TCP逐层返回浏览器。整个过程不是一条TCP连接贯穿到底，而是多条相互独立的连接。HTTP Keep-Alive负责复用HTTP连接，TCP keepalive负责探测失效连接，gRPC keepalive使用HTTP/2 PING。超时要按层传递剩余预算，重试必须配合幂等键、次数上限和指数退避，避免数据库已经提交但响应丢失时造成重复写入。</p>
+<h2>14. 自测问题</h2>
+<p class="todo">☐ 为什么第二次请求可能不再执行DNS、TCP和TLS？</p>
+<p class="todo">☐ 为什么Nginx前后的TCP连接不是同一条连接？</p>
+<p class="todo">☐ HTTP Keep-Alive、TCP keepalive和gRPC keepalive分别解决什么问题？</p>
+<p class="todo">☐ 为什么HTTP/2下，纯四层负载均衡可能让大量gRPC请求集中到一个实例？</p>
+<p class="todo">☐ 为什么<code>proxy_read_timeout=60s</code>不代表请求总时长最多60秒？</p>
+<p class="todo">☐ 为什么客户端超时不能证明数据库事务没有提交？</p>
+<p class="todo">☐ 为什么多层同时重试会形成流量放大？</p>
+<p class="todo">☐ 为什么FastAPI增加Worker后，必须重新计算数据库总连接数？</p>
+<h2>参考资料</h2>
+<ul><li><a href="https://www.rfc-editor.org/rfc/rfc1034.html" target="_blank" rel="noopener">RFC 1034：DNS Concepts and Facilities</a></li><li><a href="https://www.rfc-editor.org/rfc/rfc9293.html" target="_blank" rel="noopener">RFC 9293：Transmission Control Protocol</a></li><li><a href="https://www.rfc-editor.org/rfc/rfc8446.html" target="_blank" rel="noopener">RFC 8446：TLS 1.3</a></li><li><a href="https://www.rfc-editor.org/rfc/rfc9112.html" target="_blank" rel="noopener">RFC 9112：HTTP/1.1</a></li><li><a href="https://www.rfc-editor.org/rfc/rfc9113.html" target="_blank" rel="noopener">RFC 9113：HTTP/2</a></li><li><a href="https://nginx.org/en/docs/http/load_balancing.html" target="_blank" rel="noopener">Nginx HTTP Load Balancing</a></li><li><a href="https://nginx.org/en/docs/http/ngx_http_proxy_module.html" target="_blank" rel="noopener">Nginx HTTP Proxy Module</a></li><li><a href="https://www.uvicorn.org/concepts/asgi/" target="_blank" rel="noopener">Uvicorn ASGI Concepts</a></li><li><a href="https://fastapi.tiangolo.com/async/" target="_blank" rel="noopener">FastAPI Concurrency and async / await</a></li><li><a href="https://grpc.io/docs/what-is-grpc/core-concepts/" target="_blank" rel="noopener">gRPC Core Concepts</a></li><li><a href="https://grpc.io/docs/guides/deadlines/" target="_blank" rel="noopener">gRPC Deadlines</a></li><li><a href="https://grpc.io/docs/guides/retry/" target="_blank" rel="noopener">gRPC Retry</a></li><li><a href="https://docs.sqlalchemy.org/en/20/core/pooling.html" target="_blank" rel="noopener">SQLAlchemy Connection Pooling</a></li><li><a href="https://www.postgresql.org/docs/current/query-path.html" target="_blank" rel="noopener">PostgreSQL Path of a Query</a></li></ul>
+    </div>
+  </article>
+</main>
+<footer>&copy; 2026 Caoran · 技术札记与深度思考</footer>
+<script>
+  var p=document.getElementById('progress');
+  addEventListener('scroll',function(){
+    var h=document.documentElement,max=h.scrollHeight-h.clientHeight;
+    p.style.width=(max>0?(scrollY/max*100):0)+'%';
+  },{passive:true});
+</script>
+</body>
+</html>

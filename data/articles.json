@@ -1,7 +1,31 @@
 {
-  "generated_at": "2026-08-29T22:06:18.595625+00:00",
-  "count": 73,
+  "generated_at": "2026-08-30T22:12:53.681268+00:00",
+  "count": 75,
   "articles": [
+    {
+      "title": "Redis 入门：为什么需要 Redis",
+      "date": "2026.08.30",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "一句话结论：Redis 是一个独立运行的内存数据存储服务。它不是为了替代 PostgreSQL，而是负责缓存、短期状态、任务队列、计数、限流和跨进程协调。",
+      "url": "/articles/Redis---Redis-caa71a6f.html"
+    },
+    {
+      "title": "幂等：从 Idempotency-Key、唯一约束到 Agent Tool 副作用",
+      "date": "2026.08.30",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "核心结论：幂等真正解决的不是“把相同代码再执行一次”，而是调用方无法判断第一次是否已经产生业务效果时，允许它安全地再次表达同一个业务意图。",
+      "url": "/articles/Idempotency-Key--Agent-Tool-4c8a0093.html"
+    },
+    {
+      "title": "一次请求的完整链路：从 DNS 到数据库再到响应返回",
+      "date": "2026.08.30",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "核心结论：一次业务请求不是一条 TCP 连接从浏览器贯穿到数据库，而是一串彼此独立的网络 hop。一个逻辑请求会跨越多条连接，一条可复用连接也可以承载许多请求。",
+      "url": "/articles/DNS-0a417b96.html"
+    },
     {
       "title": "FastAPI 服务模型：从 ASGI 到 Agent Worker",
       "date": "2026.08.29",
@@ -297,14 +321,6 @@
       "tag_color": "cloud",
       "summary": "一句话结论：消息队列是服务之间传递消息的中间件。生产者把消息发送给 Broker，消费者按照自己的处理能力异步消费，从而实现异步处理、流量削峰、服务解耦和失败重试。",
       "url": "/articles/Agent-84c3fe0f.html"
-    },
-    {
-      "title": "Redis 入门：为什么需要 Redis",
-      "date": "2026.07.28",
-      "category": "学科知识正文",
-      "tag_color": "cloud",
-      "summary": "一句话结论：Redis 是一个独立运行的内存数据存储服务。它不是为了替代 PostgreSQL，而是负责缓存、短期状态、任务队列、计数、限流和跨进程协调。",
-      "url": "/articles/Redis---Redis-caa71a6f.html"
     },
     {
       "title": "单服务器上的 AI Agent 多租户与容器隔离",

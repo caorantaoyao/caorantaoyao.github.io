@@ -90,7 +90,7 @@
 <main class="container">
   <article>
     <div class="article-meta">
-      <span class="article-date">2026.08.29</span>
+      <span class="article-date">2026.08.31</span>
       <span class="article-tag cloud">学科知识正文</span>
     </div>
     <h1 class="article-title">Agent 评测：从 Trace 数据到质量闭环</h1>
@@ -241,6 +241,155 @@ Trace Collector → Trace Store
 <ul><li>：Trace、Span、传播、隐私与可观测性基础。</li><li>：理解 Agent 如何在观察结果后持续决策。</li><li>：理解 Tool 调用链、错误、幂等和权限边界。</li><li>：理解可复用工作流如何规定执行与验收步骤。</li></ul>
 <p><strong>官方资料：</strong></p>
 <p><strong>一句话总结：</strong>把每一次 Trace 变成可解释的证据，把反复出现的问题变成可回归的 Eval Case，Agent 平台才能持续证明自己在变好。</p>
+<hr>
+<h2>21. 面试八股强化：先把核心术语说清楚</h2>
+<p>Agent 评测不是只给模型最后一句话打分，而是在可重复的任务、环境和工具条件下，多次运行“模型 + Agent Harness + Context + Tool + State”，再检查最终结果、执行轨迹、关键组件和线上产品效果。面试时先建立这套对象模型，再谈指标，会比直接罗列准确率更完整。</p>
+<p>术语</p>
+<p>含义</p>
+<p>面试中要强调的点</p>
+<p>Task</p>
+<p>一条待完成的用户任务，包含输入、初始环境、可用工具和业务约束。</p>
+<p>不是只有一段 Prompt，还包括任务发生时的真实环境。</p>
+<p>Trial</p>
+<p>Agent 针对一个 Task 的一次完整运行。</p>
+<p>Agent 有随机性，同一 Task 需要重复多个 Trial。</p>
+<p>Trace / Trajectory</p>
+<p>一次运行中的模型决策、工具调用、参数、Observation、状态变化、耗时和错误。</p>
+<p>用于解释为什么成功或失败，但不能替代最终结果检查。</p>
+<p>Outcome</p>
+<p>运行结束时数据库、文件、订单或外部系统的真实最终状态。</p>
+<p>Agent 自称“成功”不等于任务真的成功。</p>
+<p>Grader</p>
+<p>对结果、轨迹或组件进行判分的规则、程序、LLM 或人工专家。</p>
+<p>客观事实优先用确定性 Grader，开放质量再用 Judge。</p>
+<p>Eval Suite</p>
+<p>版本化的任务集、环境、Rubric、Grader、运行配置和报告切片。</p>
+<p>它应可复现、可回归，而不是临时手测几个 Demo。</p>
+<p>Agent Harness</p>
+<p>包围模型的运行时，包括 Agent Loop、Context 组装、Tool 执行、权限、State、Checkpoint 和错误恢复。</p>
+<p>被测对象是模型与 Harness 共同构成的系统。</p>
+<p>Evaluation Harness</p>
+<p>负责装载数据集、重置环境、批量运行 Trial、执行 Grader、聚合指标和生成报告的评测基础设施。</p>
+<p>不要把它与 Agent Harness 混为一谈。</p>
+<p><strong>一句话判断：</strong>Outcome 回答“事情有没有真正办成”，Trace 回答“Agent 是怎样办的”，组件评测回答“具体坏在哪一层”，线上指标回答“真实用户是否因此获益”。</p>
+<h2>22. 四层评测如何组合，而不是互相替代</h2>
+<p>层级</p>
+<p>典型问题</p>
+<p>适合的指标或 Grader</p>
+<p>局限</p>
+<p>组件级</p>
+<p>记忆是否写对、RAG 是否召回、Tool 是否选对、参数是否合法？</p>
+<p>Precision、Recall、F1、Recall@k、Schema 校验、参数准确率。</p>
+<p>组件分数提高，不保证端到端任务更好。</p>
+<p>轨迹级</p>
+<p>调用顺序、依赖、权限、重试与错误恢复是否合理？</p>
+<p>必要步骤覆盖率、越权率、循环率、恢复率、Trajectory Judge。</p>
+<p>开放任务可能有多条正确路径，不能盲目精确匹配唯一轨迹。</p>
+<p>端到端 Outcome</p>
+<p>数据库、文件、订单或最终答案是否达到目标状态？</p>
+<p>Task Success、目标状态匹配、规则遵循率、回答正确性与完整性。</p>
+<p>最接近用户价值，但单独使用时难以定位失败原因。</p>
+<p>产品与线上</p>
+<p>真实用户是否完成任务、继续使用、减少人工接管？</p>
+<p>任务完成率、满意度、留存、人工接管、延迟、成本和安全事件。</p>
+<p>受真实流量和外部因素影响，通常还需 A/B 和 Trace 归因。</p>
+<p>正确做法是把四层连起来：先用端到端指标判断版本是否真正变好，再用 Trace 和组件指标解释变化来自哪里，最后通过灰度与 A/B 验证真实产品价值。对于权限、隐私、不可逆工具操作等高风险条件，应设置硬门禁，而不是用平均分抵消。</p>
+<h2>23. pass@1、pass@k 与 pass^k：能力和稳定性不能混为一谈</h2>
+<p><strong>pass@1</strong> 是一次运行成功的比例，最贴近用户只得到一次回答的常见场景。<strong>pass@k</strong> 表示运行 k 次后至少成功一次的概率，适合允许搜索、采样多个候选或重试的任务；它回答“这个系统有没有能力做到”。<strong>pass^k</strong> 表示连续 k 次全部成功的概率，用来衡量生产 Agent 的一致性和可靠性；它回答“这个系统能不能每次都做到”。</p>
+<p>若每次 Trial 的成功概率近似为 p 且相互独立，则：</p>
+<p><strong>pass@k ≈ 1 − (1 − p)^k</strong></p>
+<p><strong>pass^k ≈ p^k</strong></p>
+<p>例如单次成功率为 80%，运行 5 次后至少一次成功的 pass@5 约为 99.97%，看起来很高；但连续 5 次全部成功的 pass^5 只有约 32.77%。因此，不能用很高的 pass@k 掩盖较差的单次体验或稳定性。面向真实用户的 Agent 通常至少要同时报告 pass@1、重复 Trial 的分布和 pass^k。</p>
+<h2>24. 数据集、回归与 A/B：如何证明新版本真的更好</h2>
+<p>一条可复现的 Agent 评测样本不仅包含用户输入，还应包含初始环境状态、可用工具与权限、业务规则、期望 Outcome、必要里程碑、禁止行为、评分 Rubric、场景标签和难度。样本来源应同时覆盖产品需求、领域专家题、历史 Trace、用户投诉、Bug、边界场景和对抗场景。</p>
+<p>环节</p>
+<p>关键做法</p>
+<p>要避免的问题</p>
+<p>数据集</p>
+<p>覆盖典型、边界、对抗与真实失败；按任务类型、难度和用户群切片；保留未参与调优的 Holdout。</p>
+<p>只挑容易成功的 Demo，或不断针对测试题刷分。</p>
+<p>公平对照</p>
+<p>Baseline 与 Candidate 使用相同任务、环境、模型、Prompt、Tool、温度、Judge 和运行次数，尽量只替换一个主要变量。</p>
+<p>同时改模型、Prompt、Memory 和检索器后，无法归因。</p>
+<p>回归门禁</p>
+<p>正确性、安全、延迟和成本分别设阈值；重要 Slice 不能被总平均分掩盖。</p>
+<p>总分上升就直接发布，忽视租户泄漏等严重退化。</p>
+<p>线上 A/B</p>
+<p>按用户稳定随机分桶，预先定义主指标与护栏指标，再观察真实任务完成、体验、成本和安全。</p>
+<p>只看短期点击或满意度，忽视学习结果、错误和人工接管。</p>
+<p>质量闭环</p>
+<p>线上失败经脱敏、去重和人工确认后回流离线集，修复后进入 Regression Suite。</p>
+<p>评测集长期不更新，与真实失败分布脱节。</p>
+<p><strong>Capability Eval</strong> 回答“系统现在能做到什么”，可以包含尚未稳定解决的难题；<strong>Regression Eval</strong> 回答“过去会的能力有没有退化”，应接近全通过并作为发布门禁。已经稳定解决的能力题可以逐步进入回归集。</p>
+<h2>25. 你的记忆系统升级应该怎样评测</h2>
+<p>记忆系统升级非常适合讲成“组件级 + 端到端 + 工程护栏”的完整评测案例。最关键的实验设计是保留旧版 Agent 作为 Baseline，在相同模型、Prompt、Tool、任务集、环境、Judge 和 Trial 次数下，只替换 Memory 模块。这样才能把效果变化归因到记忆系统，而不是其他变量。</p>
+<h3>25.1 组件级：记忆本身是否工作正确</h3>
+<p>能力</p>
+<p>要评什么</p>
+<p>示例指标</p>
+<p>抽取</p>
+<p>该保存的事实是否抽出；临时、敏感或不该保存的信息是否被错误写入。</p>
+<p>抽取 Precision / Recall / F1、错误记忆率。</p>
+<p>去重与合并</p>
+<p>同义事实是否合并，重复写入是否减少。</p>
+<p>重复率、合并正确率。</p>
+<p>更新与失效</p>
+<p>用户修改偏好后，新事实是否覆盖或失效旧事实。</p>
+<p>Knowledge Update 正确率、过期记忆使用率。</p>
+<p>召回</p>
+<p>相关记忆是否进入 Top-k，无关或错误用户记忆是否被召回。</p>
+<p>Recall@k、Precision@k、跨用户错误召回率。</p>
+<p>Context 注入</p>
+<p>注入内容是否相关、新鲜、有来源，并满足 Token 预算。</p>
+<p>有效记忆占比、注入 Token、压缩率、延迟。</p>
+<p>隔离与遗忘</p>
+<p>跨用户、跨租户是否泄漏；删除后是否仍可召回。</p>
+<p>泄漏率必须为零、删除后召回率必须为零。</p>
+<h3>25.2 端到端：记忆是否真的改善了 Agent</h3>
+<p>LongMemEval 将长期交互记忆拆成五类核心能力：Information Extraction、Multi-session Reasoning、Knowledge Updates、Temporal Reasoning 和 Abstention。你的评测集可以据此设计跨会话事实回忆、多会话信息组合、偏好更新、时间先后判断，以及“历史中没有信息时不编造”的样本。</p>
+<p>最终要比较的是跨会话回答正确率、一致性、个性化准确性、错误记忆干扰率、Token、延迟和成本。仅证明 Recall@k 提高还不够：如果召回更多内容却引入过期事实、噪声、跨用户泄漏或更高延迟，端到端 Agent 可能反而变差。</p>
+<h3>25.3 适合你的项目叙述</h3>
+<p>我对记忆系统做升级时，没有只看召回率，而是建立了旧版 Baseline 和新版 Candidate。在相同模型、Prompt、Tool、任务集和运行配置下，只替换 Memory 模块。组件层评测抽取、去重、更新、召回和上下文注入；端到端评测跨会话回忆、多会话推理、知识更新、时间推理和无记忆时的拒答；同时观察 Token、延迟、稳定性和错误记忆干扰。真实失败样本会沉淀进回归集，避免后续版本再次出现同类问题。</p>
+<h2>26. 教育 Agent 的评测：会做题不等于会教学</h2>
+<p>教育 Agent 不能只看答案准确率。一个直接给出正确答案的系统可能让用户短期满意，却没有帮助学生理解，更可能诱导代做。评测应至少覆盖学科正确性、教学质量、真实学习结果和安全公平四条轴。</p>
+<p>维度</p>
+<p>关键指标</p>
+<p>学科与多模态正确性</p>
+<p>OCR/公式识别、题目区域切分、知识点识别、最终答案、解题步骤、教材或检索证据忠实度。</p>
+<p>教学质量</p>
+<p>能否识别并定位学生错误，是否提供循序渐进的提示，指导是否可执行，是否适配年级和已有水平，是否避免无条件泄露答案。</p>
+<p>真实学习结果</p>
+<p>前测/后测提升、同类题迁移、延迟保持率、重复错误减少、学习完成率。</p>
+<p>产品体验</p>
+<p>真实任务完成率、满意度、继续互动、人工接管、延迟和成本。</p>
+<p>安全与公平</p>
+<p>未成年人隐私、图片数据保护、年龄适配、有害内容、作弊诱导，以及不同年级、语言和群体的切片表现。</p>
+<p>面试豆包爱学这类岗位时，可以明确说：回答正确性只是能力层，是否帮助学生形成理解才是产品层；安全、隐私和年龄适配属于硬门禁，不能用其他维度的高分抵消。</p>
+<h2>27. LLM-as-a-Judge 的偏差与治理</h2>
+<p>LLM Judge 适合开放答案、教学质量和轨迹合理性等难以写死规则的维度，但它是可扩展的近似标注器，不是真值来源。常见偏差包括位置偏差、冗长偏差、同模型家族偏好、Judge 自身推理错误，以及更换 Prompt、Rubric 或模型造成的标尺漂移。</p>
+<p>工程上应将客观事实交给 Code Grader；Judge 使用单一维度、明确分档和示例化 Rubric；Pairwise 比较时隐藏模型名称并交换 A/B 顺序；有标准答案时提供 Reference；允许证据不足时输出 Unknown；固定并版本化 Judge 模型、Prompt、温度和 Rubric；再用专家标注小集校准，并对争议、高风险和随机样本进行人工复核。</p>
+<h2>28. 高频面试陷阱</h2>
+<p>错误说法</p>
+<p>正确回答</p>
+<p>只看最终答案就够了。</p>
+<p>Outcome 决定是否完成，Trace 和组件评测负责定位原因；也不能只看漂亮 Trace 而忽略真实最终状态。</p>
+<p>Agent 有随机性，所以评测没意义。</p>
+<p>正因为非确定，才要固定环境、重复 Trial，并区分 pass@1、pass@k 和 pass^k。</p>
+<p>LLM Judge 可以替代人工。</p>
+<p>Judge 负责规模化，人工负责定义 Gold Standard、校准标尺和复核高风险案例。</p>
+<p>唯一标准轨迹越精确越好。</p>
+<p>只有法规、权限和业务强制步骤应设硬约束；开放任务可能有多条正确路径。</p>
+<p>平均分提升就能上线。</p>
+<p>还要看重要 Slice、失败严重度、稳定性、延迟、成本、安全门禁和线上 A/B。</p>
+<p>召回率提高就证明记忆系统更好。</p>
+<p>还必须证明端到端回答和任务完成改善，并排除噪声、过期事实、泄漏、Token 和延迟代价。</p>
+<h2>29. 可直接背诵的两分钟回答</h2>
+<p>我会把 Agent 评测拆成四层。第一层是组件评测，例如检索召回、记忆抽取、Tool 选择和参数是否正确；第二层是 Trace 评测，检查 Agent 的决策、工具调用、规则遵循和错误恢复；第三层是端到端 Outcome，直接检查数据库、文件或最终答案，确认任务真正完成；第四层是上线后的产品指标，例如真实任务完成率、满意度、人工接管、延迟和成本。</p>
+<p>Grader 我不会只用一种。客观事实优先使用确定性程序，例如 Schema、单元测试和数据库最终状态；开放质量使用带明确 Rubric 的 LLM-as-a-Judge；再用专家人工标注集校准 Judge，并通过盲评、交换答案顺序和抽样复核控制位置、长度等偏差。</p>
+<p>数据集会来自产品需求、专家样本、历史 Trace 和真实失败，覆盖正常、边界和对抗场景，并按能力切片。因为 Agent 有随机性，同一任务会运行多次，同时看 pass@1 和连续稳定性，而不是只展示一次成功 Demo。</p>
+<p>在我的记忆系统升级中，我保留旧版作为 Baseline，在相同模型、Prompt、Tool 和评测集下只替换 Memory 模块。组件层比较抽取、去重、更新和召回；端到端比较跨会话正确性、知识更新、时间推理和不知道时能否拒答；同时观察 Token、延迟和错误记忆干扰。修复后的真实失败样本会进入回归集，最后再通过灰度或 A/B 验证真实用户效果。</p>
+<h2>30. 一手资料索引</h2>
+<ul><li><a href="https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents" target="_blank" rel="noopener">Anthropic：Demystifying evals for AI agents</a></li><li><a href="https://docs.langchain.com/langsmith/evaluation-concepts" target="_blank" rel="noopener">LangSmith：Evaluation concepts</a></li><li><a href="https://docs.langchain.com/langsmith/evaluation-approaches" target="_blank" rel="noopener">LangSmith：Evaluation approaches</a></li><li><a href="https://arxiv.org/abs/2406.12045" target="_blank" rel="noopener">τ-bench：Tool-Agent-User Interaction 与 pass^k</a></li><li><a href="https://arxiv.org/abs/2306.05685" target="_blank" rel="noopener">MT-Bench：LLM-as-a-Judge 及其偏差</a></li><li><a href="https://xiaowu0162.github.io/long-mem-eval/" target="_blank" rel="noopener">LongMemEval：长期交互记忆评测</a></li><li><a href="https://arxiv.org/abs/2412.16429" target="_blank" rel="noopener">LearnLM：教育场景中的模型与体验评测</a></li><li><a href="https://aclanthology.org/2025.naacl-long.57/" target="_blank" rel="noopener">AI Tutor Evaluation：教学能力八维评测体系</a></li></ul>
     </div>
   </article>
 </main>

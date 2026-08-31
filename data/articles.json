@@ -1,7 +1,31 @@
 {
-  "generated_at": "2026-08-30T22:12:53.681268+00:00",
-  "count": 75,
+  "generated_at": "2026-08-31T23:29:42.362037+00:00",
+  "count": 76,
   "articles": [
+    {
+      "title": "操作系统全局主线：多个程序如何安全高效地共享一台计算机",
+      "date": "2026.08.31",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "贯穿操作系统全局的核心问题是：如何把一台资源有限、多人共享、直接操作又很危险的计算机，包装成一个让多个程序都能安全、高效、方便运行的环境？",
+      "url": "/articles/39d384a0.html"
+    },
+    {
+      "title": "一次网络请求如何完成：从 URL 到服务端响应",
+      "date": "2026.08.31",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "这是一篇计算机网络主线总览。它不深入每个报文字段，而是回答一个核心问题：当用户输入一个 HTTPS 地址后，浏览器发出的请求如何跨越 DNS、局域网、路由器和传输协议，安全地到达服务器进程，并最终得到 HTTP 响应。",
+      "url": "/articles/URL-14ec5161.html"
+    },
+    {
+      "title": "Agent 评测：从 Trace 数据到质量闭环",
+      "date": "2026.08.31",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "Agent Trace 让我们看见一次任务经历了什么，评测则判断这次任务完成得好不好。二者结合后，系统才能从线上失败中提取样本，在离线环境回归验证，再把改进版本安全地发布回线上。",
+      "url": "/articles/Agent---Trace-e0379094.html"
+    },
     {
       "title": "Redis 入门：为什么需要 Redis",
       "date": "2026.08.30",
@@ -73,14 +97,6 @@
       "tag_color": "cloud",
       "summary": "一句话理解：Agent Trace 把一次 Agent 任务从用户请求到最终结果的每一步记录成一棵执行树，让我们能够还原模型调用、工具执行、RAG、RPC、审批、重试、耗时和费用。",
       "url": "/articles/Agent-Trace-5aa39404.html"
-    },
-    {
-      "title": "Agent 评测：从 Trace 数据到质量闭环",
-      "date": "2026.08.29",
-      "category": "学科知识正文",
-      "tag_color": "cloud",
-      "summary": "Agent Trace 让我们看见一次任务经历了什么，评测则判断这次任务完成得好不好。二者结合后，系统才能从线上失败中提取样本，在离线环境回归验证，再把改进版本安全地发布回线上。",
-      "url": "/articles/Agent---Trace-e0379094.html"
     },
     {
       "title": "Agent 工具调用：从 Function Calling 到安全执行",
@@ -209,14 +225,6 @@
       "tag_color": "cloud",
       "summary": "操作系统",
       "url": "/articles/f36e5bcb.html"
-    },
-    {
-      "title": "一次网络请求如何完成：从 URL 到服务端响应",
-      "date": "2026.08.15",
-      "category": "学科知识正文",
-      "tag_color": "cloud",
-      "summary": "这是一篇计算机网络主线总览。它不深入每个报文字段，而是回答一个核心问题：当用户输入一个 HTTPS 地址后，浏览器发出的请求如何跨越 DNS、局域网、路由器和传输协议，安全地到达服务器进程，并最终得到 HTTP 响应。",
-      "url": "/articles/URL-14ec5161.html"
     },
     {
       "title": "TLS：HTTPS 如何建立可信、加密且防篡改的通信通道",

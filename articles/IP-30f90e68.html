@@ -90,7 +90,7 @@
 <main class="container">
   <article>
     <div class="article-meta">
-      <span class="article-date">2026.08.14</span>
+      <span class="article-date">2026.09.01</span>
       <span class="article-tag cloud">学科知识正文</span>
     </div>
     <h1 class="article-title">IP 与路由：数据知道目标端口后，怎样找到目标计算机</h1>
@@ -117,7 +117,7 @@
 <p>当前路段的收件标识</p>
 <p>完成同一链路上的一跳传输</p>
 <h2>2. 数据发送的整体流程</h2>
-<ol><li>应用通过 TCP 或 UDP Socket 提供目标 IP、目标端口和数据。</li><li>传输层加入源端口、目标端口等信息。</li><li>IP 层加入源 IP 和目标 IP，形成 IP 数据包。</li><li>操作系统查询本机路由表，决定网络接口和下一跳。</li><li>本机在当前局域网内找到下一跳的 MAC 地址并发送数据帧。</li><li>一个或多个路由器根据目标 IP 逐跳转发。</li><li>数据到达目标计算机后，操作系统根据协议和目标端口交给对应 Socket。</li></ol>
+<ol><li>应用通过 TCP 或 UDP Socket 提供目标 IP端口等信息。</li><li>IP 层加入源 IP 和目标 IP，形成 IP 数据包。</li><li>操作系统查询本机路由表，决定网络接口和下一跳。</li><li>本机在当前局域网内找到下一跳的 MAC 地址并发送数据帧。</li><li>一个或多个路由器根据目标 IP 逐跳转发。</li><li>数据到达目标计算机后，操作系统根据协议和目标端口交给对应 Socket。</li></ol>
 <pre><code class="language-plaintext">应用数据
 → TCP 或 UDP：加入端口
 → IP：加入源 IP 和目标 IP

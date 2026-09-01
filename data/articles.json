@@ -1,10 +1,58 @@
 {
-  "generated_at": "2026-08-31T23:29:42.362037+00:00",
+  "generated_at": "2026-09-01T22:10:23.811215+00:00",
   "count": 76,
   "articles": [
     {
+      "title": "TLS：HTTPS 如何建立可信、加密且防篡改的通信通道",
+      "date": "2026.09.01",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "TLS 的核心作用是在不可信的网络中，为客户端和服务器建立一条加密、防篡改，并且能够验证服务器身份的通信通道。HTTPS 可以总体理解为受 TLS 保护的 HTTP：HTTP 规定请求与响应的语义，TLS 负责保护通信过程。",
+      "url": "/articles/TLS-HTTPS-2cf07aab.html"
+    },
+    {
+      "title": "IP 与路由：数据知道目标端口后，怎样找到目标计算机",
+      "date": "2026.09.01",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "只知道目标端口还不足以完成网络通信。IP 地址负责找到目标计算机，端口负责在目标计算机上找到对应进程。例如 203.0.113.10:443 表示：先把数据送到 IP 地址为 203.0.113.10 的计算机，再交给监听 443 端口的进…",
+      "url": "/articles/IP-30f90e68.html"
+    },
+    {
+      "title": "UDP：不建立连接也能发送数据",
+      "date": "2026.09.01",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "UDP 是传输层协议，主要解决一台计算机上的进程如何向另一台计算机上的指定进程发送一条数据。它的全称是 User Datagram Protocol，即用户数据报协议。",
+      "url": "/articles/UDP-d1fd0bf6.html"
+    },
+    {
+      "title": "TCP 连接管理：三次握手、四次挥手与连接状态机",
+      "date": "2026.09.01",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "TCP 连接管理负责建立双向通信状态、同步双方初始序列号、协商参数，并在通信结束后安全释放两个发送方向。一条连接由源 IP、源端口、目标 IP、目标端口组成的四元组标识，内核还会维护序列号、窗口、缓冲区、重传计时器和拥塞状态。",
+      "url": "/articles/TCP-2acd4c9b.html"
+    },
+    {
+      "title": "同机进程网络通信：从 Socket、Loopback 到 Unix Domain Socket",
+      "date": "2026.09.01",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "同一台计算机上的不同进程，可以通过 Socket 与回环网络（Loopback）按照 TCP/IP 协议通信。例如浏览器访问 http://127.0.0.1:8000，浏览器进程是客户端，FastAPI 进程是服务端。",
+      "url": "/articles/Socket-Loopback--Unix-Domain-Socket-1af375c6.html"
+    },
+    {
+      "title": "WebSocket 长连接：从握手、心跳到 Agent 实时通信",
+      "date": "2026.09.01",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "WebSocket 是一种在单个 TCP 连接上进行双向、全双工通信的应用层协议。连接建立后，客户端和服务端都可以主动发送消息，不必像普通 HTTP 那样始终由客户端先发起一次请求。",
+      "url": "/articles/WebSocket----Agent-83e40e80.html"
+    },
+    {
       "title": "操作系统全局主线：多个程序如何安全高效地共享一台计算机",
-      "date": "2026.08.31",
+      "date": "2026.09.01",
       "category": "学科知识正文",
       "tag_color": "cloud",
       "summary": "贯穿操作系统全局的核心问题是：如何把一台资源有限、多人共享、直接操作又很危险的计算机，包装成一个让多个程序都能安全、高效、方便运行的环境？",
@@ -227,14 +275,6 @@
       "url": "/articles/f36e5bcb.html"
     },
     {
-      "title": "TLS：HTTPS 如何建立可信、加密且防篡改的通信通道",
-      "date": "2026.08.15",
-      "category": "学科知识正文",
-      "tag_color": "cloud",
-      "summary": "TLS 的核心作用是在不可信的网络中，为客户端和服务器建立一条加密、防篡改，并且能够验证服务器身份的通信通道。HTTPS 可以总体理解为受 TLS 保护的 HTTP：HTTP 规定请求与响应的语义，TLS 负责保护通信过程。",
-      "url": "/articles/TLS-HTTPS-2cf07aab.html"
-    },
-    {
       "title": "HTTP：客户端和服务器如何约定请求与响应",
       "date": "2026.08.15",
       "category": "学科知识正文",
@@ -251,52 +291,12 @@
       "url": "/articles/DNS---IP-aa190e90.html"
     },
     {
-      "title": "IP 与路由：数据知道目标端口后，怎样找到目标计算机",
-      "date": "2026.08.14",
-      "category": "学科知识正文",
-      "tag_color": "cloud",
-      "summary": "只知道目标端口还不足以完成网络通信。IP 地址负责找到目标计算机，端口负责在目标计算机上找到对应进程。例如 203.0.113.10:443 表示：先把数据送到 IP 地址为 203.0.113.10 的计算机，再交给监听 443 端口的进…",
-      "url": "/articles/IP-30f90e68.html"
-    },
-    {
-      "title": "UDP：不建立连接也能发送数据",
-      "date": "2026.08.14",
-      "category": "学科知识正文",
-      "tag_color": "cloud",
-      "summary": "UDP 是传输层协议，主要解决一台计算机上的进程如何向另一台计算机上的指定进程发送一条数据。它的全称是 User Datagram Protocol，即用户数据报协议。",
-      "url": "/articles/UDP-d1fd0bf6.html"
-    },
-    {
-      "title": "TCP 连接管理：三次握手、四次挥手与连接状态机",
-      "date": "2026.08.14",
-      "category": "学科知识正文",
-      "tag_color": "cloud",
-      "summary": "TCP 连接管理负责建立双向通信状态、同步双方初始序列号、协商参数，并在通信结束后安全释放两个发送方向。一条连接由源 IP、源端口、目标 IP、目标端口组成的四元组标识，内核还会维护序列号、窗口、缓冲区、重传计时器和拥塞状态。",
-      "url": "/articles/TCP-2acd4c9b.html"
-    },
-    {
       "title": "TCP ACK：确认号、累计确认与快速重传",
       "date": "2026.08.14",
       "category": "学科知识正文",
       "tag_color": "cloud",
       "summary": "ACK 是 Acknowledgment 的缩写，是 TCP 的确认机制。它告诉发送方：接收方已经连续收到哪些字节，下一次希望从哪个序列号继续发送。",
       "url": "/articles/TCP-ACK-bbd778be.html"
-    },
-    {
-      "title": "同机进程网络通信：从 Socket、Loopback 到 Unix Domain Socket",
-      "date": "2026.08.13",
-      "category": "学科知识正文",
-      "tag_color": "cloud",
-      "summary": "同一台计算机上的不同进程，可以通过 Socket 与回环网络（Loopback）按照 TCP/IP 协议通信。例如浏览器访问 http://127.0.0.1:8000，浏览器进程是客户端，FastAPI 进程是服务端。",
-      "url": "/articles/Socket-Loopback--Unix-Domain-Socket-1af375c6.html"
-    },
-    {
-      "title": "WebSocket 长连接：从握手、心跳到 Agent 实时通信",
-      "date": "2026.08.05",
-      "category": "学科知识正文",
-      "tag_color": "cloud",
-      "summary": "WebSocket 是一种在单个 TCP 连接上进行双向、全双工通信的应用层协议。连接建立后，客户端和服务端都可以主动发送消息，不必像普通 HTTP 那样始终由客户端先发起一次请求。",
-      "url": "/articles/WebSocket----Agent-83e40e80.html"
     },
     {
       "title": "Agent State 与 Memory：智能体如何保存进度、会话与长期记忆",

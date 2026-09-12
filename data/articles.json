@@ -1,7 +1,15 @@
 {
-  "generated_at": "2026-09-11T22:05:19.248674+00:00",
-  "count": 76,
+  "generated_at": "2026-09-12T21:47:39.224611+00:00",
+  "count": 77,
   "articles": [
+    {
+      "title": "RocketMQ：异步解耦、削峰填谷与最终一致性",
+      "date": "2026.09.12",
+      "category": "学科知识正文",
+      "tag_color": "cloud",
+      "summary": "一句话理解：RocketMQ 是分布式消息中间件。生产者把消息交给 Broker 持久化，消费者稍后独立处理。它最常解决三类问题：异步解耦、削峰填谷和跨服务最终一致性。",
+      "url": "/articles/RocketMQ-6c99ed3a.html"
+    },
     {
       "title": "TLS：HTTPS 如何建立可信、加密且防篡改的通信通道",
       "date": "2026.09.01",
